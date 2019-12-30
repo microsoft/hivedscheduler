@@ -1,5 +1,11 @@
-# HivedScheduler
-A [Kubernetes Scheduler Extender](https://github.com/kubernetes/community/blob/master/contributors/design-proposals/scheduling/scheduler_extender.md) optimized for GPUs.
+# Microsoft OpenPAI HivedScheduler
+
+[![Build Status](https://github.com/microsoft/hivedscheduler/workflows/build/badge.svg?branch=master&event=push)](https://github.com/microsoft/hivedscheduler/actions?query=workflow%3Abuild+branch%3Amaster+event%3Apush)
+[![Latest Release](https://img.shields.io/github/release/microsoft/hivedscheduler.svg)](https://github.com/microsoft/hivedscheduler/releases/latest)
+[![Docker Pulls](https://img.shields.io/docker/pulls/hivedscheduler/hivedscheduler.svg)](https://hub.docker.com/u/hivedscheduler)
+[![License](https://img.shields.io/github/license/microsoft/hivedscheduler.svg)](https://github.com/microsoft/hivedscheduler/blob/master/LICENSE)
+
+As one standalone component of [Microsoft OpenPAI](https://github.com/microsoft/pai), HivedScheduler is a [Kubernetes Scheduler Extender](https://github.com/kubernetes/community/blob/master/contributors/design-proposals/scheduling/scheduler_extender.md) optimized for AI applications.
 
 *TODO: Add Features, Architecture and UserManual*
 
