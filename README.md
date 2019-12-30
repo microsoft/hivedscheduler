@@ -1,5 +1,20 @@
+# HivedScheduler
+A [Kubernetes Scheduler Extender](https://github.com/kubernetes/community/blob/master/contributors/design-proposals/scheduling/scheduler_extender.md) optimized for GPUs.
 
-# Contributing
+*TODO: Add Features, Architecture and UserManual*
+
+## Prerequisite
+1. A Kubernetes cluster, v1.14.2 or above, on-cloud or on-premise.
+
+## Quick Start
+1. [Run Scheduler](example/run)
+2. [Submit Workload to Scheduler](example/request)
+
+## Official Image
+* [DockerHub](https://hub.docker.com/u/hivedscheduler)
+
+
+## Contributing
 
 This project welcomes contributions and suggestions.  Most contributions require you to agree to a
 Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us
