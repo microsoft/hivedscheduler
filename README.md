@@ -1,4 +1,10 @@
-# HiveDScheduler
+# Microsoft OpenPAI HiveDScheduler
+
+[![Build Status](https://github.com/microsoft/hivedscheduler/workflows/build/badge.svg?branch=master&event=push)](https://github.com/microsoft/hivedscheduler/actions?query=workflow%3Abuild+branch%3Amaster+event%3Apush)
+[![Latest Release](https://img.shields.io/github/release/microsoft/hivedscheduler.svg)](https://github.com/microsoft/hivedscheduler/releases/latest)
+[![Docker Pulls](https://img.shields.io/docker/pulls/hivedscheduler/hivedscheduler.svg)](https://hub.docker.com/u/hivedscheduler)
+[![License](https://img.shields.io/github/license/microsoft/hivedscheduler.svg)](https://github.com/microsoft/hivedscheduler/blob/master/LICENSE)
+
 **HiveD is a scheduler for deep learning workloads.**
 
 It is designed to be a [Kubernetes Scheduler **Extender**](https://github.com/kubernetes/community/blob/master/contributors/design-proposals/scheduling/scheduler_extender.md) for **Multi-Tenant** **GPU** clusters. A multi-tenant GPU cluster assumes multiple tenants (teams) share the same GPU pool in a single physical cluster (PC) and provides some resource guarantees to each tenant. HiveD models each tenant as a virtual cluster (VC), so that one tenant can use its own VC as if it is a private cluster, while it can also use other VCs' free resource at lower priority. 
@@ -55,12 +61,13 @@ HiveD supports multiple job **priorities**. Higher-priority jobs can **[preempt]
 * [OpenPAI](https://github.com/microsoft/pai): A complete solution for AI platform. HiveD will be more user-friendly when working in tandem with OpenPAI.
 
 ## Contributing
-This project welcomes contributions and suggestions. Most contributions require you to agree to a
-Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us
-the rights to use your contribution. For details, visit https://cla.microsoft.com.
 
-When you submit a pull request, a CLA-bot will automatically determine whether you need to provide
-a CLA and decorate the PR appropriately (e.g., label, comment). Simply follow the instructions
+This project welcomes contributions and suggestions.  Most contributions require you to agree to a
+Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us
+the rights to use your contribution. For details, visit https://cla.opensource.microsoft.com.
+
+When you submit a pull request, a CLA bot will automatically determine whether you need to provide
+a CLA and decorate the PR appropriately (e.g., status check, comment). Simply follow the instructions
 provided by the bot. You will only need to do this once across all repos using our CLA.
 
 This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/).

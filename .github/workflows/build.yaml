@@ -1,0 +1,17 @@
+name: build
+
+on:
+  push:
+    branches:
+    - master
+  pull_request:
+    branches:
+    - master
+
+jobs:
+  hivedscheduler:
+    name: hivedscheduler
+    runs-on: ubuntu-16.04
+    steps:
+    - uses: actions/checkout@v1
+    - run: build/hivedscheduler/docker-build.sh
