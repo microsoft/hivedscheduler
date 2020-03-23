@@ -65,7 +65,7 @@ type InspectHandlers struct {
 // 2. Should take all the input parameters as readonly and return pod schedule
 //    decision by PodScheduleResult.
 // 3. {Schedule, AddAllocatedPod, DeleteAllocatedPod, AddUnallocatedPod,
-// 		DeleteUnallocatedPod} will never be executed concurrently for all pods.
+//    DeleteUnallocatedPod} will never be executed concurrently for all pods.
 // 4. [Schedule -> (AddAllocatedPod) -> Schedule -> ...] is executed sequentially
 //    for all pods.
 //    I.e. the constructed scheduling view is already lock protected.
