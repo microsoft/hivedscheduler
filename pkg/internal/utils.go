@@ -52,50 +52,46 @@ func SplitKey(key string) (namespace, name string, err error) {
 	return cache.SplitMetaNamespaceKey(key)
 }
 
-// obj could be *core.Pod or cache.DeletedFinalStateUnknown.
+// obj should come from Pod SharedIndexInformer, otherwise may panic.
 func ToPod(obj interface{}) *core.Pod {
 	pod, ok := obj.(*core.Pod)
 
 	if !ok {
 		deletedFinalStateUnknown, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
-			klog.Errorf(
+			panic(fmt.Errorf(
 				"Failed to convert obj to Pod or DeletedFinalStateUnknown: %#v",
-				obj)
-			return nil
+				obj))
 		}
 
 		pod, ok = deletedFinalStateUnknown.Obj.(*core.Pod)
 		if !ok {
-			klog.Errorf(
+			panic(fmt.Errorf(
 				"Failed to convert DeletedFinalStateUnknown.Obj to Pod: %#v",
-				deletedFinalStateUnknown)
-			return nil
+				deletedFinalStateUnknown))
 		}
 	}
 
 	return pod
 }
 
-// obj could be *core.Node or cache.DeletedFinalStateUnknown.
+// obj should come from Node SharedIndexInformer, otherwise may panic.
 func ToNode(obj interface{}) *core.Node {
 	node, ok := obj.(*core.Node)
 
 	if !ok {
 		deletedFinalStateUnknown, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
-			klog.Errorf(
+			panic(fmt.Errorf(
 				"Failed to convert obj to Node or DeletedFinalStateUnknown: %#v",
-				obj)
-			return nil
+				obj))
 		}
 
 		node, ok = deletedFinalStateUnknown.Obj.(*core.Node)
 		if !ok {
-			klog.Errorf(
+			panic(fmt.Errorf(
 				"Failed to convert DeletedFinalStateUnknown.Obj to Node: %#v",
-				deletedFinalStateUnknown)
-			return nil
+				deletedFinalStateUnknown))
 		}
 	}
 
@@ -156,6 +152,19 @@ func IsBound(pod *core.Pod) bool {
 // An unbound Pod means it is currently waiting on its requested resources.
 func IsUnbound(pod *core.Pod) bool {
 	return pod.Spec.NodeName == "" && IsLive(pod)
+}
+
+// A node is considered healthy if it is not unschedulable and in ready condition.
+func IsNodeHealthy(node *core.Node) bool {
+	if node.Spec.Unschedulable {
+		return false
+	}
+	for _, c := range node.Status.Conditions {
+		if c.Type == core.NodeReady && c.Status == core.ConditionTrue {
+			return true
+		}
+	}
+	return false
 }
 
 func NewBindingPod(pod *core.Pod, podBindInfo *si.PodBindInfo) *core.Pod {

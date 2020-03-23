@@ -25,6 +25,7 @@ package algorithm
 import (
 	"fmt"
 	"github.com/microsoft/hivedscheduler/pkg/api"
+	"github.com/microsoft/hivedscheduler/pkg/common"
 	core "k8s.io/api/core/v1"
 	"k8s.io/klog"
 	"strings"
@@ -52,9 +53,9 @@ func (cl CellList) String() string {
 	names := make([]string, len(cl))
 	for i, c := range cl {
 		if cc, ok := c.(*PhysicalCell); ok {
-			names[i] = fmt.Sprintf("%v(%v)(%v)", cc.GetName(), cc.GetPriority(), cc.GetPhysicalPlacementString())
+			names[i] = fmt.Sprintf("%v(%v)(%v)", cc.GetAddress(), cc.GetPriority(), cc.GetPhysicalPlacementString())
 		} else {
-			names[i] = fmt.Sprintf("%v(%v)", c.GetName(), c.GetPriority())
+			names[i] = fmt.Sprintf("%v(%v)", c.GetAddress(), c.GetPriority())
 		}
 	}
 	return strings.Join(names, ", ")
@@ -70,7 +71,7 @@ func (cl CellList) remove(c Cell) CellList {
 	}
 	if index < 0 {
 		panic(fmt.Sprintf("Cell not not found in list when removing: %v",
-			c.GetName()))
+			c.GetAddress()))
 	}
 	length := len(cl)
 	cl[index] = cl[length-1]
@@ -99,34 +100,41 @@ func (ccl ChainCellList) String() string {
 
 func (ccl ChainCellList) remove(c Cell, l CellLevel) {
 	ccl[l] = ccl[l].remove(c)
-	klog.Infof("Cell removed from cell list: %v", c.GetName())
+	klog.Infof("Cell removed from cell list: %v", c.GetAddress())
 }
 
 // AlgoAffinityGroup is the algorithm-internal representation of an affinity group.
 type AlgoAffinityGroup struct {
 	name                 string
+	vc                   api.VirtualClusterName
 	gangReleaseEnable    bool
 	lazyPreemptionEnable bool
-	totalPodNums         map[int32]int32       // GpuNum -> PodNum
-	allocatedPods        map[int32][]*core.Pod // GpuNum -> a list of allocated pods and node addresses
-	physicalGpuPlacement map[int32][]CellList  // GpuNum -> a list of pods -> a list of physical GPUs of each pod
-	virtualGpuPlacement  map[int32][]CellList  // GpuNum -> a list of pods -> a list of virtual GPUs of each pod
+	totalPodNums         map[int32]int32        // GpuNum -> PodNum
+	allocatedPods        map[int32][]*core.Pod  // GpuNum -> a list of allocated pods and node addresses
+	physicalGpuPlacement groupPhysicalPlacement // GpuNum -> a list of pods -> a list of physical GPUs of each pod
+	virtualGpuPlacement  groupVirtualPlacement  // GpuNum -> a list of pods -> a list of virtual GPUs of each pod
 	lazyPreemptionStatus *api.LazyPreemptionStatus
 }
 
-func newAlgoAffinityGroup(g *api.AffinityGroupSpec, gangReleaseEnable bool, lazyPreemptionEnable bool) *AlgoAffinityGroup {
+func newAlgoAffinityGroup(
+	g *api.AffinityGroupSpec,
+	vc api.VirtualClusterName,
+	gangReleaseEnable bool,
+	lazyPreemptionEnable bool) *AlgoAffinityGroup {
+
 	podNums := make(map[int32]int32)
 	for _, m := range g.Members {
 		podNums[m.GpuNumber] += m.PodNumber
 	}
 	group := &AlgoAffinityGroup{
 		name:                 g.Name,
+		vc:                   vc,
 		gangReleaseEnable:    gangReleaseEnable,
 		lazyPreemptionEnable: lazyPreemptionEnable,
 		totalPodNums:         podNums,
 		allocatedPods:        map[int32][]*core.Pod{},
-		physicalGpuPlacement: map[int32][]CellList{},
-		virtualGpuPlacement:  map[int32][]CellList{},
+		physicalGpuPlacement: groupPhysicalPlacement{},
+		virtualGpuPlacement:  groupVirtualPlacement{},
 	}
 	for gpuNum, podNum := range podNums {
 		group.physicalGpuPlacement[gpuNum] = make([]CellList, podNum)
@@ -145,4 +153,43 @@ func (aag *AlgoAffinityGroup) ToAffinityGroup() api.AffinityGroup {
 	ag.Name = aag.name
 	ag.Status.LazyPreemptionStatus = aag.lazyPreemptionStatus
 	return ag
+}
+
+type groupPhysicalPlacement map[int32][]CellList
+type groupVirtualPlacement map[int32][]CellList
+
+func (p groupPhysicalPlacement) toString() string {
+	nodeToGpuIndices := map[string][]int32{}
+	for _, podPlacements := range p {
+		for _, pod := range podPlacements {
+			for _, gpu := range pod {
+				pGpu := gpu.(*PhysicalCell)
+				nodes, gpuIndices := pGpu.GetPhysicalPlacement()
+				if _, ok := nodeToGpuIndices[nodes[0]]; !ok {
+					nodeToGpuIndices[nodes[0]] = []int32{}
+				}
+				nodeToGpuIndices[nodes[0]] = append(nodeToGpuIndices[nodes[0]], gpuIndices[0])
+			}
+		}
+	}
+	return common.ToJson(nodeToGpuIndices)
+}
+
+func (p groupVirtualPlacement) toString() string {
+	preassignedCellToLeafCells := map[api.CellAddress][]api.CellAddress{}
+	for _, podPlacements := range p {
+		for _, pod := range podPlacements {
+			for _, gpu := range pod {
+				vGpu := gpu.(*VirtualCell)
+				address := vGpu.GetAddress()
+				preassignedAddress := vGpu.GetPreAssignedCell().GetAddress()
+				if _, ok := preassignedCellToLeafCells[preassignedAddress]; !ok {
+					preassignedCellToLeafCells[preassignedAddress] = []api.CellAddress{}
+				}
+				preassignedCellToLeafCells[preassignedAddress] = append(
+					preassignedCellToLeafCells[preassignedAddress], address)
+			}
+		}
+	}
+	return common.ToJson(preassignedCellToLeafCells)
 }
