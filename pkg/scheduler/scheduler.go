@@ -94,7 +94,6 @@ type HivedScheduler struct {
 	podLister coreLister.PodLister
 
 	// WebServer is used to interact with K8S Default Scheduler and others.
-	// Only responsible for unbound Pod (from Default Scheduler).
 	//
 	// Platform Error Panic in WebServer Callbacks will be recovered, since generally
 	// it is just one request failure that can be ignored and will not impact the
@@ -294,6 +293,8 @@ func (s *HivedScheduler) deletePod(obj interface{}) {
 	if podStatus != nil {
 		if internal.IsAllocated(podStatus.PodState) {
 			s.schedulerAlgorithm.DeleteAllocatedPod(podStatus.Pod)
+		} else {
+			s.schedulerAlgorithm.DeleteUnallocatedPod(podStatus.Pod)
 		}
 
 		delete(s.podScheduleStatuses, pod.UID)
@@ -333,8 +334,6 @@ func (s *HivedScheduler) addBoundPod(pod *core.Pod) {
 	}
 }
 
-// Also track unbound Pod to help prevent tracking and scheduling for future
-// not existing and completed Pod.
 func (s *HivedScheduler) addUnboundPod(pod *core.Pod) {
 	s.schedulerLock.Lock()
 	defer s.schedulerLock.Unlock()
@@ -350,6 +349,7 @@ func (s *HivedScheduler) addUnboundPod(pod *core.Pod) {
 	}
 
 	// Receive newly unbound pod, so it must be PodWaiting.
+	s.schedulerAlgorithm.AddUnallocatedPod(pod)
 	s.podScheduleStatuses[pod.UID] = &internal.PodScheduleStatus{
 		Pod:               pod,
 		PodState:          internal.PodWaiting,
