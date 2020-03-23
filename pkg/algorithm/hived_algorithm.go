@@ -195,6 +195,12 @@ func (h *HivedAlgorithm) Schedule(pod *core.Pod, suggestedNodes []string) intern
 		pod)
 }
 
+func (h *HivedAlgorithm) AddUnallocatedPod(pod *core.Pod) {
+}
+
+func (h *HivedAlgorithm) DeleteUnallocatedPod(pod *core.Pod) {
+}
+
 func (h *HivedAlgorithm) AddAllocatedPod(pod *core.Pod) {
 	h.algorithmLock.Lock()
 	defer h.algorithmLock.Unlock()
