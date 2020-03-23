@@ -64,8 +64,8 @@ type InspectHandlers struct {
 //    logs, other Panics will crash the whole process, see HandleWebServerPanic.
 // 2. Should take all the input parameters as readonly and return pod schedule
 //    decision by PodScheduleResult.
-// 3. {Schedule, AddAllocatedPod, DeleteAllocatedPod} will never be executed
-//    concurrently for all pods.
+// 3. {Schedule, AddUnallocatedPod, DeleteUnallocatedPod, AddAllocatedPod,
+//    DeleteAllocatedPod} will never be executed concurrently for all pods.
 // 4. [Schedule -> (AddAllocatedPod) -> Schedule -> ...] is executed sequentially
 //    for all pods.
 //    I.e. the constructed scheduling view is already lock protected.
@@ -82,7 +82,10 @@ type SchedulerAlgorithm interface {
 	UpdateNode(oldNode, newNode *core.Node)
 	DeleteNode(node *core.Node)
 
-	// Track all current allocated Pods in the whole cluster.
+	// Track all current unallocated and allocated Pods in the whole cluster.
+	// Unallocated Pod includes both PodWaiting and PodPreempting Pods.
+	AddUnallocatedPod(pod *core.Pod)
+	DeleteUnallocatedPod(pod *core.Pod)
 	// Allocated Pod includes both PodBound and PodBinding Pods.
 	AddAllocatedPod(pod *core.Pod)
 	DeleteAllocatedPod(pod *core.Pod)
