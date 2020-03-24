@@ -193,8 +193,11 @@ func generateAffinityGroupBindInfo(
 // collectPreemptionVictims collects preemption victims of an affinity group.
 // If any of the GPUs allocated for the whole group is still used by a pod,
 // we will wait for the preemption, as a group is gang-scheduled.
-func collectPreemptionVictims(physicalPlacement groupPhysicalPlacement) (victims map[string]common.Set) {
-	victims = map[string]common.Set{}
+func collectPreemptionVictims(physicalPlacement groupPhysicalPlacement) (
+	victimPods map[string]common.Set, ongoingPreemptorGroups common.Set) {
+
+	victimPods = map[string]common.Set{}
+	ongoingPreemptorGroups = common.NewSet()
 	for gpuNum := range physicalPlacement {
 		for podIndex := range physicalPlacement[gpuNum] {
 			for _, gpu := range physicalPlacement[gpuNum][podIndex] {
@@ -202,23 +205,27 @@ func collectPreemptionVictims(physicalPlacement groupPhysicalPlacement) (victims
 					continue
 				}
 				pGpu := gpu.(*PhysicalCell)
-				if pGpu.GetState() == cellUsed || pGpu.GetState() == cellAcquiring {
+				state := pGpu.GetState()
+				if state == cellUsed || state == cellAcquiring {
 					// for any victim pod, gang-preempt all the other pods from the same affinity group
-					for _, victimPods := range pGpu.GetUsingGroup().allocatedPods {
-						for _, v := range victimPods {
+					for _, pods := range pGpu.GetUsingGroup().allocatedPods {
+						for _, v := range pods {
 							if v != nil {
-								if _, ok := victims[v.Spec.NodeName]; !ok {
-									victims[v.Spec.NodeName] = common.NewSet()
+								if _, ok := victimPods[v.Spec.NodeName]; !ok {
+									victimPods[v.Spec.NodeName] = common.NewSet()
 								}
-								victims[v.Spec.NodeName].Add(v)
+								victimPods[v.Spec.NodeName].Add(v)
 							}
 						}
 					}
 				}
+				if state == cellAcquiring || state == cellAcquired {
+					ongoingPreemptorGroups.Add(pGpu.GetAcquiringGroup())
+				}
 			}
 		}
 	}
-	return victims
+	return victimPods, ongoingPreemptorGroups
 }
 
 // retrieveMissingPodPlacement finds the placement of a pod from the annotation of other pods in the same group

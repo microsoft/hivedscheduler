@@ -181,14 +181,19 @@ func (h *HivedAlgorithm) Schedule(pod *core.Pod, suggestedNodes []string) intern
 		klog.Infof("[%v]: Pod from preemptor affinity group: %v", internal.Key(pod), s.AffinityGroup.Name)
 		groupPhysicalPlacement = g.physicalGpuPlacement
 		groupVirtualPlacement = g.virtualGpuPlacement
-		if preemptionVictims = collectPreemptionVictims(groupPhysicalPlacement); len(preemptionVictims) == 0 {
+		if preemptionVictims, _ = collectPreemptionVictims(groupPhysicalPlacement); len(preemptionVictims) == 0 {
 			klog.Infof("Preemption victims have been cleaned up for preemptor affinity group %v", g.name)
 		}
 		g.preemptorPods[internal.Key(pod)] = pod
 	} else {
 		klog.Infof("[%v]: Scheduling new affinity group %v", internal.Key(pod), s.AffinityGroup.Name)
 		groupPhysicalPlacement, groupVirtualPlacement = h.scheduleNewAffinityGroup(pod, s, suggestedNodeSet)
-		if preemptionVictims = collectPreemptionVictims(groupPhysicalPlacement); len(preemptionVictims) != 0 {
+		var ongoingPreemptors common.Set
+		preemptionVictims, ongoingPreemptors = collectPreemptionVictims(groupPhysicalPlacement)
+		for preemptor := range ongoingPreemptors.Items() {
+			h.deletePreemptorAffinityGroup(preemptor.(*AlgoAffinityGroup), s.AffinityGroup.Name, pod)
+		}
+		if len(preemptionVictims) != 0 {
 			h.createPreemptorAffinityGroup(s, groupPhysicalPlacement, groupVirtualPlacement, pod)
 		}
 	}
@@ -222,7 +227,7 @@ func (h *HivedAlgorithm) DeleteUnallocatedPod(pod *core.Pod) {
 			delete(g.preemptorPods, podKey)
 		}
 		if len(g.preemptorPods) == 0 {
-			h.deletePreemptorAffinityGroup(g, "")
+			h.deletePreemptorAffinityGroup(g, "", pod)
 		}
 	}
 }
@@ -732,18 +737,9 @@ func (h *HivedAlgorithm) mapVirtualPlacementToPhysical(
 			physicalPlacement[podGpuNum][i] = make(CellList, len(podGpus))
 			for j, gpu := range podGpus {
 				vGpu := gpu.(*VirtualCell)
-				if pGpu := vGpu.GetPhysicalCell(); pGpu != nil {
-					// Two possible cases of finding the virtual cell has been bound to a physical cell:
-					// 1. A group of this VC is running on this physical cell (then the cell will be in CellUsed state).
-					// We can either lazy-preempt this group and try to use another physical cell, or just preempt the group.
-					// 2. A group of this VC is preempting another group on this cell (CellAcquiring or CellAcquired).
-					// We will cancel the ongoing preemption and delete the preemptor group.
-					if pGpu.GetState() == cellUsed {
-						if groupToPreempt := vGpu.GetPhysicalCell().GetUsingGroup(); groupToPreempt.lazyPreemptionEnable {
-							h.lazyPreemptAffinityGroup(groupToPreempt, sr.affinityGroupName)
-						}
-					} else { // cellAcquiring or cellAcquired
-						h.deletePreemptorAffinityGroup(pGpu.GetAcquiringGroup(), sr.affinityGroupName)
+				if pGpu := vGpu.GetPhysicalCell(); pGpu != nil && pGpu.GetState() == cellUsed {
+					if groupToPreempt := vGpu.GetPhysicalCell().GetUsingGroup(); groupToPreempt.lazyPreemptionEnable {
+						h.lazyPreemptAffinityGroup(groupToPreempt, sr.affinityGroupName)
 					}
 				}
 				physicalPlacement[podGpuNum][i][j] = mapVirtualCellToPhysical(vGpu, h.freeCellList[sr.chain], suggestedNodes)
@@ -887,7 +883,8 @@ func (h *HivedAlgorithm) createPreemptorAffinityGroup(
 				}
 				h.allocateGpu(pGpu, vGpu, CellPriority(s.Priority), newGroup.vc)
 				pGpu.AddAcquiringGroup(newGroup)
-				// state of pGpu can be either Used or Free
+				// state of pGpu can be either Used or Free (if it was Acquiring or Acquired,
+				// we must have canceled the ongoing preemption before, in h.Schedule)
 				if pGpu.GetState() == cellUsed {
 					setState(pGpu, cellAcquiring)
 				} else { // cellFree
@@ -903,12 +900,13 @@ func (h *HivedAlgorithm) createPreemptorAffinityGroup(
 
 // deletePreemptorAffinityGroup revokes a preemption and deletes the affinity group that is
 // still waiting for the completion of the preemption.
-func (h *HivedAlgorithm) deletePreemptorAffinityGroup(g *AlgoAffinityGroup, newGroupName string) {
+func (h *HivedAlgorithm) deletePreemptorAffinityGroup(g *AlgoAffinityGroup, newGroupName string, pod *core.Pod) {
 	if newGroupName == "" {
-		klog.Infof("All preemptor pods deleted, deleting preemptor affinity group %v", g.name)
+		klog.Infof("[%v]: All preemptor pods deleted, deleting preemptor affinity group %v",
+			internal.Key(pod), g.name)
 	} else {
-		klog.Infof("Preemption canceled by a higher-priority group %v, deleting preemptor affinity group %v",
-			newGroupName, g.name)
+		klog.Infof("[%v]: Affinity group %v cancels an ongoing preemption, deleting the ongoing preemptor affinity group %v",
+			internal.Key(pod), newGroupName, g.name)
 	}
 	for gpuNum := range g.physicalGpuPlacement {
 		for podIndex := range g.physicalGpuPlacement[gpuNum] {
