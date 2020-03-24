@@ -1087,7 +1087,9 @@ func (h *HivedAlgorithm) allocateGpu(
 			h.vcFreeCellNum[vcn][c][l]--
 			h.allVCFreeCellNum[c][l]--
 			if preassignedBad {
-				// this means the preassigned cell was counted as a doomed bad cell
+				// This means the preassigned cell was previously counted as a doomed bad cell.
+				// We will later pick another virtual cell and mark it as bad (when removing it
+				// from the free list)
 				h.vcDoomedBadCellNum[vcn][c][l]--
 			}
 			// remove the allocated cell from the free list (possibly splitting cells)
@@ -1140,10 +1142,12 @@ func (h *HivedAlgorithm) removeCellFromFreeList(c *PhysicalCell) (success bool, 
 			message = fmt.Sprintf("Adding pod would lead to broken safety: cell type %v, %v left, %v free cells in all VCs",
 				h.cellTypes[chain][l], h.totalLeftCellNum[chain][l], h.allVCFreeCellNum[chain][l])
 		}
-		// if the used cell is bad, we should exclude it from the bad free cells (the same below)
 		if isBad {
+			// if the used cell is bad, we should exclude it from the bad free cells (the same below)
 			h.decrementBadFreeCell(chain, l, numToRemove)
 		} else {
+			// if the used cell is healthy, we should check if some VCs' cells are doomed bad
+			// due to the reduced healthy free cells (the same below)
 			h.checkVCDoomedBadCells(chain, l)
 		}
 		numToRemove *= int32(len(h.fullCellList[chain][l][0].GetChildren()))
@@ -1191,10 +1195,12 @@ func (h *HivedAlgorithm) addCellToFreeList(c *PhysicalCell) {
 	isBad := c.GetAPIStatus().CellHealthiness == api.CellBad
 	for l := c.GetLevel() - 1; l >= lowestLevel; l-- {
 		h.totalLeftCellNum[chain][l] += numToAdd
-		// if the freed cell is bad, we should add it to the bad free cells (the same below)
 		if isBad {
+			// if the freed cell is bad, we should add it to the bad free cells (the same below)
 			h.incrementBadFreeCell(chain, l, numToAdd)
 		} else {
+			// if the freed cell is healthy, we should check if some VCs's doomed bad cells should be reduced
+			// due to the increased healthy free cells (the same below)
 			h.checkVCDoomedBadCells(chain, l)
 		}
 		numToAdd *= int32(len(h.fullCellList[chain][l][0].GetChildren()))
