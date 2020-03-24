@@ -32,7 +32,7 @@ const (
 	maxGuaranteedPriority = CellPriority(api.MaxGuaranteedPriority)
 	minGuaranteedPriority = CellPriority(api.MinGuaranteedPriority)
 	opportunisticPriority = CellPriority(api.OpportunisticPriority)
-	freePriority          = CellPriority(-2)
+	freePriority          = opportunisticPriority - 1
 
 	// lowest and highest levels in a cell chain
 	lowestLevel  = CellLevel(1)

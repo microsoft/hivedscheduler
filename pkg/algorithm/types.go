@@ -103,6 +103,15 @@ func (ccl ChainCellList) remove(c Cell, l CellLevel) {
 	klog.Infof("Cell removed from cell list: %v", c.GetAddress())
 }
 
+func (ccl ChainCellList) copy() ChainCellList {
+	copied := ChainCellList{}
+	for l := CellLevel(1); l <= CellLevel(len(ccl)); l++ {
+		copied[l] = make(CellList, len(ccl[l]))
+		copy(copied[l], ccl[l])
+	}
+	return copied
+}
+
 // AlgoAffinityGroup is the algorithm-internal representation of an affinity group.
 type AlgoAffinityGroup struct {
 	name                 string
