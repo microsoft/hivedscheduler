@@ -205,7 +205,6 @@ func (c *PhysicalCell) AddUsingGroup(g *AlgoAffinityGroup) {
 	}
 	c.usingGroup = g
 	klog.Infof("Cell %v is now used by affinity group %v", c.address, g.name)
-	c.SetState(cellUsed)
 }
 
 func (c *PhysicalCell) DeleteUsingGroup(g *AlgoAffinityGroup) {
@@ -214,11 +213,6 @@ func (c *PhysicalCell) DeleteUsingGroup(g *AlgoAffinityGroup) {
 	}
 	c.usingGroup = nil
 	klog.Infof("Cell %v is no longer used by affinity group %v", c.address, g.name)
-	if c.acquiringGroup != nil {
-		c.SetState(cellAcquired)
-	} else {
-		c.SetState(cellFree)
-	}
 }
 
 func (c *PhysicalCell) GetUsingGroup() *AlgoAffinityGroup {
@@ -232,11 +226,6 @@ func (c *PhysicalCell) AddAcquiringGroup(g *AlgoAffinityGroup) {
 	}
 	c.acquiringGroup = g
 	klog.Infof("Cell %v is now being acquired by affinity group %v", c.address, g.name)
-	if c.usingGroup != nil {
-		c.SetState(cellAcquiring)
-	} else {
-		c.SetState(cellAcquired)
-	}
 }
 
 func (c *PhysicalCell) DeleteAcquiringGroup(g *AlgoAffinityGroup) {
@@ -245,11 +234,6 @@ func (c *PhysicalCell) DeleteAcquiringGroup(g *AlgoAffinityGroup) {
 	}
 	c.acquiringGroup = nil
 	klog.Infof("Cell %v is no longer acquired by affinity group %v", c.address, g.name)
-	if c.usingGroup != nil {
-		c.SetState(cellUsed)
-	} else {
-		c.SetState(cellFree)
-	}
 }
 
 func (c *PhysicalCell) GetAcquiringGroup() *AlgoAffinityGroup {
@@ -302,6 +286,16 @@ func (c *PhysicalCell) SetReserved(reserved bool) {
 
 func (c *PhysicalCell) GetAPIStatus() *api.PhysicalCellStatus {
 	return c.apiStatus
+}
+
+func (c *PhysicalCell) SetHealthiness(h api.CellHealthiness) {
+	klog.Infof("Cell %v is set to %v", c.address, h)
+	c.GetAPIStatus().CellHealthiness = h
+	if c.virtualCell != nil {
+		c.GetAPIStatus().VirtualCell.CellHealthiness = h
+		c.virtualCell.GetAPIStatus().CellHealthiness = h
+		c.virtualCell.GetAPIStatus().PhysicalCell.CellHealthiness = h
+	}
 }
 
 // VirtualCell defines a cell in a VC.

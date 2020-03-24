@@ -114,8 +114,8 @@ func generatePodScheduleResult(
 	}
 }
 
-// generateAffinityGroupBindInfo writes the physical and virtual placements of an affinity group
-// into a a series of AffinityGroupMemberBindInfos, and returns the allocated node and GPU addresses
+// generateAffinityGroupBindInfo translates the physical and virtual placements of an affinity group
+// into a a series of AffinityGroupMemberBindInfos, and also returns the allocated node and GPU addresses
 // of the current pod.
 func generateAffinityGroupBindInfo(
 	groupPhysicalPlacement groupPhysicalPlacement,
@@ -240,6 +240,7 @@ func retrieveMissingPodPlacement(g *AlgoAffinityGroup, gpuNum int32, podIndex in
 		"No allocated pod found in an allocated group %v when retrieving placement for pod %v with GPU number %v", g.name, podIndex, gpuNum))
 }
 
+// retrieveVirtualCell finds the corresponding virtual cell for a physical cell in the placements of an affinity group.
 func retrieveVirtualCell(
 	physicalPlacement groupPhysicalPlacement,
 	virtualPlacement groupVirtualPlacement,
@@ -316,6 +317,62 @@ func allPodsReleased(allocatedPods map[int32][]*core.Pod) bool {
 	return true
 }
 
+// findPhysicalGpu finds a physical GPU cell in the full list. If the GPU is not found in the chain specified
+// in the PodBindInfo (due to reconfiguration), we will try to search in the other chains.
+func findPhysicalGpu(
+	fullCellList map[CellChain]ChainCellList,
+	chain CellChain,
+	node string,
+	gpuIndex int32) *PhysicalCell {
+
+	if g := findPhysicalGpuInChain(fullCellList, chain, node, gpuIndex); g == nil {
+		for c := range fullCellList {
+			if c != chain {
+				if g = findPhysicalGpuInChain(fullCellList, c, node, gpuIndex); g != nil {
+					klog.Warningf("GPU %v on node %v has been moved to chain %v", gpuIndex, node, c)
+					return g
+				}
+			}
+		}
+		return nil
+	} else {
+		return g
+	}
+}
+
+// findPhysicalGpuInChain finds a physical GPU cell in the full list of a given chain. This search is based on
+// *one* node and *one* GPU index, assuming there is no resource overlapping among cells at the same level.
+func findPhysicalGpuInChain(
+	fullCellList map[CellChain]ChainCellList,
+	chain CellChain,
+	node string,
+	gpuIndex int32) *PhysicalCell {
+
+	for _, c := range fullCellList[chain][1] {
+		success := false
+		cc := c.(*PhysicalCell)
+		nodes, gpuIndices := cc.GetPhysicalPlacement()
+		for _, n := range nodes {
+			if n == node {
+				success = true
+				break
+			}
+		}
+		if success {
+			if gpuIndex < 0 {
+				return cc
+			} else {
+				for _, g := range gpuIndices {
+					if g == gpuIndex {
+						return cc
+					}
+				}
+			}
+		}
+	}
+	return nil
+}
+
 // inFreeCellList checks if a physical cell (or its ancestor) is in the global free cell list.
 func inFreeCellList(c *PhysicalCell) bool {
 	for {
@@ -327,6 +384,29 @@ func inFreeCellList(c *PhysicalCell) bool {
 		}
 		c = c.GetParent().(*PhysicalCell)
 	}
+}
+
+// setState sets state for a cell and its parent recursively. A parent cell will be in Used state
+// if any of its children is in Used state. For the other states (Free, Acquired, Acquiring),
+// a parent will be in the state if all of this children are in the state.
+func setState(c *PhysicalCell, s CellState) {
+	c.SetState(s)
+	if c.GetParent() != nil {
+		parent := c.GetParent().(*PhysicalCell)
+		if s == cellUsed || allChildrenSameState(parent, s) {
+			setState(parent, s)
+		}
+	}
+}
+
+// allChildrenSameState checks if all of a cell's children are in the same state.
+func allChildrenSameState(c *PhysicalCell, s CellState) bool {
+	for _, child := range c.GetChildren() {
+		if child.(*PhysicalCell).GetState() != s {
+			return false
+		}
+	}
+	return true
 }
 
 // generateOpporVirtualCell generates a fake virtual cell in a VC's API status
@@ -344,4 +424,19 @@ func generateOpporVirtualCell(pc *api.PhysicalCellStatus) *api.VirtualCellStatus
 		PhysicalCell: pc,
 	}
 	return vc
+}
+
+// deleteOpporVirtualCell deletes the fake virtual cell of an opportunistic cell from the VC's API status.
+func deleteOpporVirtualCell(s api.VirtualClusterStatus, addr api.CellAddress) api.VirtualClusterStatus {
+	var opporVirtualCellIdx int32
+	for i, ovc := range s {
+		if ovc.PhysicalCell != nil && ovc.PhysicalCell.CellAddress == addr {
+			opporVirtualCellIdx = int32(i)
+			break
+		}
+	}
+	novc := len(s)
+	s[opporVirtualCellIdx] = s[novc-1]
+	s[novc-1] = nil
+	return s[:novc-1]
 }

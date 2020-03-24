@@ -457,7 +457,7 @@ var expectedPreemptInfos = map[string]common.Set{
 	"pod32": common.NewSet("pod28"),
 }
 
-var deletedPreemptingGroups = map[string][]string{
+var deletedPreemptorGroups = map[string][]string{
 	"pod32": {"group21", "group22"},
 	"pod33": {"group23"},
 }
@@ -607,9 +607,9 @@ func testStatefulPreemption(t *testing.T, configFilePath string) {
 			h.AddAllocatedPod(allocatedPod)
 			allocatedPods = append(allocatedPods, allocatedPod)
 		}
-		if deletedGroups := deletedPreemptingGroups[podName]; deletedGroups != nil {
+		if deletedGroups := deletedPreemptorGroups[podName]; deletedGroups != nil {
 			for _, g := range deletedGroups {
-				if _, ok := h.preemptingAffinityGroups[g]; ok {
+				if _, ok := h.preemptorAffinityGroups[g]; ok {
 					t.Errorf("Group %v is expected to be deleted in scheduler, but not", g)
 				}
 			}
