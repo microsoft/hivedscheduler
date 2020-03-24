@@ -621,8 +621,10 @@ func (h *HivedAlgorithm) scheduleNewAffinityGroup(
 	if sr.reservationId != "" {
 		klog.Infof("Use reservation %v", s.ReservationId)
 		physicalPlacement, virtualPlacement = h.processSchedulingRequest(sr, suggestedNodes)
+	} else if s.GpuType != "" {
+		physicalPlacement, virtualPlacement = h.scheduleAffinityGroupForGivenGpuType(sr, s.GpuType, pod, suggestedNodes)
 	} else {
-		physicalPlacement, virtualPlacement = h.scheduleAffinityGroupForGpuType(sr, s.GpuType, pod, suggestedNodes)
+		physicalPlacement, virtualPlacement = h.scheduleAffinityGroupForAnyGpuType(sr, suggestedNodes)
 	}
 	if physicalPlacement != nil {
 		klog.Infof("Succeeded in scheduling group %v", s.AffinityGroup.Name)
@@ -632,42 +634,51 @@ func (h *HivedAlgorithm) scheduleNewAffinityGroup(
 	return physicalPlacement, virtualPlacement
 }
 
-// scheduleAffinityGroupForGpuType schedules an affinity group in a certain cell chain.
-// If a GPU type is specified, it will be scheduled to a chain that contains this GPU type.
-// Otherwise any GPU type will be tried (the first one that succeeds will be picked).
-func (h *HivedAlgorithm) scheduleAffinityGroupForGpuType(
+// scheduleAffinityGroupForGivenGpuType schedules an affinity group in a certain cell chain
+// that matches the specified GPU type.
+func (h *HivedAlgorithm) scheduleAffinityGroupForGivenGpuType(
 	sr schedulingRequest,
 	gpuType string,
 	pod *core.Pod,
-	suggestedNodes common.Set) (physicalPlacement groupPhysicalPlacement, virtualPlacement groupVirtualPlacement) {
+	suggestedNodes common.Set) (groupPhysicalPlacement, groupVirtualPlacement) {
 
-	if gpuType != "" {
-		if chains := h.chains[gpuType]; chains == nil {
-			panic(internal.NewBadRequestError(fmt.Sprintf(
-				"[%v]: pod requesting GPU type %v which the whole cluster does not have",
-				internal.Key(pod), gpuType)))
-		} else {
-			vcHasType := false
-			for _, chain := range chains {
-				if h.vcSchedulers[sr.vc].getNonReservedFullCellList()[chain] != nil {
-					vcHasType = true
-				}
+	if chains := h.chains[gpuType]; chains == nil {
+		panic(internal.NewBadRequestError(fmt.Sprintf(
+			"[%v]: pod requesting GPU type %v which the whole cluster does not have",
+			internal.Key(pod), gpuType)))
+	} else {
+		vcHasType := false
+		for _, chain := range chains {
+			if h.vcSchedulers[sr.vc].getNonReservedFullCellList()[chain] != nil {
+				vcHasType = true
 				sr.chain = chain
-				if physicalPlacement, virtualPlacement = h.processSchedulingRequest(sr, suggestedNodes); physicalPlacement != nil {
+				physicalPlacement, virtualPlacement := h.processSchedulingRequest(sr, suggestedNodes)
+				if physicalPlacement != nil {
 					return physicalPlacement, virtualPlacement
 				}
 			}
-			if sr.priority >= minGuaranteedPriority && !vcHasType {
-				panic(internal.NewBadRequestError(fmt.Sprintf(
-					"[%v]: pod requesting GPU type %v which VC %v does not have",
-					internal.Key(pod), gpuType, sr.vc)))
-			}
 		}
-	} else {
-		for _, chains := range h.chains {
-			for _, chain := range chains {
+		if sr.priority >= minGuaranteedPriority && !vcHasType {
+			panic(internal.NewBadRequestError(fmt.Sprintf(
+				"[%v]: pod requesting GPU type %v which VC %v does not have",
+				internal.Key(pod), gpuType, sr.vc)))
+		}
+	}
+	return nil, nil
+}
+
+// scheduleAffinityGroupForAnyGpuType schedules an affinity group in a certain cell chain,
+// trying every possible GPU type (as the user does not specify a GPU type).
+func (h *HivedAlgorithm) scheduleAffinityGroupForAnyGpuType(
+	sr schedulingRequest,
+	suggestedNodes common.Set) (groupPhysicalPlacement, groupVirtualPlacement) {
+
+	for _, chains := range h.chains {
+		for _, chain := range chains {
+			if h.vcSchedulers[sr.vc].getNonReservedFullCellList()[chain] != nil {
 				sr.chain = chain
-				if physicalPlacement, virtualPlacement = h.processSchedulingRequest(sr, suggestedNodes); physicalPlacement != nil {
+				physicalPlacement, virtualPlacement := h.processSchedulingRequest(sr, suggestedNodes)
+				if physicalPlacement != nil {
 					return physicalPlacement, virtualPlacement
 				}
 			}
@@ -754,9 +765,9 @@ func (h *HivedAlgorithm) mapVirtualPlacementToPhysical(
 // scheduleOpportunisticAffinityGroup calls the opportunistic pod scheduler to schedule an affinity group.
 func (h *HivedAlgorithm) scheduleOpportunisticAffinityGroup(
 	sr schedulingRequest,
-	suggestedNodes common.Set) (physicalPlacement groupPhysicalPlacement) {
+	suggestedNodes common.Set) groupPhysicalPlacement {
 
-	physicalPlacement = h.opportunisticSchedulers[sr.chain].Schedule(
+	physicalPlacement := h.opportunisticSchedulers[sr.chain].Schedule(
 		sr.affinityGroupPodNums, opportunisticPriority, suggestedNodes)
 	if physicalPlacement == nil {
 		klog.Infof("Insufficient capacity in PC for scheduling request: GPU numbers %v, priority %v, chain %v",
