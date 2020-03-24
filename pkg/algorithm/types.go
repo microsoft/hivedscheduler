@@ -121,6 +121,7 @@ type AlgoAffinityGroup struct {
 	lazyPreemptionEnable bool
 	priority             int32
 	totalPodNums         map[int32]int32        // GpuNum -> PodNum
+	preemptorPods        map[string]*core.Pod   // string -> pod
 	allocatedPods        map[int32][]*core.Pod  // GpuNum -> a list of allocated pods
 	physicalGpuPlacement groupPhysicalPlacement // GpuNum -> a list of pods -> a list of physical GPU cells of each pod
 	virtualGpuPlacement  groupVirtualPlacement  // GpuNum -> a list of pods -> a list of virtual GPU cells of each pod
@@ -151,6 +152,9 @@ func newAlgoAffinityGroup(
 		physicalGpuPlacement: groupPhysicalPlacement{},
 		virtualGpuPlacement:  groupVirtualPlacement{},
 		state:                state,
+	}
+	if state == groupPreempting {
+		group.preemptorPods = map[string]*core.Pod{}
 	}
 	for gpuNum, podNum := range podNums {
 		group.physicalGpuPlacement[gpuNum] = make([]CellList, podNum)

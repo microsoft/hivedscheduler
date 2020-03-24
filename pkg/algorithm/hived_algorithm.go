@@ -181,7 +181,10 @@ func (h *HivedAlgorithm) Schedule(pod *core.Pod, suggestedNodes []string) intern
 		klog.Infof("[%v]: Pod from preemptor affinity group: %v", internal.Key(pod), s.AffinityGroup.Name)
 		groupPhysicalPlacement = g.physicalGpuPlacement
 		groupVirtualPlacement = g.virtualGpuPlacement
-		preemptionVictims = collectPreemptionVictims(groupPhysicalPlacement)
+		if preemptionVictims = collectPreemptionVictims(groupPhysicalPlacement); len(preemptionVictims) == 0 {
+			klog.Infof("Preemption victims have been cleaned up for preemptor affinity group %v", g.name)
+		}
+		g.preemptorPods[internal.Key(pod)] = pod
 	} else {
 		klog.Infof("[%v]: Scheduling new affinity group %v", internal.Key(pod), s.AffinityGroup.Name)
 		groupPhysicalPlacement, groupVirtualPlacement = h.scheduleNewAffinityGroup(pod, s, suggestedNodeSet)
@@ -209,15 +212,28 @@ func (h *HivedAlgorithm) AddUnallocatedPod(pod *core.Pod) {
 }
 
 func (h *HivedAlgorithm) DeleteUnallocatedPod(pod *core.Pod) {
+	h.algorithmLock.Lock()
+	defer h.algorithmLock.Unlock()
+
+	s := internal.ExtractPodSchedulingSpec(pod)
+	if g := h.preemptorAffinityGroups[s.AffinityGroup.Name]; g != nil {
+		if podKey := internal.Key(pod); g.preemptorPods[podKey] != nil {
+			klog.Infof("[%v]: Deleting preemptor pod from affinity group %v...", podKey, g.name)
+			delete(g.preemptorPods, podKey)
+		}
+		if len(g.preemptorPods) == 0 {
+			h.deletePreemptorAffinityGroup(g, "")
+		}
+	}
 }
 
 func (h *HivedAlgorithm) AddAllocatedPod(pod *core.Pod) {
 	h.algorithmLock.Lock()
 	defer h.algorithmLock.Unlock()
 
-	klog.Infof("[%v]: Adding allocated pod...", internal.Key(pod))
 	s := internal.ExtractPodSchedulingSpec(pod)
 	info := internal.ExtractPodBindInfo(pod)
+	klog.Infof("[%v]: Adding allocated pod to affinity group %v...", internal.Key(pod), s.AffinityGroup.Name)
 	klog.Infof("[%v]: Adding to node %v, GPUs %v", internal.Key(pod), info.Node, common.ToJson(info.GpuIsolation))
 
 	if g := h.preemptorAffinityGroups[s.AffinityGroup.Name]; g != nil {
@@ -240,9 +256,9 @@ func (h *HivedAlgorithm) DeleteAllocatedPod(pod *core.Pod) {
 	h.algorithmLock.Lock()
 	defer h.algorithmLock.Unlock()
 
-	klog.Infof("[%v]: Deleting allocated pod...", internal.Key(pod))
 	s := internal.ExtractPodSchedulingSpec(pod)
 	info := internal.ExtractPodBindInfo(pod)
+	klog.Infof("[%v]: Deleting allocated pod from affinity group %v...", internal.Key(pod), s.AffinityGroup.Name)
 	klog.Infof("[%v]: Deleting from node %v, GPUs %v", internal.Key(pod), info.Node, common.ToJson(info.GpuIsolation))
 
 	if g := h.allocatedAffinityGroups[s.AffinityGroup.Name]; g == nil {
@@ -758,6 +774,7 @@ func (h *HivedAlgorithm) scheduleOpportunisticAffinityGroup(
 
 // createAllocatedAffinityGroup creates a new affinity group and allocate the resources.
 func (h *HivedAlgorithm) createAllocatedAffinityGroup(s *api.PodSchedulingSpec, info *api.PodBindInfo, pod *core.Pod) {
+	klog.Infof("[%v]: Creating new allocated affinity group: %v", internal.Key(pod), s.AffinityGroup.Name)
 	newGroup := newAlgoAffinityGroup(
 		s.AffinityGroup, s.VirtualCluster, s.GangReleaseEnable, s.LazyPreemptionEnable, s.Priority, groupAllocated)
 	shouldLazyPreempt := false
@@ -817,7 +834,7 @@ func (h *HivedAlgorithm) createAllocatedAffinityGroup(s *api.PodSchedulingSpec, 
 // deleteAllocatedAffinityGroup deletes a new affinity group and release the resources (that are not
 // allocated to a preemptor group).
 func (h HivedAlgorithm) deleteAllocatedAffinityGroup(g *AlgoAffinityGroup, pod *core.Pod) {
-	klog.Infof("[%v]: All pods complete, releasing resource from the affinity group %v",
+	klog.Infof("[%v]: All pods complete, deleting affinity group: %v",
 		internal.Key(pod), g.name)
 	for _, podPlacements := range g.physicalGpuPlacement {
 		for _, podPlacement := range podPlacements {
@@ -853,6 +870,7 @@ func (h *HivedAlgorithm) createPreemptorAffinityGroup(
 	virtualPlacement groupVirtualPlacement,
 	pod *core.Pod) {
 
+	klog.Infof("[%v]: Creating new preemptor affinity group: %v", internal.Key(pod), s.AffinityGroup.Name)
 	newGroup := newAlgoAffinityGroup(
 		s.AffinityGroup, s.VirtualCluster, s.GangReleaseEnable, s.LazyPreemptionEnable, s.Priority, groupPreempting)
 	newGroup.physicalGpuPlacement = physicalPlacement
@@ -878,6 +896,7 @@ func (h *HivedAlgorithm) createPreemptorAffinityGroup(
 			}
 		}
 	}
+	newGroup.preemptorPods[internal.Key(pod)] = pod
 	h.preemptorAffinityGroups[s.AffinityGroup.Name] = newGroup
 	klog.Infof("[%v]: New preemptor affinity group created: %v", internal.Key(pod), newGroup.name)
 }
@@ -885,6 +904,12 @@ func (h *HivedAlgorithm) createPreemptorAffinityGroup(
 // deletePreemptorAffinityGroup revokes a preemption and deletes the affinity group that is
 // still waiting for the completion of the preemption.
 func (h *HivedAlgorithm) deletePreemptorAffinityGroup(g *AlgoAffinityGroup, newGroupName string) {
+	if newGroupName == "" {
+		klog.Infof("All preemptor pods deleted, deleting preemptor affinity group %v", g.name)
+	} else {
+		klog.Infof("Preemption canceled by a higher-priority group %v, deleting preemptor affinity group %v",
+			newGroupName, g.name)
+	}
 	for gpuNum := range g.physicalGpuPlacement {
 		for podIndex := range g.physicalGpuPlacement[gpuNum] {
 			for _, gpu := range g.physicalGpuPlacement[gpuNum][podIndex] {
@@ -911,8 +936,7 @@ func (h *HivedAlgorithm) deletePreemptorAffinityGroup(g *AlgoAffinityGroup, newG
 		}
 	}
 	delete(h.preemptorAffinityGroups, g.name)
-	klog.Infof("Preemptor affinity group %v deleted because a higher-priority group %v is acquiring its resource",
-		g.name, newGroupName)
+	klog.Infof("Preemptor affinity group %v deleted", g.name)
 }
 
 // preemptorAffinityGroupToAllocated let a preemptor affinity group whose preemption has completed
@@ -929,6 +953,7 @@ func (h *HivedAlgorithm) preemptorAffinityGroupToAllocated(g *AlgoAffinityGroup,
 		}
 	}
 	g.state = groupAllocated
+	g.preemptorPods = nil
 	h.allocatedAffinityGroups[g.name] = g
 	delete(h.preemptorAffinityGroups, g.name)
 	klog.Infof("[%v]: Preemptor affinity group %v transits to allocated", internal.Key(pod), g.name)
