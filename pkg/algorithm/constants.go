@@ -35,6 +35,26 @@ const (
 	freePriority          = opportunisticPriority - 1
 
 	// lowest and highest levels in a cell chain
-	lowestLevel  = CellLevel(1)
-	highestLevel = CellLevel(math.MaxInt32)
+	lowestLevel  CellLevel = 1
+	highestLevel CellLevel = math.MaxInt32
+
+	// internal cell states
+
+	// no affinity group is using / acquiring or has acquired the cell
+	cellFree CellState = "Free"
+	// an affinity group is using this cell, and no other group is acquiring it
+	cellUsed CellState = "Used"
+	// an affinity group is using this cell, and another group is acquiring it
+	cellAcquiring CellState = "Acquiring"
+	// no affinity group is using this cell, and a group has acquired it
+	cellAcquired CellState = "Acquired"
+
+	// internal affinity group states
+
+	// the affinity group has been allocated cells and is allowed to run
+	groupAllocated affinityGroupState = "Allocated"
+	// the affinity group is waiting for the completion of preemption of other groups
+	groupPreempting affinityGroupState = "Preempting"
+	// the affinity group is being preempted by some other groups
+	groupBeingPreempted affinityGroupState = "BeingPreempted"
 )

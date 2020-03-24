@@ -47,17 +47,43 @@ func buddyAlloc(freeList ChainCellList, level CellLevel, suggestedNodes common.S
 	return getFewestOpporPhysicalCell(freeList[level], suggestedNodes)
 }
 
-// mapNonPreassignedCellToPhysical is used for cell binding inside a preassigned virtual cell.
+func mapVirtualCellToPhysical(c *VirtualCell, freeList ChainCellList, suggestedNodes common.Set) *PhysicalCell {
+	pac := c.GetPreAssignedCell()
+	// check if the preassigned cell has been (temporarily) bound to a physical cell
+	preassignedPhysical := pac.GetPhysicalCell()
+	if preassignedPhysical == nil {
+		preassignedPhysical = pac.GetPreBoundPhysicalCell()
+	}
+	if preassignedPhysical == nil {
+		// Allocate a new physical cell to the preassigned cell. Input a copy of the free cell list
+		// because during the scheduling we should not make in-place change to the data structures
+		// (they can be modified only when adding or deleting pods)
+		c := buddyAlloc(freeList.copy(), pac.GetLevel(), suggestedNodes)
+		if c == nil {
+			panic(fmt.Sprintf(
+				"VC Safety Broken: Cannot find physical cell for a VC cell: %v", pac.GetAddress()))
+		} else {
+			preassignedPhysical = c
+			// create binding (which is temporary and will be cleared after the scheduling,
+			// same reason as above)
+			pac.SetPreBoundPhysicalCell(preassignedPhysical)
+			preassignedPhysical.SetPreBoundVirtualCell(pac)
+		}
+	}
+	return mapNonPreassignedVirtualToPhysical(c, suggestedNodes)
+}
+
+// mapNonPreassignedVirtualToPhysical is used for cell binding inside a preassigned virtual cell.
 // It maps a virtual cell (possibly inside a preassigned one) to one of the cell inside the physical cell
 // allocated to the preassigned cell. This operation keeps the inner-cell topology equivalent,
 // by recursively binding the cells inside the preassigned one.
-func mapNonPreassignedCellToPhysical(c *VirtualCell, suggestedNodes common.Set) *PhysicalCell {
+func mapNonPreassignedVirtualToPhysical(c *VirtualCell, suggestedNodes common.Set) *PhysicalCell {
 	if c.GetPhysicalCell() != nil {
 		return c.GetPhysicalCell()
 	} else if c.GetPreBoundPhysicalCell() != nil {
 		return c.GetPreBoundPhysicalCell()
 	} else {
-		parentPhysical := mapNonPreassignedCellToPhysical(c.GetParent().(*VirtualCell), suggestedNodes)
+		parentPhysical := mapNonPreassignedVirtualToPhysical(c.GetParent().(*VirtualCell), suggestedNodes)
 		pc := getFewestOpporPhysicalCell(parentPhysical.GetChildren(), suggestedNodes)
 		if pc == nil || pc.GetPriority() > opportunisticPriority {
 			panic(fmt.Sprintf("VC Safety Broken: Cannot find physical cell for %v", c.GetAddress()))
@@ -129,10 +155,10 @@ func getFewestOpporPhysicalCell(cl CellList, suggestedNodes common.Set) *Physica
 	return selectedCell
 }
 
-// mapNonPreassignedCellToVirtual is an inverse operation of mapNonPreassignedCellToPhysical,
+// mapPhysicalCellToVirtual is an inverse operation of mapVirtualCellToPhysical,
 // used for finding the virtual cell when adding an allocated pod.
 // It maps a physical cell (possibly allocated to a non-preassigned virtual cell) to the corresponding virtual cell.
-func mapNonPreassignedCellToVirtual(
+func mapPhysicalCellToVirtual(
 	c *PhysicalCell,
 	vccl ChainCellList,
 	preassignedLevel CellLevel,
@@ -151,7 +177,7 @@ func mapNonPreassignedCellToVirtual(
 			"physical and virtual cell hierarchies not match (cannot reach the preassigned level %v in physical)",
 			preassignedLevel)
 	} else {
-		parentVirtual, message := mapNonPreassignedCellToVirtual(c.GetParent().(*PhysicalCell), vccl, preassignedLevel, p)
+		parentVirtual, message := mapPhysicalCellToVirtual(c.GetParent().(*PhysicalCell), vccl, preassignedLevel, p)
 		if parentVirtual == nil {
 			return nil, message
 		} else {

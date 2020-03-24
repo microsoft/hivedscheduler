@@ -33,8 +33,9 @@ import (
 
 type (
 	CellChain    string // name of a cell chain (type of the top-level cell)
-	CellLevel    int32  // starts from 1
+	CellLevel    int32
 	CellPriority int32
+	CellState    string
 )
 
 type schedulingRequest struct {
@@ -118,10 +119,12 @@ type AlgoAffinityGroup struct {
 	vc                   api.VirtualClusterName
 	gangReleaseEnable    bool
 	lazyPreemptionEnable bool
+	priority             int32
 	totalPodNums         map[int32]int32        // GpuNum -> PodNum
-	allocatedPods        map[int32][]*core.Pod  // GpuNum -> a list of allocated pods and node addresses
-	physicalGpuPlacement groupPhysicalPlacement // GpuNum -> a list of pods -> a list of physical GPUs of each pod
-	virtualGpuPlacement  groupVirtualPlacement  // GpuNum -> a list of pods -> a list of virtual GPUs of each pod
+	allocatedPods        map[int32][]*core.Pod  // GpuNum -> a list of allocated pods
+	physicalGpuPlacement groupPhysicalPlacement // GpuNum -> a list of pods -> a list of physical GPU cells of each pod
+	virtualGpuPlacement  groupVirtualPlacement  // GpuNum -> a list of pods -> a list of virtual GPU cells of each pod
+	state                affinityGroupState
 	lazyPreemptionStatus *api.LazyPreemptionStatus
 }
 
@@ -129,7 +132,9 @@ func newAlgoAffinityGroup(
 	g *api.AffinityGroupSpec,
 	vc api.VirtualClusterName,
 	gangReleaseEnable bool,
-	lazyPreemptionEnable bool) *AlgoAffinityGroup {
+	lazyPreemptionEnable bool,
+	priority int32,
+	state affinityGroupState) *AlgoAffinityGroup {
 
 	podNums := make(map[int32]int32)
 	for _, m := range g.Members {
@@ -138,12 +143,14 @@ func newAlgoAffinityGroup(
 	group := &AlgoAffinityGroup{
 		name:                 g.Name,
 		vc:                   vc,
-		gangReleaseEnable:    gangReleaseEnable,
+		gangReleaseEnable:    true,
 		lazyPreemptionEnable: lazyPreemptionEnable,
+		priority:             priority,
 		totalPodNums:         podNums,
 		allocatedPods:        map[int32][]*core.Pod{},
 		physicalGpuPlacement: groupPhysicalPlacement{},
 		virtualGpuPlacement:  groupVirtualPlacement{},
+		state:                state,
 	}
 	for gpuNum, podNum := range podNums {
 		group.physicalGpuPlacement[gpuNum] = make([]CellList, podNum)
@@ -202,3 +209,5 @@ func (p groupVirtualPlacement) toString() string {
 	}
 	return common.ToJson(preassignedCellToLeafCells)
 }
+
+type affinityGroupState string

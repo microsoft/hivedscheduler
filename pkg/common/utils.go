@@ -264,3 +264,13 @@ func Int32SliceContains(n []int32, i int32) bool {
 	}
 	return false
 }
+
+func Int32MapKeys(m map[int32]int32) []int32 {
+	s := make([]int32, len(m))
+	i := 0
+	for k := range m {
+		s[i] = k
+		i++
+	}
+	return s
+}
