@@ -63,7 +63,7 @@ func initNodes(h *HivedAlgorithm) {
 }
 
 var group1, group2, group3, group4, group5, group6, group7, group8, group9, group10, group11, group12,
-	group13, group14, group15, group16, group17, group18, group19, group20, group21, group22, group23, group24 = &api.AffinityGroupSpec{
+	group13, group14, group15, group16, group17, group18, group19, group20, group21, group22, group23, group24, group25, group26 = &api.AffinityGroupSpec{
 	Name:    "group1",
 	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, GpuNumber: 1}},
 }, &api.AffinityGroupSpec{
@@ -131,10 +131,16 @@ var group1, group2, group3, group4, group5, group6, group7, group8, group9, grou
 	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, GpuNumber: 16}},
 }, &api.AffinityGroupSpec{
 	Name:    "group23",
-	Members: []api.AffinityGroupMemberSpec{{PodNumber: 2, GpuNumber: 16}},
+	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, GpuNumber: 16}},
 }, &api.AffinityGroupSpec{
 	Name:    "group24",
+	Members: []api.AffinityGroupMemberSpec{{PodNumber: 2, GpuNumber: 16}},
+}, &api.AffinityGroupSpec{
+	Name:    "group25",
 	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, GpuNumber: 16}},
+}, &api.AffinityGroupSpec{
+	Name:    "group26",
+	Members: []api.AffinityGroupMemberSpec{{PodNumber: 2, GpuNumber: 16}},
 }
 
 var pss = map[types.UID]api.PodSchedulingSpec{
@@ -370,15 +376,15 @@ var pss = map[types.UID]api.PodSchedulingSpec{
 		GpuType:              "DGX2-V100",
 		GpuNumber:            16,
 		AffinityGroup:        group20,
-	}, "pod30": { // will try to preempt pod28, and will be scheduled to a different node from pod29
+	}, "pod30": { // cannot get scheduled because pod28's still holding the resource
 		VirtualCluster:       "VC1",
-		Priority:             2,
+		Priority:             1,
 		LazyPreemptionEnable: true,
 		ReservationId:        "VC1-YQW-DGX2",
 		GpuType:              "DGX2-V100",
 		GpuNumber:            16,
 		AffinityGroup:        group21,
-	}, "pod31": { // cannot get scheduled because VC1-YQW-DGX2 has been used up by pod29 and pod30
+	}, "pod31": { // will try to preempt pod28, and will be scheduled to a different node from pod29
 		VirtualCluster:       "VC1",
 		Priority:             2,
 		LazyPreemptionEnable: true,
@@ -386,22 +392,38 @@ var pss = map[types.UID]api.PodSchedulingSpec{
 		GpuType:              "DGX2-V100",
 		GpuNumber:            16,
 		AffinityGroup:        group22,
-	}, "pod32": { // will cancel pod29 and pod30's preemption, and continue to preempt pod28
+	}, "pod32": { // cannot get scheduled because VC1-YQW-DGX2 has been used up by pod29 and pod31
+		VirtualCluster:       "VC1",
+		Priority:             2,
+		LazyPreemptionEnable: true,
+		ReservationId:        "VC1-YQW-DGX2",
+		GpuType:              "DGX2-V100",
+		GpuNumber:            16,
+		AffinityGroup:        group23,
+	}, "pod33": { // will cancel pod29 and pod31's preemption, and continue to preempt pod28
 		VirtualCluster:       "VC1",
 		Priority:             3,
 		LazyPreemptionEnable: true,
 		ReservationId:        "VC1-YQW-DGX2",
 		GpuType:              "DGX2-V100",
 		GpuNumber:            16,
-		AffinityGroup:        group23,
-	}, "pod33": { // will cancel pod32's preemption, and get scheduled immediately (because pod28 has been deleted)
+		AffinityGroup:        group24,
+	}, "pod34": { // will cancel pod33's preemption, and get scheduled immediately (because pod28 has been deleted)
 		VirtualCluster:       "VC1",
 		Priority:             4,
+		LazyPreemptionEnable: false,
+		ReservationId:        "VC1-YQW-DGX2",
+		GpuType:              "DGX2-V100",
+		GpuNumber:            16,
+		AffinityGroup:        group25,
+	}, "pod35": { // will preempt pod34, and will be deleted before the preemption is done (so the preemption will be canceled)
+		VirtualCluster:       "VC1",
+		Priority:             5,
 		LazyPreemptionEnable: true,
 		ReservationId:        "VC1-YQW-DGX2",
 		GpuType:              "DGX2-V100",
 		GpuNumber:            16,
-		AffinityGroup:        group24,
+		AffinityGroup:        group26,
 	},
 }
 
@@ -419,7 +441,7 @@ var casesThatShouldBeLazyPreempted = []string{
 }
 
 var casesForStatefulPreemption = []string{
-	"pod28", "pod29", "pod30", "pod31", "pod32", "pod33",
+	"pod28", "pod29", "pod30", "pod31", "pod32", "pod33", "pod34", "pod35",
 }
 
 type result struct {
@@ -445,7 +467,7 @@ var expectedBindInfos = map[string]result{
 	"pod24": {node: "0.0.0.0", gpuIsolation: []int32{0, 1}},
 	"pod25": {node: "0.0.0.1", gpuIsolation: []int32{0, 1}},
 	"pod28": {node: "0.0.3.0", gpuIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
-	"pod33": {node: "0.0.3.0", gpuIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
+	"pod34": {node: "0.0.3.0", gpuIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
 }
 
 var expectedPreemptInfos = map[string]common.Set{
@@ -453,13 +475,15 @@ var expectedPreemptInfos = map[string]common.Set{
 	"pod17": common.NewSet("pod5", "pod6"),
 	"pod26": common.NewSet("pod25"),
 	"pod29": common.NewSet("pod28"),
-	"pod30": common.NewSet("pod28"),
-	"pod32": common.NewSet("pod28"),
+	"pod31": common.NewSet("pod28"),
+	"pod33": common.NewSet("pod28"),
+	"pod35": common.NewSet("pod34"),
 }
 
 var deletedPreemptorGroups = map[string][]string{
-	"pod32": {"group21", "group22"},
-	"pod33": {"group23"},
+	"pod33": {"group20", "group22"},
+	"pod34": {"group24"},
+	"pod35": {"group26"},
 }
 
 var allocatedPods []*core.Pod
@@ -573,7 +597,7 @@ func testDeleteAllocatedPods(t *testing.T, h *HivedAlgorithm) {
 		h.DeleteAllocatedPod(allocatedPods[i])
 	}
 	for _, pod := range allocatedPods {
-		if g, ok := h.allocatedAffinityGroups[pss[pod.UID].AffinityGroup.Name]; ok {
+		if g, ok := h.affinityGroups[pss[pod.UID].AffinityGroup.Name]; ok {
 			t.Errorf("Group %v is expected to be deleted in scheduler, but not", g.name)
 		}
 	}
@@ -597,7 +621,7 @@ func testStatefulPreemption(t *testing.T, configFilePath string) {
 	h := NewHivedAlgorithm(sConfig)
 	allocatedPods = []*core.Pod{}
 	var psr internal.PodScheduleResult
-	for i, podName := range casesForStatefulPreemption {
+	for _, podName := range casesForStatefulPreemption {
 		pod := allPods[podName]
 		pod.Annotations[api.AnnotationKeyPodSchedulingSpec] = common.ToYaml(pss[pod.UID])
 		psr = h.Schedule(pod, allNodes)
@@ -607,15 +631,37 @@ func testStatefulPreemption(t *testing.T, configFilePath string) {
 			h.AddAllocatedPod(allocatedPod)
 			allocatedPods = append(allocatedPods, allocatedPod)
 		}
-		if deletedGroups := deletedPreemptorGroups[podName]; deletedGroups != nil {
-			for _, g := range deletedGroups {
-				if _, ok := h.preemptorAffinityGroups[g]; ok {
-					t.Errorf("Group %v is expected to be deleted in scheduler, but not", g)
+		if podName == "pod33" {
+			h.DeleteAllocatedPod(allocatedPods[0])
+		}
+		if podName == "pod35" {
+			p := &groupPhysicalPlacement{}
+			*p = h.affinityGroups[pss[pod.UID].AffinityGroup.Name].physicalGpuPlacement
+			h.DeleteUnallocatedPod(pod)
+			// test correctness of preemption cancellation
+			for _, podPlacements := range *p {
+				for _, podGpus := range podPlacements {
+					for _, gpu := range podGpus {
+						pGpu := gpu.(*PhysicalCell)
+						if pGpu.GetState() == cellUsed {
+							if int32(pGpu.GetPriority()) != pss["pod34"].Priority {
+								t.Errorf("Cell %v's priority should be pod34's priority, but is %v",
+									pGpu.GetAddress(), pGpu.GetPriority())
+							}
+						} else if pGpu.GetState() != cellFree {
+							t.Errorf("Cell %v should be in Free state, but is %v",
+								pGpu.GetAddress(), pGpu.GetState())
+						}
+					}
 				}
 			}
 		}
-		if i == len(casesForStatefulPreemption)-2 {
-			h.DeleteAllocatedPod(allocatedPods[0])
+		if deletedGroups := deletedPreemptorGroups[podName]; deletedGroups != nil {
+			for _, g := range deletedGroups {
+				if _, ok := h.affinityGroups[g]; ok {
+					t.Errorf("Group %v is expected to be deleted in scheduler, but not", g)
+				}
+			}
 		}
 	}
 }
@@ -662,7 +708,7 @@ func testReconfiguration(t *testing.T, configFilePath string) {
 	}
 	for _, podName := range casesThatShouldBeLazyPreempted {
 		pod := allPods[podName]
-		g := h.allocatedAffinityGroups[pss[pod.UID].AffinityGroup.Name]
+		g := h.affinityGroups[pss[pod.UID].AffinityGroup.Name]
 		if g.virtualGpuPlacement != nil {
 			t.Errorf("Group %v is expected to be lazy preempted, but not", g.name)
 		}

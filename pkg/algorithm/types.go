@@ -27,15 +27,16 @@ import (
 	"github.com/microsoft/hivedscheduler/pkg/api"
 	"github.com/microsoft/hivedscheduler/pkg/common"
 	core "k8s.io/api/core/v1"
-	"k8s.io/klog"
+	"k8s.io/apimachinery/pkg/types"
 	"strings"
 )
 
 type (
-	CellChain    string // name of a cell chain (type of the top-level cell)
-	CellLevel    int32
-	CellPriority int32
-	CellState    string
+	CellChain          string // name of a cell chain (type of the top-level cell)
+	CellLevel          int32
+	CellPriority       int32
+	CellState          string
+	AffinityGroupState string
 )
 
 type schedulingRequest struct {
@@ -101,10 +102,9 @@ func (ccl ChainCellList) String() string {
 
 func (ccl ChainCellList) remove(c Cell, l CellLevel) {
 	ccl[l] = ccl[l].remove(c)
-	klog.Infof("Cell removed from cell list: %v", c.GetAddress())
 }
 
-func (ccl ChainCellList) copy() ChainCellList {
+func (ccl ChainCellList) shallowCopy() ChainCellList {
 	copied := ChainCellList{}
 	for l := CellLevel(1); l <= CellLevel(len(ccl)); l++ {
 		copied[l] = make(CellList, len(ccl[l]))
@@ -117,25 +117,23 @@ func (ccl ChainCellList) copy() ChainCellList {
 type AlgoAffinityGroup struct {
 	name                 string
 	vc                   api.VirtualClusterName
-	gangReleaseEnable    bool
 	lazyPreemptionEnable bool
 	priority             int32
-	totalPodNums         map[int32]int32        // GpuNum -> PodNum
-	preemptorPods        map[string]*core.Pod   // string -> pod
-	allocatedPods        map[int32][]*core.Pod  // GpuNum -> a list of allocated pods
-	physicalGpuPlacement groupPhysicalPlacement // GpuNum -> a list of pods -> a list of physical GPU cells of each pod
-	virtualGpuPlacement  groupVirtualPlacement  // GpuNum -> a list of pods -> a list of virtual GPU cells of each pod
-	state                affinityGroupState
+	totalPodNums         map[int32]int32 // GpuNum -> PodNum
+	preemptingPods       map[types.UID]*core.Pod
+	allocatedPods        map[int32][]*core.Pod // GpuNum -> a list of allocated pods
+	physicalGpuPlacement groupPhysicalPlacement
+	virtualGpuPlacement  groupVirtualPlacement
+	state                AffinityGroupState
 	lazyPreemptionStatus *api.LazyPreemptionStatus
 }
 
 func newAlgoAffinityGroup(
 	g *api.AffinityGroupSpec,
 	vc api.VirtualClusterName,
-	gangReleaseEnable bool,
 	lazyPreemptionEnable bool,
 	priority int32,
-	state affinityGroupState) *AlgoAffinityGroup {
+	state AffinityGroupState) *AlgoAffinityGroup {
 
 	podNums := make(map[int32]int32)
 	for _, m := range g.Members {
@@ -144,7 +142,6 @@ func newAlgoAffinityGroup(
 	group := &AlgoAffinityGroup{
 		name:                 g.Name,
 		vc:                   vc,
-		gangReleaseEnable:    true,
 		lazyPreemptionEnable: lazyPreemptionEnable,
 		priority:             priority,
 		totalPodNums:         podNums,
@@ -154,7 +151,7 @@ func newAlgoAffinityGroup(
 		state:                state,
 	}
 	if state == groupPreempting {
-		group.preemptorPods = map[string]*core.Pod{}
+		group.preemptingPods = map[types.UID]*core.Pod{}
 	}
 	for gpuNum, podNum := range podNums {
 		group.physicalGpuPlacement[gpuNum] = make([]CellList, podNum)
@@ -175,8 +172,8 @@ func (aag *AlgoAffinityGroup) ToAffinityGroup() api.AffinityGroup {
 	return ag
 }
 
-type groupPhysicalPlacement map[int32][]CellList
-type groupVirtualPlacement map[int32][]CellList
+type groupPhysicalPlacement map[int32][]CellList // GpuNum -> a list of pods -> a list of physical GPU cells of each pod
+type groupVirtualPlacement map[int32][]CellList  // GpuNum -> a list of pods -> a list of virtual GPU cells of each pod
 
 func (p groupPhysicalPlacement) toString() string {
 	nodeToGpuIndices := map[string][]int32{}
@@ -213,5 +210,3 @@ func (p groupVirtualPlacement) toString() string {
 	}
 	return common.ToJson(preassignedCellToLeafCells)
 }
-
-type affinityGroupState string

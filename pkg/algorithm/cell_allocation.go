@@ -62,7 +62,7 @@ func mapVirtualCellToPhysical(c *VirtualCell, freeList ChainCellList, suggestedN
 		// Allocate a new physical cell to the preassigned cell. Input a copy of the free cell list
 		// because during the scheduling we should not make in-place change to the data structures
 		// (they can be modified only when adding or deleting pods)
-		c := buddyAlloc(freeList.copy(), pac.GetLevel(), suggestedNodes)
+		c := buddyAlloc(freeList.shallowCopy(), pac.GetLevel(), suggestedNodes)
 		if c == nil {
 			panic(fmt.Sprintf(
 				"VC Safety Broken: Cannot find physical cell for a VC cell: %v", pac.GetAddress()))
@@ -146,14 +146,16 @@ func getFewestOpporPhysicalCell(cl CellList, suggestedNodes common.Set) *Physica
 		// it back to the suggested nodes)
 		selectedCell = preemptibleCells[rand.Int31n(int32(len(preemptibleCells)))]
 		nodes, _ := selectedCell.GetPhysicalPlacement()
-		klog.Infof("Selected a cell not within suggested nodes but preempting opportunistic pods may help: %v, nodes %v",
+		klog.Infof("Selected a cell not fully within suggested nodes (some of its children may be within); "+
+			"preempting opportunistic pods may help: %v, nodes %v",
 			selectedCell.GetAddress(), common.ToJson(nodes))
 	} else if fewestOpporCell == nil {
 		panic("VC Safety Broken: Cannot find any physical cell that has not been bound to a virtual cell")
 	} else {
 		selectedCell = fewestOpporCell
 		nodes, _ := selectedCell.GetPhysicalPlacement()
-		klog.Infof("Selected a cell not within suggested nodes and no preemption can help: %v, nodes %v",
+		klog.Infof("Selected a cell not fully within suggested nodes (some of its children may be within); "+
+			"no preemption can help: %v, nodes %v",
 			selectedCell.GetAddress(), common.ToJson(nodes))
 	}
 	return selectedCell

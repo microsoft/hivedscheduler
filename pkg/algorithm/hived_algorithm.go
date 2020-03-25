@@ -45,10 +45,8 @@ type HivedAlgorithm struct {
 	fullCellList map[CellChain]ChainCellList
 	// ChainCellLists of free physical cells of each cell chain (used in buddy alloc)
 	freeCellList map[CellChain]ChainCellList
-	// all affinity groups that have been allocated cells
-	allocatedAffinityGroups map[string]*AlgoAffinityGroup
-	// all affinity groups that are preempting other groups
-	preemptorAffinityGroups map[string]*AlgoAffinityGroup
+	// all affinity groups that have been allocated or are preempting other groups
+	affinityGroups map[string]*AlgoAffinityGroup
 
 	// vcFreeCellNum, allVCFreeCellNum, and totalLeftCellNum are used to track cell usage of the VCs.
 	// Note that these numbers count both healthy and bad cells.
@@ -96,8 +94,7 @@ func NewHivedAlgorithm(sConfig *api.Config) *HivedAlgorithm {
 		badNodes:                common.NewSet(),
 		chains:                  gpuTypeToChain,
 		cellTypes:               cellLevelToType,
-		allocatedAffinityGroups: map[string]*AlgoAffinityGroup{},
-		preemptorAffinityGroups: map[string]*AlgoAffinityGroup{},
+		affinityGroups:          map[string]*AlgoAffinityGroup{},
 		apiClusterStatus: api.ClusterStatus{
 			PhysicalCluster: api.PhysicalClusterStatus{},
 			VirtualClusters: map[api.VirtualClusterName]api.VirtualClusterStatus{},
@@ -165,39 +162,41 @@ func (h *HivedAlgorithm) Schedule(pod *core.Pod, suggestedNodes []string) intern
 		groupPhysicalPlacement groupPhysicalPlacement // GPU number -> a set of pods -> a set of GPUs of each pod
 		groupVirtualPlacement  groupVirtualPlacement  // GPU number -> a set of pods -> a set of GPUs of each pod
 		preemptionVictims      map[string]common.Set  // node -> pods
-		podIndex               int32                  // index of among the pods with the same GPU number in the group, 0 by default
+		podIndex               int32                  // index of current pod among those of the same GPU number in the group, 0 by default
 	)
 
-	if g := h.allocatedAffinityGroups[s.AffinityGroup.Name]; g != nil {
-		klog.Infof("[%v]: Pod from allocated affinity group: %v", internal.Key(pod), s.AffinityGroup.Name)
-		groupPhysicalPlacement = g.physicalGpuPlacement
-		groupVirtualPlacement = g.virtualGpuPlacement
-		if podIndex = getNewPodIndex(g.allocatedPods[s.GpuNumber]); podIndex == -1 {
-			panic(internal.NewBadRequestError(fmt.Sprintf(
-				"Requesting more pods than the configured number for %v GPUs (%v pods) in affinity group %v",
-				s.GpuNumber, g.totalPodNums[s.GpuNumber], s.AffinityGroup.Name)))
+	if g := h.affinityGroups[s.AffinityGroup.Name]; g != nil {
+		// state of g can be either allocated or preempting
+		if g.state == groupAllocated {
+			klog.Infof("[%v]: Pod affinity group is already allocated: %v", internal.Key(pod), s.AffinityGroup.Name)
+			groupPhysicalPlacement = g.physicalGpuPlacement
+			groupVirtualPlacement = g.virtualGpuPlacement
+			if podIndex = getNewPodIndex(g.allocatedPods[s.GpuNumber]); podIndex == -1 {
+				panic(internal.NewBadRequestError(fmt.Sprintf(
+					"Requesting more pods than the configured number for %v GPUs (%v pods) in affinity group %v",
+					s.GpuNumber, g.totalPodNums[s.GpuNumber], s.AffinityGroup.Name)))
+			}
+		} else { // groupPreempting
+			klog.Infof("[%v]: Pod affinity group is preempting others: %v", internal.Key(pod), s.AffinityGroup.Name)
+			groupPhysicalPlacement = g.physicalGpuPlacement
+			groupVirtualPlacement = g.virtualGpuPlacement
+			if preemptionVictims, _ = collectPreemptionVictims(groupPhysicalPlacement); len(preemptionVictims) == 0 {
+				klog.Infof("Preemption victims have been cleaned up for the preemptor affinity group %v", g.name)
+			}
+			g.preemptingPods[pod.UID] = pod
 		}
-	} else if g = h.preemptorAffinityGroups[s.AffinityGroup.Name]; g != nil {
-		klog.Infof("[%v]: Pod from preemptor affinity group: %v", internal.Key(pod), s.AffinityGroup.Name)
-		groupPhysicalPlacement = g.physicalGpuPlacement
-		groupVirtualPlacement = g.virtualGpuPlacement
-		if preemptionVictims, _ = collectPreemptionVictims(groupPhysicalPlacement); len(preemptionVictims) == 0 {
-			klog.Infof("Preemption victims have been cleaned up for preemptor affinity group %v", g.name)
-		}
-		g.preemptorPods[internal.Key(pod)] = pod
 	} else {
 		klog.Infof("[%v]: Scheduling new affinity group %v", internal.Key(pod), s.AffinityGroup.Name)
 		groupPhysicalPlacement, groupVirtualPlacement = h.scheduleNewAffinityGroup(pod, s, suggestedNodeSet)
 		var ongoingPreemptors common.Set
 		preemptionVictims, ongoingPreemptors = collectPreemptionVictims(groupPhysicalPlacement)
 		for preemptor := range ongoingPreemptors.Items() {
-			h.deletePreemptorAffinityGroup(preemptor.(*AlgoAffinityGroup), s.AffinityGroup.Name, pod)
+			h.deletePreemptingAffinityGroup(preemptor.(*AlgoAffinityGroup), s.AffinityGroup.Name, pod)
 		}
 		if len(preemptionVictims) != 0 {
-			h.createPreemptorAffinityGroup(s, groupPhysicalPlacement, groupVirtualPlacement, pod)
+			h.createPreemptingAffinityGroup(s, groupPhysicalPlacement, groupVirtualPlacement, pod)
 		}
 	}
-
 	return generatePodScheduleResult(
 		groupPhysicalPlacement,
 		groupVirtualPlacement,
@@ -206,7 +205,7 @@ func (h *HivedAlgorithm) Schedule(pod *core.Pod, suggestedNodes []string) intern
 		h.cellTypes,
 		s.GpuNumber,
 		podIndex,
-		h.allocatedAffinityGroups[s.AffinityGroup.Name],
+		h.affinityGroups[s.AffinityGroup.Name],
 		s.AffinityGroup.Name,
 		suggestedNodeSet,
 		s.VirtualCluster,
@@ -221,13 +220,13 @@ func (h *HivedAlgorithm) DeleteUnallocatedPod(pod *core.Pod) {
 	defer h.algorithmLock.Unlock()
 
 	s := internal.ExtractPodSchedulingSpec(pod)
-	if g := h.preemptorAffinityGroups[s.AffinityGroup.Name]; g != nil {
-		if podKey := internal.Key(pod); g.preemptorPods[podKey] != nil {
-			klog.Infof("[%v]: Deleting preemptor pod from affinity group %v...", podKey, g.name)
-			delete(g.preemptorPods, podKey)
+	if g := h.affinityGroups[s.AffinityGroup.Name]; g != nil && g.state == groupPreempting {
+		if g.preemptingPods[pod.UID] != nil {
+			klog.Infof("[%v]: Deleting preempting pod from affinity group %v...", internal.Key(pod), g.name)
+			delete(g.preemptingPods, pod.UID)
 		}
-		if len(g.preemptorPods) == 0 {
-			h.deletePreemptorAffinityGroup(g, "", pod)
+		if len(g.preemptingPods) == 0 {
+			h.deletePreemptingAffinityGroup(g, "", pod)
 		}
 	}
 }
@@ -241,20 +240,20 @@ func (h *HivedAlgorithm) AddAllocatedPod(pod *core.Pod) {
 	klog.Infof("[%v]: Adding allocated pod to affinity group %v...", internal.Key(pod), s.AffinityGroup.Name)
 	klog.Infof("[%v]: Adding to node %v, GPUs %v", internal.Key(pod), info.Node, common.ToJson(info.GpuIsolation))
 
-	if g := h.preemptorAffinityGroups[s.AffinityGroup.Name]; g != nil {
-		h.preemptorAffinityGroupToAllocated(g, pod)
-	}
 	podIndex := int32(0)
-	if g := h.allocatedAffinityGroups[s.AffinityGroup.Name]; g == nil {
-		h.createAllocatedAffinityGroup(s, info, pod)
-	} else {
+	if g := h.affinityGroups[s.AffinityGroup.Name]; g != nil {
+		if g.state == groupPreempting {
+			h.allocatePreemptingAffinityGroup(g, pod)
+		}
 		if podIndex = getAllocatedPodIndex(info, s.GpuNumber); podIndex == -1 {
 			klog.Errorf("[%v]: Pod placement not found in group %v: node %v, GPUs %v",
 				internal.Key(pod), s.AffinityGroup.Name, info.Node, info.GpuIsolation)
 			return
 		}
+	} else {
+		h.createAllocatedAffinityGroup(s, info, pod)
 	}
-	h.allocatedAffinityGroups[s.AffinityGroup.Name].allocatedPods[s.GpuNumber][podIndex] = pod
+	h.affinityGroups[s.AffinityGroup.Name].allocatedPods[s.GpuNumber][podIndex] = pod
 }
 
 func (h *HivedAlgorithm) DeleteAllocatedPod(pod *core.Pod) {
@@ -266,7 +265,7 @@ func (h *HivedAlgorithm) DeleteAllocatedPod(pod *core.Pod) {
 	klog.Infof("[%v]: Deleting allocated pod from affinity group %v...", internal.Key(pod), s.AffinityGroup.Name)
 	klog.Infof("[%v]: Deleting from node %v, GPUs %v", internal.Key(pod), info.Node, common.ToJson(info.GpuIsolation))
 
-	if g := h.allocatedAffinityGroups[s.AffinityGroup.Name]; g == nil {
+	if g := h.affinityGroups[s.AffinityGroup.Name]; g == nil {
 		klog.Errorf("[%v]: Group %v not found when deleting pod", internal.Key(pod), s.AffinityGroup.Name)
 		return
 	} else {
@@ -288,7 +287,7 @@ func (h *HivedAlgorithm) GetAllAffinityGroups() api.AffinityGroupList {
 	defer h.algorithmLock.RUnlock()
 
 	ags := api.AffinityGroupList{}
-	for _, aag := range h.allocatedAffinityGroups {
+	for _, aag := range h.affinityGroups {
 		ags.Items = append(ags.Items, aag.ToAffinityGroup())
 	}
 
@@ -299,7 +298,7 @@ func (h *HivedAlgorithm) GetAffinityGroup(name string) api.AffinityGroup {
 	h.algorithmLock.RLock()
 	defer h.algorithmLock.RUnlock()
 
-	if aag := h.allocatedAffinityGroups[name]; aag != nil {
+	if aag := h.affinityGroups[name]; aag != nil {
 		return aag.ToAffinityGroup()
 	}
 
@@ -524,7 +523,7 @@ func (h *HivedAlgorithm) incrementBadFreeCell(c CellChain, l CellLevel, n int32)
 			"than the total free cells of all the VCs (%v). Certain VCs' cells may be doomed to be bad.",
 			h.cellTypes[c][l], c, l, h.totalLeftCellNum[c][l]-h.badFreeCellNum[c][l],
 			h.badFreeCellNum[c][l], h.allVCFreeCellNum[c][l])
-		h.checkVCDoomedBadCells(c, l)
+		h.updateVCDoomedBadCells(c, l)
 	}
 }
 
@@ -539,13 +538,13 @@ func (h *HivedAlgorithm) decrementBadFreeCell(c CellChain, l CellLevel, n int32)
 				h.cellTypes[c][l], c, l, h.totalLeftCellNum[c][l]-h.badFreeCellNum[c][l],
 				h.badFreeCellNum[c][l], h.allVCFreeCellNum[c][l])
 		}
-		h.checkVCDoomedBadCells(c, l)
+		h.updateVCDoomedBadCells(c, l)
 	}
 }
 
-// checkVCDoomedBadCells checks if the healthy cells in the physical cluster can satisfy the free cells
+// updateVCDoomedBadCells checks if the healthy cells in the physical cluster can satisfy the free cells
 // in each VC. If not, we will mark some of the virtual cells in the VC as bad (i.e., doomed to be bad).
-func (h *HivedAlgorithm) checkVCDoomedBadCells(c CellChain, l CellLevel) {
+func (h *HivedAlgorithm) updateVCDoomedBadCells(c CellChain, l CellLevel) {
 	for vcName, vcFreeCellNum := range h.vcFreeCellNum {
 		if _, ok := vcFreeCellNum[c][l]; !ok {
 			continue
@@ -644,7 +643,7 @@ func (h *HivedAlgorithm) scheduleAffinityGroupForGivenGpuType(
 
 	if chains := h.chains[gpuType]; chains == nil {
 		panic(internal.NewBadRequestError(fmt.Sprintf(
-			"[%v]: pod requesting GPU type %v which the whole cluster does not have",
+			"[%v]: Pod requesting GPU type %v which the whole cluster does not have",
 			internal.Key(pod), gpuType)))
 	} else {
 		vcHasType := false
@@ -660,7 +659,7 @@ func (h *HivedAlgorithm) scheduleAffinityGroupForGivenGpuType(
 		}
 		if sr.priority >= minGuaranteedPriority && !vcHasType {
 			panic(internal.NewBadRequestError(fmt.Sprintf(
-				"[%v]: pod requesting GPU type %v which VC %v does not have",
+				"[%v]: Pod requesting GPU type %v which VC %v does not have",
 				internal.Key(pod), gpuType, sr.vc)))
 		}
 	}
@@ -783,7 +782,7 @@ func (h *HivedAlgorithm) scheduleOpportunisticAffinityGroup(
 func (h *HivedAlgorithm) createAllocatedAffinityGroup(s *api.PodSchedulingSpec, info *api.PodBindInfo, pod *core.Pod) {
 	klog.Infof("[%v]: Creating new allocated affinity group: %v", internal.Key(pod), s.AffinityGroup.Name)
 	newGroup := newAlgoAffinityGroup(
-		s.AffinityGroup, s.VirtualCluster, s.GangReleaseEnable, s.LazyPreemptionEnable, s.Priority, groupAllocated)
+		s.AffinityGroup, s.VirtualCluster, s.LazyPreemptionEnable, s.Priority, groupAllocated)
 	shouldLazyPreempt := false
 	for _, gms := range info.AffinityGroupBindInfo {
 		gpuNumber := int32(len(gms.PodPlacements[0].PhysicalGpuIndices))
@@ -834,14 +833,14 @@ func (h *HivedAlgorithm) createAllocatedAffinityGroup(s *api.PodSchedulingSpec, 
 	if shouldLazyPreempt {
 		h.lazyPreemptAffinityGroup(newGroup, newGroup.name)
 	}
-	h.allocatedAffinityGroups[s.AffinityGroup.Name] = newGroup
+	h.affinityGroups[s.AffinityGroup.Name] = newGroup
 	klog.Infof("[%v]: New allocated affinity group created: %v", internal.Key(pod), s.AffinityGroup.Name)
 }
 
 // deleteAllocatedAffinityGroup deletes a new affinity group and release the resources (that are not
-// allocated to a preemptor group).
+// allocated to a preempting group).
 func (h HivedAlgorithm) deleteAllocatedAffinityGroup(g *AlgoAffinityGroup, pod *core.Pod) {
-	klog.Infof("[%v]: All pods complete, deleting affinity group: %v",
+	klog.Infof("[%v]: All pods complete, deleting allocated affinity group: %v",
 		internal.Key(pod), g.name)
 	for _, podPlacements := range g.physicalGpuPlacement {
 		for _, podPlacement := range podPlacements {
@@ -863,23 +862,23 @@ func (h HivedAlgorithm) deleteAllocatedAffinityGroup(g *AlgoAffinityGroup, pod *
 			}
 		}
 	}
-	delete(h.allocatedAffinityGroups, g.name)
+	delete(h.affinityGroups, g.name)
 	klog.Infof("[%v]: Allocated affinity group deleted: %v", internal.Key(pod), g.name)
 }
 
-// createPreemptorAffinityGroup creates a new affinity group that is preempting some other groups.
+// createPreemptingAffinityGroup creates a new affinity group that is preempting some other groups.
 // Its resources are immediately allocated to the group (even if the preemption victims have not yet been deleted),
 // so that other groups will not be scheduled to the same placement (unless they have higher priorities).
-// This avoids the case where multiple groups preempt the same victims simultaneously, which may cause resource dead lock.
-func (h *HivedAlgorithm) createPreemptorAffinityGroup(
+// This avoids the case where multiple groups preempt the same victims simultaneously, which may cause resource deadlock.
+func (h *HivedAlgorithm) createPreemptingAffinityGroup(
 	s *api.PodSchedulingSpec,
 	physicalPlacement groupPhysicalPlacement,
 	virtualPlacement groupVirtualPlacement,
 	pod *core.Pod) {
 
-	klog.Infof("[%v]: Creating new preemptor affinity group: %v", internal.Key(pod), s.AffinityGroup.Name)
+	klog.Infof("[%v]: Creating new preempting affinity group: %v", internal.Key(pod), s.AffinityGroup.Name)
 	newGroup := newAlgoAffinityGroup(
-		s.AffinityGroup, s.VirtualCluster, s.GangReleaseEnable, s.LazyPreemptionEnable, s.Priority, groupPreempting)
+		s.AffinityGroup, s.VirtualCluster, s.LazyPreemptionEnable, s.Priority, groupPreempting)
 	newGroup.physicalGpuPlacement = physicalPlacement
 	newGroup.virtualGpuPlacement = virtualPlacement
 	for gpuNum := range physicalPlacement {
@@ -904,19 +903,19 @@ func (h *HivedAlgorithm) createPreemptorAffinityGroup(
 			}
 		}
 	}
-	newGroup.preemptorPods[internal.Key(pod)] = pod
-	h.preemptorAffinityGroups[s.AffinityGroup.Name] = newGroup
-	klog.Infof("[%v]: New preemptor affinity group created: %v", internal.Key(pod), newGroup.name)
+	newGroup.preemptingPods[pod.UID] = pod
+	h.affinityGroups[s.AffinityGroup.Name] = newGroup
+	klog.Infof("[%v]: New preempting affinity group created: %v", internal.Key(pod), newGroup.name)
 }
 
-// deletePreemptorAffinityGroup revokes a preemption and deletes the affinity group that is
+// deletePreemptingAffinityGroup revokes a preemption and deletes the affinity group that is
 // still waiting for the completion of the preemption.
-func (h *HivedAlgorithm) deletePreemptorAffinityGroup(g *AlgoAffinityGroup, newGroupName string, pod *core.Pod) {
+func (h *HivedAlgorithm) deletePreemptingAffinityGroup(g *AlgoAffinityGroup, newGroupName string, pod *core.Pod) {
 	if newGroupName == "" {
-		klog.Infof("[%v]: All preemptor pods deleted, deleting preemptor affinity group %v",
+		klog.Infof("[%v]: All pods deleted, deleting preempting affinity group %v",
 			internal.Key(pod), g.name)
 	} else {
-		klog.Infof("[%v]: Affinity group %v cancels an ongoing preemption, deleting the ongoing preemptor affinity group %v",
+		klog.Infof("[%v]: Affinity group %v cancels an ongoing preemption, deleting the ongoing preempting affinity group %v",
 			internal.Key(pod), newGroupName, g.name)
 	}
 	for gpuNum := range g.physicalGpuPlacement {
@@ -944,13 +943,13 @@ func (h *HivedAlgorithm) deletePreemptorAffinityGroup(g *AlgoAffinityGroup, newG
 			}
 		}
 	}
-	delete(h.preemptorAffinityGroups, g.name)
-	klog.Infof("Preemptor affinity group %v deleted", g.name)
+	delete(h.affinityGroups, g.name)
+	klog.Infof("[%v]: Preempting affinity group %v deleted", internal.Key(pod), g.name)
 }
 
-// preemptorAffinityGroupToAllocated let a preemptor affinity group whose preemption has completed
-// transit to allocated state.
-func (h *HivedAlgorithm) preemptorAffinityGroupToAllocated(g *AlgoAffinityGroup, pod *core.Pod) {
+// allocatePreemptingAffinityGroup lets a preemptor affinity group whose preemption has completed
+// transition to allocated state.
+func (h *HivedAlgorithm) allocatePreemptingAffinityGroup(g *AlgoAffinityGroup, pod *core.Pod) {
 	for gpuNum := range g.physicalGpuPlacement {
 		for podIndex := range g.physicalGpuPlacement[gpuNum] {
 			for _, gpu := range g.physicalGpuPlacement[gpuNum][podIndex] {
@@ -962,10 +961,8 @@ func (h *HivedAlgorithm) preemptorAffinityGroupToAllocated(g *AlgoAffinityGroup,
 		}
 	}
 	g.state = groupAllocated
-	g.preemptorPods = nil
-	h.allocatedAffinityGroups[g.name] = g
-	delete(h.preemptorAffinityGroups, g.name)
-	klog.Infof("[%v]: Preemptor affinity group %v transits to allocated", internal.Key(pod), g.name)
+	g.preemptingPods = nil
+	klog.Infof("[%v]: Preempting affinity group %v transitioned to allocated", internal.Key(pod), g.name)
 }
 
 // lazyPreemptAffinityGroup removes an affinity group from its VC, clears it virtual placement,
@@ -1010,13 +1007,13 @@ func (h *HivedAlgorithm) findAllocatedGpu(
 	physicalGpuIndex := physicalGpuIndices[index]
 	if pGpu := findPhysicalGpu(h.fullCellList, chain, node, physicalGpuIndex); pGpu == nil {
 		klog.Warningf(
-			"[%v]: cannot find GPU %v on node %v: not found in the spec. pod ignored",
+			"[%v]: Cannot find GPU %v on node %v: not found in the spec. Pod ignored",
 			internal.Key(pod), physicalGpuIndex, node)
 		return nil, nil, common.PtrBool(false)
 	} else {
 		var vGpu *VirtualCell
 		if preassignedCellTypes == nil {
-			klog.Warningf("[%v]: cannot find virtual cell: preassigned cell not found in pod bind info", internal.Key(pod))
+			klog.Warningf("[%v]: Cannot find virtual cell: preassigned cell not found in pod bind info", internal.Key(pod))
 			return pGpu, nil, common.PtrBool(true)
 		}
 		if group.virtualGpuPlacement != nil && !lazyPreempted {
@@ -1032,7 +1029,7 @@ func (h *HivedAlgorithm) findAllocatedGpu(
 				}
 				var message string
 				if !typeFound {
-					message = fmt.Sprintf("preassigned cell type %v not found in chain %v", preassignedType, pGpu.GetChain())
+					message = fmt.Sprintf("Preassigned cell type %v not found in chain %v", preassignedType, pGpu.GetChain())
 				} else if vcs := h.vcSchedulers[s.VirtualCluster]; vcs == nil {
 					message = fmt.Sprintf("VC %v not found", s.VirtualCluster)
 				} else {
@@ -1049,7 +1046,7 @@ func (h *HivedAlgorithm) findAllocatedGpu(
 					}
 				}
 				if vGpu == nil {
-					klog.Warningf("[%v]: cannot find virtual cell: %v", internal.Key(pod), message)
+					klog.Warningf("[%v]: Cannot find virtual cell: %v", internal.Key(pod), message)
 					return pGpu, nil, common.PtrBool(true)
 				} else {
 					return pGpu, vGpu, common.PtrBool(false)
@@ -1148,7 +1145,7 @@ func (h *HivedAlgorithm) removeCellFromFreeList(c *PhysicalCell) (success bool, 
 		} else {
 			// if the used cell is healthy, we should check if some VCs' cells are doomed bad
 			// due to the reduced healthy free cells (the same below)
-			h.checkVCDoomedBadCells(chain, l)
+			h.updateVCDoomedBadCells(chain, l)
 		}
 		numToRemove *= int32(len(h.fullCellList[chain][l][0].GetChildren()))
 	}
@@ -1167,6 +1164,7 @@ func (h *HivedAlgorithm) removeCellFromFreeList(c *PhysicalCell) (success bool, 
 			terminate = true
 		}
 		h.freeCellList[chain].remove(c, l)
+		klog.Infof("Cell %v (type %v) removed from free cell list", c.GetAddress(), h.cellTypes[chain][l])
 		h.totalLeftCellNum[chain][l]--
 		if h.totalLeftCellNum[chain][l] < h.allVCFreeCellNum[chain][l] {
 			success = false
@@ -1176,7 +1174,7 @@ func (h *HivedAlgorithm) removeCellFromFreeList(c *PhysicalCell) (success bool, 
 		if c.GetAPIStatus().CellHealthiness == api.CellBad {
 			h.decrementBadFreeCell(chain, l, 1)
 		} else {
-			h.checkVCDoomedBadCells(chain, l)
+			h.updateVCDoomedBadCells(chain, l)
 		}
 		if terminate {
 			break
@@ -1201,7 +1199,7 @@ func (h *HivedAlgorithm) addCellToFreeList(c *PhysicalCell) {
 		} else {
 			// if the freed cell is healthy, we should check if some VCs's doomed bad cells should be reduced
 			// due to the increased healthy free cells (the same below)
-			h.checkVCDoomedBadCells(chain, l)
+			h.updateVCDoomedBadCells(chain, l)
 		}
 		numToAdd *= int32(len(h.fullCellList[chain][l][0].GetChildren()))
 	}
@@ -1222,6 +1220,8 @@ func (h *HivedAlgorithm) addCellToFreeList(c *PhysicalCell) {
 				for _, buddy := range parent.GetChildren() {
 					if !CellEqual(buddy, c) {
 						h.freeCellList[chain].remove(buddy, l)
+						klog.Infof("Cell %v (type %v) removed from free cell list",
+							buddy.GetAddress(), h.cellTypes[chain][l])
 					}
 				}
 				parent.(*PhysicalCell).SetSplit(false)
@@ -1233,7 +1233,7 @@ func (h *HivedAlgorithm) addCellToFreeList(c *PhysicalCell) {
 		if c.GetAPIStatus().CellHealthiness == api.CellBad {
 			h.incrementBadFreeCell(chain, l, 1)
 		} else {
-			h.checkVCDoomedBadCells(chain, l)
+			h.updateVCDoomedBadCells(chain, l)
 		}
 		if terminate {
 			h.freeCellList[chain][l] = append(h.freeCellList[chain][l], c)

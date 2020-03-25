@@ -40,21 +40,28 @@ const (
 
 	// internal cell states
 
-	// no affinity group is using / acquiring or has acquired the cell
+	// No affinity group is using, acquiring or has acquired the cell.
+	// A Free cell's priority must be freePriority.
 	cellFree CellState = "Free"
-	// an affinity group is using this cell, and no other group is acquiring it
+	// An affinity group is using this cell, and no other group is acquiring it.
+	// A Used cell's priority is that of the group using the cell.
 	cellUsed CellState = "Used"
-	// an affinity group is using this cell, and another group is acquiring it
+	// An affinity group is using this cell, and another group is acquiring it.
+	// An Acquiring cell's priority is that of the group acquiring the cell.
 	cellAcquiring CellState = "Acquiring"
-	// no affinity group is using this cell, and a group has acquired it
+	// No affinity group is using this cell, and a group has acquired it.
+	// An Acquired cell's priority is that of the group acquiring the cell.
 	cellAcquired CellState = "Acquired"
 
 	// internal affinity group states
 
-	// the affinity group has been allocated cells and is allowed to run
-	groupAllocated affinityGroupState = "Allocated"
-	// the affinity group is waiting for the completion of preemption of other groups
-	groupPreempting affinityGroupState = "Preempting"
-	// the affinity group is being preempted by some other groups
-	groupBeingPreempted affinityGroupState = "BeingPreempted"
+	// The affinity group has been allocated cells and is allowed to run.
+	// All cells in the group must be in Used state.
+	groupAllocated AffinityGroupState = "Allocated"
+	// The affinity group is preempting other groups to get free resource.
+	// Cells in the group must be in either Acquiring or Acquired states.
+	groupPreempting AffinityGroupState = "Preempting"
+	// The affinity group is being preempted by some other groups.
+	// Cells in the group must be in either Used or Acquiring states.
+	groupBeingPreempted AffinityGroupState = "BeingPreempted"
 )

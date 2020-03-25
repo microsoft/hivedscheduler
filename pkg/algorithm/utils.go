@@ -85,10 +85,10 @@ func generatePodScheduleResult(
 				waitReason = fmt.Sprintf("insufficient capacity in VC %v", vc)
 			}
 		} else if len(nodesNotInSuggested) > 0 {
-			if group == nil {
-				// for a new group, we will keep it waiting if not all of its pods are scheduled to suggested nodes
+			if group == nil || group.state == groupPreempting {
+				// for an unallocated group, we will keep it waiting if not all of its pods are scheduled to suggested nodes
 				waitReason = fmt.Sprintf(
-					"affinity group is scheduled to some nodes not within K8s suggested nodes: %v",
+					"affinity group is decided to be scheduled to some nodes not within K8s suggested nodes: %v",
 					common.ToJson(nodesNotInSuggested))
 			} else {
 				// for an existing group, we always insist the previous scheduling decision
@@ -101,7 +101,7 @@ func generatePodScheduleResult(
 			klog.Infof("[%v]: need to wait because %v", internal.Key(pod), waitReason)
 			return internal.PodScheduleResult{PodWaitInfo: &internal.PodWaitInfo{Reason: waitReason}}
 		}
-		klog.Infof("[%v]: scheduled to node %v, GPUs %v",
+		klog.Infof("[%v]: pod is decided to be scheduled to node %v, GPUs %v",
 			internal.Key(pod), selectedNode, common.ToJson(selectedGpuIndices))
 		return internal.PodScheduleResult{
 			PodBindInfo: &api.PodBindInfo{
@@ -147,7 +147,7 @@ func generateAffinityGroupBindInfo(
 			for gpuIndex := int32(0); gpuIndex < podGpuNum; gpuIndex++ {
 				pGpu := podPhysicalPlacements[podIndex][gpuIndex]
 				if pGpu == nil {
-					if group == nil {
+					if group == nil || group.state == groupPreempting {
 						panic(fmt.Sprintf("The first pod in group %v was allocated invalid resource", groupName))
 					}
 					// if the physical placement of this pod is not found (e.g., removed due to reconfiguration),
@@ -196,7 +196,7 @@ func generateAffinityGroupBindInfo(
 func collectPreemptionVictims(physicalPlacement groupPhysicalPlacement) (
 	victimPods map[string]common.Set, ongoingPreemptorGroups common.Set) {
 
-	victimPods = map[string]common.Set{}
+	victimPods = map[string]common.Set{} // node -> pods
 	ongoingPreemptorGroups = common.NewSet()
 	for gpuNum := range physicalPlacement {
 		for podIndex := range physicalPlacement[gpuNum] {

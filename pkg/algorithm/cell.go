@@ -124,7 +124,7 @@ type PhysicalCell struct {
 	nodes               []string           // node names inside the cell
 	gpuIndices          []int32            // [-1] for cells at levels higher than node
 	usingGroup          *AlgoAffinityGroup // affinity group using this cell (i.e., has running pod on the cell)
-	acquiringGroup      *AlgoAffinityGroup // affinity group that is trying to acquire, or has acquired the cell (e.g., waiting for preemption)
+	acquiringGroup      *AlgoAffinityGroup // affinity group that is acquiring, or has acquired the cell (e.g., waiting for preemption)
 	virtualCell         *VirtualCell       // points to the bound virtual cell
 	preBoundVirtualCell *VirtualCell       // points to the temporarily bound virtual cell (before the binding is confirmed)
 	split               bool               // true when the cell has been split
