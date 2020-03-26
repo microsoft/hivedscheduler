@@ -683,7 +683,7 @@ func (s *HivedScheduler) preemptRoutine(args ei.ExtenderPreemptionArgs) *ei.Exte
 			PodScheduleResult: &result,
 		}
 
-		victims := podStatus.PodScheduleResult.PodPreemptInfo.VictimPods
+		victims := result.PodPreemptInfo.VictimPods
 		nodesVictims := map[string]*ei.MetaVictims{}
 
 		for _, victim := range victims {
