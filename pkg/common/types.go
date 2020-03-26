@@ -65,7 +65,7 @@ func (s Set) Items() map[T]Empty {
 	return s.items
 }
 
-func (s Set) ToString() string {
+func (s Set) String() string {
 	ss := make([]string, len(s.items))
 	n := int32(0)
 	for item := range s.items {

@@ -119,9 +119,9 @@ type AlgoAffinityGroup struct {
 	vc                   api.VirtualClusterName
 	lazyPreemptionEnable bool
 	priority             int32
-	totalPodNums         map[int32]int32 // GpuNum -> PodNum
-	preemptingPods       map[types.UID]*core.Pod
+	totalPodNums         map[int32]int32       // GpuNum -> PodNum
 	allocatedPods        map[int32][]*core.Pod // GpuNum -> a list of allocated pods
+	preemptingPods       map[types.UID]*core.Pod
 	physicalGpuPlacement groupPhysicalPlacement
 	virtualGpuPlacement  groupVirtualPlacement
 	state                AffinityGroupState
@@ -166,16 +166,42 @@ func newAlgoAffinityGroup(
 }
 
 func (aag *AlgoAffinityGroup) ToAffinityGroup() api.AffinityGroup {
-	ag := api.AffinityGroup{}
-	ag.Name = aag.name
-	ag.Status.LazyPreemptionStatus = aag.lazyPreemptionStatus
+	ag := api.AffinityGroup{
+		ObjectMeta: api.ObjectMeta{Name: aag.name},
+		Status: api.AffinityGroupStatus{
+			VC:                   aag.vc,
+			Priority:             aag.priority,
+			State:                api.AffinityGroupState(aag.state),
+			LazyPreemptionStatus: aag.lazyPreemptionStatus,
+		},
+	}
+	if aag.physicalGpuPlacement != nil {
+		ag.Status.PhysicalPlacement = aag.physicalGpuPlacement.nodeToGpuIndices()
+	}
+	if aag.virtualGpuPlacement != nil {
+		ag.Status.VirtualPlacement = aag.virtualGpuPlacement.preassignedCellToLeafCells()
+	}
+	for _, pods := range aag.allocatedPods {
+		for _, p := range pods {
+			if p != nil {
+				ag.Status.AllocatedPods = append(ag.Status.AllocatedPods, p.UID)
+			}
+		}
+	}
+	for p := range aag.preemptingPods {
+		ag.Status.PreemptingPods = append(ag.Status.PreemptingPods, p)
+	}
 	return ag
 }
 
 type groupPhysicalPlacement map[int32][]CellList // GpuNum -> a list of pods -> a list of physical GPU cells of each pod
 type groupVirtualPlacement map[int32][]CellList  // GpuNum -> a list of pods -> a list of virtual GPU cells of each pod
 
-func (p groupPhysicalPlacement) toString() string {
+func (p groupPhysicalPlacement) String() string {
+	return common.ToJson(p.nodeToGpuIndices())
+}
+
+func (p groupPhysicalPlacement) nodeToGpuIndices() map[string][]int32 {
 	nodeToGpuIndices := map[string][]int32{}
 	for _, podPlacements := range p {
 		for _, pod := range podPlacements {
@@ -189,10 +215,14 @@ func (p groupPhysicalPlacement) toString() string {
 			}
 		}
 	}
-	return common.ToJson(nodeToGpuIndices)
+	return nodeToGpuIndices
 }
 
-func (p groupVirtualPlacement) toString() string {
+func (p groupVirtualPlacement) String() string {
+	return common.ToJson(p.preassignedCellToLeafCells())
+}
+
+func (p groupVirtualPlacement) preassignedCellToLeafCells() map[api.CellAddress][]api.CellAddress {
 	preassignedCellToLeafCells := map[api.CellAddress][]api.CellAddress{}
 	for _, podPlacements := range p {
 		for _, pod := range podPlacements {
@@ -208,5 +238,5 @@ func (p groupVirtualPlacement) toString() string {
 			}
 		}
 	}
-	return common.ToJson(preassignedCellToLeafCells)
+	return preassignedCellToLeafCells
 }

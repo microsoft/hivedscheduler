@@ -422,6 +422,7 @@ func (h *HivedAlgorithm) initAPIClusterStatus() {
 // initReservations creates static bindings for the reserved cells, and removes the
 // reserved physical cells from the free cell list.
 func (h *HivedAlgorithm) initReservations(reservedCells map[api.VirtualClusterName]map[api.ReservationId]*PhysicalCell) {
+	klog.Info("Init reservations")
 	for vcn, vcReservation := range reservedCells {
 		for rid, physical := range vcReservation {
 			h.vcFreeCellNum[vcn][physical.GetChain()][physical.GetLevel()]--
@@ -485,23 +486,36 @@ func (h *HivedAlgorithm) setHealthyNode(nodeName string) {
 
 // setBadCell marks a physical cell (and also the virtual cell it is bound to) as bad,
 // and recursively for its parent, guaranteeing that a cell is bad if all of its children are bad.
+// setBadCell always starts from the lowest level, i.e., GPU-level cells.
 func (h *HivedAlgorithm) setBadCell(c *PhysicalCell) {
 	c.SetHealthiness(api.CellBad)
 	if inFreeCellList(c) {
 		h.incrementBadFreeCell(c.GetChain(), c.GetLevel(), 1)
 	}
+	terminate := false
 	if parent := c.GetParent(); parent != nil {
 		for _, buddy := range parent.GetChildren() {
 			if buddy.(*PhysicalCell).GetAPIStatus().CellHealthiness != api.CellBad {
-				return
+				terminate = true
+				break
 			}
 		}
-		h.setBadCell(parent.(*PhysicalCell))
+		if !terminate {
+			h.setBadCell(parent.(*PhysicalCell))
+		}
+	} else {
+		terminate = true
+	}
+	if terminate && c.GetVirtualCell() != nil {
+		// we set virtual cell to bad only when we terminate the recursion
+		// (if we set it for every recursive call it will waste computation)
+		setVirtualCellHealthiness(c.GetVirtualCell(), api.CellBad)
 	}
 }
 
 // setHealthyCell marks a physical cell (and also the virtual cell it is bound to) as healthy,
 // and recursively for its parent, guaranteeing that a cell is healthy if any of its children is healthy.
+// setHealthy always starts from the lowest level, i.e., GPU-level cells.
 func (h *HivedAlgorithm) setHealthyCell(c *PhysicalCell) {
 	c.SetHealthiness(api.CellHealthy)
 	if inFreeCellList(c) {
@@ -510,7 +524,16 @@ func (h *HivedAlgorithm) setHealthyCell(c *PhysicalCell) {
 	if parent := c.GetParent(); parent != nil {
 		if pp := parent.(*PhysicalCell); pp.GetAPIStatus().CellHealthiness == api.CellBad {
 			h.setHealthyCell(pp)
+			return
 		}
+	}
+	if vc := c.GetVirtualCell(); vc != nil {
+		// When a cell is set back to healthy, we cannot guarantee all of its children are bad.
+		// So we should reset the healthiness of the children of its virtual cell to respect the real cell binding,
+		//i.e., the children who are not bound to physical cells should be set to healthy.
+		// This is done only when we terminate the recursion (if we set it for every recursive call
+		// it will waste computation).
+		resetVirtualCellHealthiness(vc)
 	}
 }
 
@@ -573,7 +596,7 @@ func (h *HivedAlgorithm) updateVCDoomedBadCells(c CellChain, l CellLevel) {
 			for _, vc := range h.vcSchedulers[vcName].getNonReservedFreeCellList()[c][l] {
 				virtualCell := vc.(*VirtualCell)
 				if virtualCell.GetPhysicalCell() == nil && virtualCell.GetAPIStatus().CellHealthiness == api.CellBad {
-					virtualCell.GetAPIStatus().CellHealthiness = api.CellHealthy
+					setVirtualCellHealthiness(virtualCell, api.CellHealthy)
 					n++
 					if n >= numToReduce {
 						break
@@ -586,7 +609,7 @@ func (h *HivedAlgorithm) updateVCDoomedBadCells(c CellChain, l CellLevel) {
 			for _, vc := range h.vcSchedulers[vcName].getNonReservedFreeCellList()[c][l] {
 				virtualCell := vc.(*VirtualCell)
 				if virtualCell.GetPhysicalCell() == nil && virtualCell.GetAPIStatus().CellHealthiness != api.CellBad {
-					virtualCell.GetAPIStatus().CellHealthiness = api.CellBad
+					setVirtualCellHealthiness(virtualCell, api.CellBad)
 					n++
 					if n >= numToIncrease {
 						break
@@ -769,7 +792,7 @@ func (h *HivedAlgorithm) scheduleOpportunisticAffinityGroup(
 	physicalPlacement := h.opportunisticSchedulers[sr.chain].Schedule(
 		sr.affinityGroupPodNums, opportunisticPriority, suggestedNodes)
 	if physicalPlacement == nil {
-		klog.Infof("Insufficient capacity in PC for scheduling request: GPU numbers %v, priority %v, chain %v",
+		klog.Infof("Failed in scheduling in PC due to insufficient capacity for scheduling request: GPU numbers %v, priority %v, chain %v",
 			sr.affinityGroupPodNums, sr.priority, sr.chain)
 	} else {
 		klog.Infof("Succeeded in scheduling in PC for scheduling request: GPU numbers %v, priority %v, chain %v",
@@ -821,7 +844,7 @@ func (h *HivedAlgorithm) createAllocatedAffinityGroup(s *api.PodSchedulingSpec, 
 					// In this case, we will lazy preempt this affinity group.
 					success, message := h.allocateGpu(pGpu, vGpu, CellPriority(s.Priority), newGroup.vc)
 					pGpu.AddUsingGroup(newGroup)
-					setState(pGpu, cellUsed)
+					setCellState(pGpu, cellUsed)
 					if !success {
 						shouldLazyPreempt = true
 						klog.Warningf("[%v]: %v", internal.Key(pod), message)
@@ -853,11 +876,11 @@ func (h HivedAlgorithm) deleteAllocatedAffinityGroup(g *AlgoAffinityGroup, pod *
 				// state of pGpu can be either Used or Acquiring
 				if pGpu.GetState() == cellUsed {
 					h.releaseGpu(pGpu, g.vc)
-					setState(pGpu, cellFree)
+					setCellState(pGpu, cellFree)
 				} else { // cellAcquiring
 					// When pGpu is in cellAcquiring state, we shouldn't call h.releaseGpu
 					// because it must have been allocated to the acquiring group before
-					setState(pGpu, cellAcquired)
+					setCellState(pGpu, cellAcquired)
 				}
 			}
 		}
@@ -896,9 +919,9 @@ func (h *HivedAlgorithm) createPreemptingAffinityGroup(
 				// state of pGpu can be either Used or Free (if it was Acquiring or Acquired,
 				// we must have canceled the ongoing preemption before, in h.Schedule)
 				if pGpu.GetState() == cellUsed {
-					setState(pGpu, cellAcquiring)
+					setCellState(pGpu, cellAcquiring)
 				} else { // cellFree
-					setState(pGpu, cellAcquired)
+					setCellState(pGpu, cellAcquired)
 				}
 			}
 		}
@@ -926,7 +949,7 @@ func (h *HivedAlgorithm) deletePreemptingAffinityGroup(g *AlgoAffinityGroup, new
 				pGpu.DeleteAcquiringGroup(pGpu.GetAcquiringGroup())
 				// state of pGpu can be either Acquiring or Acquired
 				if pGpu.GetState() == cellAcquiring {
-					setState(pGpu, cellUsed)
+					setCellState(pGpu, cellUsed)
 					// return the cell to the group being preempted
 					beingPreemptedGroup := pGpu.GetUsingGroup()
 					var beingPreemptedVGpu *VirtualCell
@@ -938,7 +961,7 @@ func (h *HivedAlgorithm) deletePreemptingAffinityGroup(g *AlgoAffinityGroup, new
 					h.allocateGpu(
 						pGpu, beingPreemptedVGpu, CellPriority(beingPreemptedGroup.priority), beingPreemptedGroup.vc)
 				} else { // cellAcquired
-					setState(pGpu, cellFree)
+					setCellState(pGpu, cellFree)
 				}
 			}
 		}
@@ -956,7 +979,7 @@ func (h *HivedAlgorithm) allocatePreemptingAffinityGroup(g *AlgoAffinityGroup, p
 				pGpu := gpu.(*PhysicalCell)
 				pGpu.DeleteAcquiringGroup(g)
 				pGpu.AddUsingGroup(g)
-				setState(pGpu, cellUsed)
+				setCellState(pGpu, cellUsed)
 			}
 		}
 	}
@@ -1070,30 +1093,30 @@ func (h *HivedAlgorithm) allocateGpu(
 
 	success = true
 	if vGpu != nil {
-		setPriority(vGpu, p)
+		setCellPriority(vGpu, p)
 		updateUsedGpuNumAtPriority(vGpu, p, true)
-		setPriority(pGpu, p)
+		setCellPriority(pGpu, p)
 		updateUsedGpuNumAtPriority(pGpu, p, true)
 		pac := vGpu.GetPreAssignedCell()
+		c := pac.GetChain()
+		l := pac.GetLevel()
 		preassignedNewlyBound := pac.GetPhysicalCell() == nil
-		preassignedBad := pac.GetAPIStatus().CellHealthiness == api.CellBad
+		if preassignedNewlyBound && pac.GetAPIStatus().CellHealthiness == api.CellBad {
+			// This means the preassigned cell was previously counted as a doomed bad cell.
+			// We will first set it back to healthy (its real healthiness will be decided by the physical cell),
+			// and later pick another virtual cell and mark it as bad (in h.removeCellFromFreeList).
+			setVirtualCellHealthiness(pac, api.CellHealthy)
+			h.vcDoomedBadCellNum[vcn][c][l]--
+		}
 		bindCell(pGpu, vGpu)
 		if preassignedNewlyBound {
-			c := pac.GetChain()
-			l := pac.GetLevel()
 			h.vcFreeCellNum[vcn][c][l]--
 			h.allVCFreeCellNum[c][l]--
-			if preassignedBad {
-				// This means the preassigned cell was previously counted as a doomed bad cell.
-				// We will later pick another virtual cell and mark it as bad (when removing it
-				// from the free list)
-				h.vcDoomedBadCellNum[vcn][c][l]--
-			}
 			// remove the allocated cell from the free list (possibly splitting cells)
 			success, message = h.removeCellFromFreeList(vGpu.GetPreAssignedCell().GetPhysicalCell())
 		}
 	} else {
-		setPriority(pGpu, opportunisticPriority)
+		setCellPriority(pGpu, opportunisticPriority)
 		updateUsedGpuNumAtPriority(pGpu, opportunisticPriority, true)
 		pGpu.GetAPIStatus().VC = vcn
 		h.apiClusterStatus.VirtualClusters[vcn] = append(
@@ -1115,14 +1138,14 @@ func (h *HivedAlgorithm) releaseGpu(pGpu *PhysicalCell, vcn api.VirtualClusterNa
 			h.addCellToFreeList(preassignedPhysical)
 		}
 		updateUsedGpuNumAtPriority(vGpu, vGpu.GetPriority(), false)
-		setPriority(vGpu, freePriority)
+		setCellPriority(vGpu, freePriority)
 	} else {
 		pGpu.GetAPIStatus().VC = ""
 		h.apiClusterStatus.VirtualClusters[vcn] = deleteOpporVirtualCell(
 			h.apiClusterStatus.VirtualClusters[vcn], pGpu.GetAddress())
 	}
 	updateUsedGpuNumAtPriority(pGpu, pGpu.GetPriority(), false)
-	setPriority(pGpu, freePriority)
+	setCellPriority(pGpu, freePriority)
 }
 
 // removeCellFromFreeList removes a cell from the free cell list and splits its parent recursively if needed.

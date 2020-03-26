@@ -134,7 +134,15 @@ type PhysicalCell struct {
 	apiStatus *api.PhysicalCellStatus
 }
 
-func NewPhysicalCell(c CellChain, l CellLevel, g bool, n int32, cellType api.CellType, address api.CellAddress) *PhysicalCell {
+func NewPhysicalCell(
+	c CellChain,
+	l CellLevel,
+	g bool,
+	n int32,
+	cellType api.CellType,
+	address api.CellAddress,
+	isNodeLevel bool) *PhysicalCell {
+
 	return &PhysicalCell{
 		GenericCell: GenericCell{
 			chain:                  c,
@@ -149,8 +157,9 @@ func NewPhysicalCell(c CellChain, l CellLevel, g bool, n int32, cellType api.Cel
 		apiStatus: &api.PhysicalCellStatus{
 			CellStatus: api.CellStatus{
 				CellType:        cellType,
+				IsNodeLevel:     isNodeLevel,
 				CellAddress:     address,
-				CellState:       api.CellFree,
+				CellState:       api.CellState(cellFree),
 				CellHealthiness: api.CellHealthy,
 				CellPriority:    int32(freePriority),
 			},
@@ -319,7 +328,8 @@ func NewVirtualCell(
 	n int32,
 	pac *VirtualCell,
 	cellType api.CellType,
-	address api.CellAddress) *VirtualCell {
+	address api.CellAddress,
+	isNodeLevel bool) *VirtualCell {
 
 	return &VirtualCell{
 		GenericCell: GenericCell{
@@ -337,8 +347,9 @@ func NewVirtualCell(
 		apiStatus: &api.VirtualCellStatus{
 			CellStatus: api.CellStatus{
 				CellType:        cellType,
+				IsNodeLevel:     isNodeLevel,
 				CellAddress:     address,
-				CellState:       api.CellFree,
+				CellState:       api.CellState(cellFree),
 				CellHealthiness: api.CellHealthy,
 				CellPriority:    int32(freePriority),
 			},
