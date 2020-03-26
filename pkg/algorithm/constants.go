@@ -47,10 +47,12 @@ const (
 	// A Used cell's priority is that of the group using the cell.
 	cellUsed CellState = "Used"
 	// An affinity group is using this cell, and another group is acquiring it.
-	// An Acquiring cell's priority is that of the group acquiring the cell.
+	// An Acquiring cell's priority is that of the group acquiring the cell. This means the scheduling algorithm
+	// will respect the acquiring group, i.e., a group with a non-higher priority cannot get this cell.
 	cellAcquiring CellState = "Acquiring"
 	// No affinity group is using this cell, and a group has acquired it.
-	// An Acquired cell's priority is that of the group acquiring the cell.
+	// An Acquired cell's priority is that of the group that acquired the cell. This means the scheduling algorithm
+	// will respect the group that acquired the cell, i.e., a group with a non-higher priority cannot get this cell.
 	cellAcquired CellState = "Acquired"
 
 	// internal affinity group states
