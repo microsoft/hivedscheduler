@@ -511,7 +511,7 @@ func (s *HivedScheduler) filterRoutine(args ei.ExtenderArgs) *ei.ExtenderFilterR
 	// {PodWaiting, PodPreempting}
 
 	// Carry out a new scheduling
-	result := s.schedulerAlgorithm.Schedule(pod, suggestedNodes)
+	result := s.schedulerAlgorithm.Schedule(pod, suggestedNodes, internal.FilteringPhase)
 
 	if result.PodBindInfo != nil {
 		bindingPod := internal.NewBindingPod(pod, result.PodBindInfo)
@@ -629,12 +629,15 @@ func (s *HivedScheduler) bindRoutine(args ei.ExtenderBindingArgs) *ei.ExtenderBi
 }
 
 func (s *HivedScheduler) preemptRoutine(args ei.ExtenderPreemptionArgs) *ei.ExtenderPreemptionResult {
-	s.schedulerLock.RLock()
-	defer s.schedulerLock.RUnlock()
+	s.schedulerLock.Lock()
+	defer s.schedulerLock.Unlock()
 
-	// Suggested Victims in args can be ignored.
 	// Preemptor and Victims can be in different namespaces.
 	pod := args.Pod
+	suggestedNodes := []string{}
+	for node := range args.NodeNameToMetaVictims {
+		suggestedNodes = append(suggestedNodes, node)
+	}
 
 	logPfx := fmt.Sprintf("[%v]: preemptRoutine: ", internal.Key(pod))
 	klog.Infof(logPfx + "Started")
@@ -646,8 +649,41 @@ func (s *HivedScheduler) preemptRoutine(args ei.ExtenderPreemptionArgs) *ei.Exte
 		panic(internal.NewBadRequestError(fmt.Sprintf(
 			"Pod has already been binding to node %v",
 			podStatus.Pod.Spec.NodeName)))
-	} else if podStatus.PodState == internal.PodPreempting {
-		victims := podStatus.PodScheduleResult.PodPreemptInfo.VictimPods
+	}
+
+	// At this point, podState must be in:
+	// {PodWaiting, PodPreempting}
+
+	// If the podState is PodWaiting:
+	// Maybe filterRoutine will never be called by K8S Default Scheduler, but only
+	// preemptRoutine will be called, such as lower priority Pods used all resources.
+	//
+	// If the podState is PodPreempting:
+	// Maybe filterRoutine will no longer be called by K8S Default Scheduler, but
+	// only preemptRoutine will be called, such as lower priority Pods used all
+	// resources after filterRoutine is called for the last time.
+	// And we should not insist previous preemption result, as it may be stale,
+	// such as, even if these victim resources are all preempted, the Pod still
+	// cannot be bound to them due to they become unhealthy.
+	//
+	// So, in either case, we need to schedule again with more suggestedNodes, as
+	// lower priority Pods are ignored by K8S Default Scheduler now.
+	result := s.schedulerAlgorithm.Schedule(pod, suggestedNodes, internal.PreemptingPhase)
+
+	if result.PodBindInfo != nil {
+		klog.Infof(logPfx+
+			"Pod already can be bound on the free resource, so no need to preempt "+
+			"anymore, and just need to wait for future filterRoutine: %v",
+			common.ToJson(result.PodBindInfo))
+		return &ei.ExtenderPreemptionResult{}
+	} else if result.PodPreemptInfo != nil {
+		s.podScheduleStatuses[pod.UID] = &internal.PodScheduleStatus{
+			Pod:               pod,
+			PodState:          internal.PodPreempting,
+			PodScheduleResult: &result,
+		}
+
+		victims := result.PodPreemptInfo.VictimPods
 		nodesVictims := map[string]*ei.MetaVictims{}
 
 		for _, victim := range victims {
@@ -668,14 +704,22 @@ func (s *HivedScheduler) preemptRoutine(args ei.ExtenderPreemptionArgs) *ei.Exte
 		return &ei.ExtenderPreemptionResult{
 			NodeNameToMetaVictims: nodesVictims,
 		}
+	} else {
+		s.podScheduleStatuses[pod.UID] = &internal.PodScheduleStatus{
+			Pod:               pod,
+			PodState:          internal.PodWaiting,
+			PodScheduleResult: &result,
+		}
+
+		waitReason :=
+			"Pod is waiting for preemptible or free resource to appear, " +
+				"so no need to preempt anymore"
+		if result.PodWaitInfo != nil {
+			waitReason += ": " + result.PodWaitInfo.Reason
+		}
+		klog.Infof(logPfx + waitReason)
+		return &ei.ExtenderPreemptionResult{}
 	}
-
-	// At this point, podState must be in:
-	// {PodWaiting}
-
-	// The Pod should keep on waiting for preemptible or free resource to appear,
-	// so do not preempt any victim.
-	return &ei.ExtenderPreemptionResult{}
 }
 
 func (s *HivedScheduler) getAllAffinityGroups() si.AffinityGroupList {

@@ -145,7 +145,10 @@ func (h *HivedAlgorithm) DeleteNode(node *core.Node) {
 	h.setBadNode(node.Name)
 }
 
-func (h *HivedAlgorithm) Schedule(pod *core.Pod, suggestedNodes []string) internal.PodScheduleResult {
+func (h *HivedAlgorithm) Schedule(
+	pod *core.Pod,
+	suggestedNodes []string,
+	phase internal.SchedulingPhase) internal.PodScheduleResult {
 	h.algorithmLock.Lock()
 	defer h.algorithmLock.Unlock()
 
