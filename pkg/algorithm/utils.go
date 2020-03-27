@@ -28,6 +28,7 @@ import (
 	"github.com/microsoft/hivedscheduler/pkg/common"
 	"github.com/microsoft/hivedscheduler/pkg/internal"
 	core "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog"
 	"math/rand"
 )
@@ -38,6 +39,7 @@ func generatePodScheduleResult(
 	groupVirtualPlacement groupVirtualPlacement,
 	priority CellPriority,
 	preemptionVictims map[string]common.Set,
+	nodesNotInSuggested common.Set,
 	cellLevelToType map[CellChain]map[CellLevel]api.CellType,
 	currentGpuNum int32,
 	currentPodIndex int32,
@@ -53,65 +55,70 @@ func generatePodScheduleResult(
 		klog.Infof("[%v]: Virtual placement: %v", internal.Key(pod), groupVirtualPlacement)
 	}
 	if len(preemptionVictims) > 0 {
-		var (
-			nodesHavingVictims []string
-			victimPods         []*core.Pod
-			victimKeys         []string
-		)
-		for node := range preemptionVictims {
-			nodesHavingVictims = append(nodesHavingVictims, node)
-		}
-		// We collect victims on a random node, as K8s preempts victims from only one node once.
-		// Random is to let different pods preempt victims on different nodes
-		// (note that this randomness is not necessary for the eventual completeness of preemption).
-		nodeToPreempt := nodesHavingVictims[rand.Int31n(int32(len(nodesHavingVictims)))]
-		for v := range preemptionVictims[nodeToPreempt].Items() {
-			victimPods = append(victimPods, v.(*core.Pod))
-			victimKeys = append(victimKeys, internal.Key(v.(*core.Pod)))
-		}
-		klog.Infof("[%v]: need to preempt pods %v", internal.Key(pod), common.ToJson(victimKeys))
 		return internal.PodScheduleResult{
-			PodPreemptInfo: &internal.PodPreemptInfo{VictimPods: victimPods},
-		}
-	} else {
-		// we find the selected node after the preemption is done, otherwise the preemption victims
-		// may cause the selected node to be excluded from the suggested nodes
-		affinityGroupBindInfo, nodesNotInSuggested, selectedNode, selectedGpuIndices, cellChain := generateAffinityGroupBindInfo(
-			groupPhysicalPlacement, groupVirtualPlacement, cellLevelToType, currentGpuNum, currentPodIndex, group, groupName, suggestedNodes)
-		var waitReason string
-		if affinityGroupBindInfo == nil {
-			waitReason = "insufficient capacity in physical cluster"
-			if priority >= minGuaranteedPriority {
-				waitReason = fmt.Sprintf("insufficient capacity in VC %v", vc)
-			}
-		} else if !nodesNotInSuggested.IsEmpty() {
-			if group == nil || group.state == groupPreempting {
-				// for an unallocated group, we will keep it waiting if not all of its pods are scheduled to suggested nodes
-				waitReason = fmt.Sprintf(
-					"affinity group is decided to be scheduled to some nodes not within K8s suggested nodes: %v",
-					nodesNotInSuggested)
-			} else {
-				// for an existing group, we always insist the previous scheduling decision
-				// even if some pods are now not within suggested nodes
-				klog.Warningf("Some nodes used by affinity group %v are no longer within K8s suggested nodes: %v",
-					group.name, nodesNotInSuggested)
-			}
-		}
-		if waitReason != "" {
-			klog.Infof("[%v]: need to wait because %v", internal.Key(pod), waitReason)
-			return internal.PodScheduleResult{PodWaitInfo: &internal.PodWaitInfo{Reason: waitReason}}
-		}
-		klog.Infof("[%v]: pod is decided to be scheduled to node %v, GPUs %v",
-			internal.Key(pod), selectedNode, common.ToJson(selectedGpuIndices))
-		return internal.PodScheduleResult{
-			PodBindInfo: &api.PodBindInfo{
-				Node:                  selectedNode,
-				GpuIsolation:          selectedGpuIndices,
-				CellChain:             cellChain,
-				AffinityGroupBindInfo: affinityGroupBindInfo,
-			},
+			PodPreemptInfo: generatePodPreemptInfo(preemptionVictims, pod),
 		}
 	}
+	var waitReason string
+	if groupPhysicalPlacement == nil {
+		waitReason = "insufficient capacity in physical cluster"
+		if priority >= minGuaranteedPriority {
+			waitReason = fmt.Sprintf("insufficient capacity in VC %v", vc)
+		}
+	} else if !nodesNotInSuggested.IsEmpty() {
+		if group == nil || group.state == groupPreempting {
+			// for an unallocated group, we will keep it waiting if not all of its pods are scheduled to suggested nodes
+			waitReason = fmt.Sprintf(
+				"affinity group is decided to be scheduled to some nodes not within K8s suggested nodes: %v",
+				nodesNotInSuggested)
+		} else {
+			// for an existing group, we always insist the previous scheduling decision
+			// even if some pods are now not within suggested nodes
+			klog.Warningf("Some nodes used by affinity group %v are no longer within K8s suggested nodes: %v",
+				group.name, nodesNotInSuggested)
+		}
+	}
+	if waitReason != "" {
+		klog.Infof("[%v]: need to wait because %v", internal.Key(pod), waitReason)
+		return internal.PodScheduleResult{PodWaitInfo: &internal.PodWaitInfo{Reason: waitReason}}
+	}
+	// we find the selected node after the preemption is done, otherwise the preemption victims
+	// may cause the selected node to be excluded from the suggested nodes
+	affinityGroupBindInfo, selectedNode, selectedGpuIndices, cellChain := generateAffinityGroupBindInfo(
+		groupPhysicalPlacement, groupVirtualPlacement, cellLevelToType, currentGpuNum, currentPodIndex, group, groupName)
+	klog.Infof("[%v]: pod is decided to be scheduled to node %v, GPUs %v",
+		internal.Key(pod), selectedNode, common.ToJson(selectedGpuIndices))
+	return internal.PodScheduleResult{
+		PodBindInfo: &api.PodBindInfo{
+			Node:                  selectedNode,
+			GpuIsolation:          selectedGpuIndices,
+			CellChain:             cellChain,
+			AffinityGroupBindInfo: affinityGroupBindInfo,
+		},
+	}
+}
+
+// generatePodPreemptInfo writes the preemption victims into a PodPreemptInfo.
+func generatePodPreemptInfo(preemptionVictims map[string]common.Set, pod *core.Pod) *internal.PodPreemptInfo {
+	klog.Infof("[%v]: Preemption victim candidates: %v", internal.Key(pod), victimsToString(preemptionVictims))
+	var (
+		nodesHavingVictims []string
+		victimPods         []*core.Pod
+		victimKeys         []string
+	)
+	for node := range preemptionVictims {
+		nodesHavingVictims = append(nodesHavingVictims, node)
+	}
+	// We collect victims on a random node, as K8s preempts victims from only one node once.
+	// Random is to let different pods preempt victims on different nodes
+	// (note that this randomness is not necessary for the eventual completeness of preemption).
+	nodeToPreempt := nodesHavingVictims[rand.Int31n(int32(len(nodesHavingVictims)))]
+	for v := range preemptionVictims[nodeToPreempt].Items() {
+		victimPods = append(victimPods, v.(*core.Pod))
+		victimKeys = append(victimKeys, internal.Key(v.(*core.Pod)))
+	}
+	klog.Infof("[%v]: need to preempt pods %v", internal.Key(pod), common.ToJson(victimKeys))
+	return &internal.PodPreemptInfo{VictimPods: victimPods}
 }
 
 // generateAffinityGroupBindInfo translates the physical and virtual placements of an affinity group
@@ -124,19 +131,13 @@ func generateAffinityGroupBindInfo(
 	currentGpuNum int32,
 	currentPodIndex int32,
 	group *AlgoAffinityGroup,
-	groupName string,
-	suggestedNodes common.Set) (
+	groupName string) (
 	affinityGroupBindInfo []api.AffinityGroupMemberBindInfo,
-	nodesNotInSuggested common.Set,
 	selectedNode string,
 	selectedGpuIndices []int32,
 	chain string) {
 
-	if groupPhysicalPlacement == nil {
-		return
-	}
 	affinityGroupBindInfo = make([]api.AffinityGroupMemberBindInfo, len(groupPhysicalPlacement))
-	nodesNotInSuggested = common.NewSet()
 	groupMemberIndex := 0
 	for podGpuNum, podPhysicalPlacements := range groupPhysicalPlacement {
 		mbi := api.AffinityGroupMemberBindInfo{
@@ -163,9 +164,6 @@ func generateAffinityGroupBindInfo(
 					// in its "nodes" and "gpuIndices" as the node and GPU address
 					if mbi.PodPlacements[podIndex].PhysicalNode == "" {
 						mbi.PodPlacements[podIndex].PhysicalNode = nodes[0]
-						if !suggestedNodes.Contains(nodes[0]) {
-							nodesNotInSuggested.Add(nodes[0])
-						}
 					}
 					mbi.PodPlacements[podIndex].PhysicalGpuIndices[gpuIndex] = gpuIndices[0]
 					if groupVirtualPlacement != nil {
@@ -188,20 +186,42 @@ func generateAffinityGroupBindInfo(
 		affinityGroupBindInfo[groupMemberIndex] = mbi
 		groupMemberIndex++
 	}
-	return affinityGroupBindInfo, nodesNotInSuggested, selectedNode, selectedGpuIndices, chain
+	return affinityGroupBindInfo, selectedNode, selectedGpuIndices, chain
+}
+
+// collectNodesNotSuggested collects all the nodes that are not within the suggested nodes
+// in the physical placement of an affinity group.
+func collectNodesNotSuggested(
+	placement groupPhysicalPlacement, suggestedNodes common.Set) (nodesNotInSuggested common.Set) {
+
+	nodesNotInSuggested = common.NewSet()
+	for gpuNum := range placement {
+		for podIndex := range placement[gpuNum] {
+			for _, gpu := range placement[gpuNum][podIndex] {
+				if gpu == nil {
+					continue
+				}
+				nodes, _ := gpu.(*PhysicalCell).GetPhysicalPlacement()
+				if !suggestedNodes.Contains(nodes[0]) {
+					nodesNotInSuggested.Add(nodes[0])
+				}
+			}
+		}
+	}
+	return nodesNotInSuggested
 }
 
 // collectPreemptionVictims collects preemption victims of an affinity group.
 // If any of the GPUs allocated for the whole group is still used by a pod,
 // we will wait for the preemption, as a group is gang-scheduled.
-func collectPreemptionVictims(physicalPlacement groupPhysicalPlacement) (
-	victimPods map[string]common.Set, ongoingPreemptorGroups common.Set) {
+func collectPreemptionVictims(placement groupPhysicalPlacement) (
+	victimPods map[string]common.Set, overlappingPreemptorGroups common.Set) {
 
 	victimPods = map[string]common.Set{} // node -> pods
-	ongoingPreemptorGroups = common.NewSet()
-	for gpuNum := range physicalPlacement {
-		for podIndex := range physicalPlacement[gpuNum] {
-			for _, gpu := range physicalPlacement[gpuNum][podIndex] {
+	overlappingPreemptorGroups = common.NewSet()
+	for gpuNum := range placement {
+		for podIndex := range placement[gpuNum] {
+			for _, gpu := range placement[gpuNum][podIndex] {
 				if gpu == nil {
 					continue
 				}
@@ -221,12 +241,23 @@ func collectPreemptionVictims(physicalPlacement groupPhysicalPlacement) (
 					}
 				}
 				if state == cellAcquiring || state == cellAcquired {
-					ongoingPreemptorGroups.Add(pGpu.GetAcquiringGroup())
+					overlappingPreemptorGroups.Add(pGpu.GetAcquiringGroup())
 				}
 			}
 		}
 	}
-	return victimPods, ongoingPreemptorGroups
+	return victimPods, overlappingPreemptorGroups
+}
+
+func victimsToString(victimPods map[string]common.Set) string {
+	s := map[string][]types.UID{}
+	for node, victims := range victimPods {
+		s[node] = []types.UID{}
+		for v := range victims.Items() {
+			s[node] = append(s[node], v.(*core.Pod).UID)
+		}
+	}
+	return common.ToJson(s)
 }
 
 // retrieveMissingPodPlacement finds the placement of a pod from the annotation of other pods in the same group

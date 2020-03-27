@@ -487,6 +487,7 @@ var deletedPreemptorGroups = map[string][]string{
 }
 
 var allocatedPods []*core.Pod
+var preemptingPods []*core.Pod
 
 func TestHivedAlgorithm(t *testing.T) {
 	configFilePath := "../../example/config/design/hivedscheduler.yaml"
@@ -541,22 +542,25 @@ func printConfig(t *testing.T, h *HivedAlgorithm) {
 func testNormalOperations(t *testing.T, h *HivedAlgorithm) {
 	testCasesThatShouldSucceed(t, h)
 	testCasesThatShouldFail(t, h)
-	testDeleteAllocatedPods(t, h)
+	testDeletePods(t, h)
 	testSuggestedNodes(t, h)
 }
 
 func testCasesThatShouldSucceed(t *testing.T, h *HivedAlgorithm) {
 	allocatedPods = []*core.Pod{}
+	preemptingPods = []*core.Pod{}
 	var psr internal.PodScheduleResult
 	for _, podName := range casesThatShouldSucceed {
 		pod := allPods[podName]
 		pod.Annotations[api.AnnotationKeyPodSchedulingSpec] = common.ToYaml(pss[pod.UID])
-		psr = h.Schedule(pod, allNodes)
+		psr = h.Schedule(pod, allNodes, internal.FilteringPhase)
 		compareSchedulingResult(t, pod, psr)
 		if psr.PodBindInfo != nil {
 			allocatedPod := internal.NewBindingPod(pod, psr.PodBindInfo)
 			h.AddAllocatedPod(allocatedPod)
 			allocatedPods = append(allocatedPods, allocatedPod)
+		} else if psr.PodPreemptInfo != nil {
+			preemptingPods = append(preemptingPods, pod)
 		}
 	}
 }
@@ -579,7 +583,7 @@ func testOneCaseThatShouldFail(t *testing.T, h *HivedAlgorithm, podNames []strin
 	for _, podName := range podNames {
 		pod := allPods[podName]
 		pod.Annotations[api.AnnotationKeyPodSchedulingSpec] = common.ToYaml(pss[pod.UID])
-		psr = h.Schedule(pod, allNodes)
+		psr = h.Schedule(pod, allNodes, internal.FilteringPhase)
 		allocatedPod := internal.NewBindingPod(pod, psr.PodBindInfo)
 		h.AddAllocatedPod(allocatedPod)
 		allocatedPods = append(allocatedPods, allocatedPod)
@@ -592,11 +596,19 @@ func testCasesThatShouldFail(t *testing.T, h *HivedAlgorithm) {
 	}
 }
 
-func testDeleteAllocatedPods(t *testing.T, h *HivedAlgorithm) {
+func testDeletePods(t *testing.T, h *HivedAlgorithm) {
 	for i := len(allocatedPods) - 1; i >= 0; i-- {
 		h.DeleteAllocatedPod(allocatedPods[i])
 	}
 	for _, pod := range allocatedPods {
+		if g, ok := h.affinityGroups[pss[pod.UID].AffinityGroup.Name]; ok {
+			t.Errorf("Group %v is expected to be deleted in scheduler, but not", g.name)
+		}
+	}
+	for i := len(preemptingPods) - 1; i >= 0; i-- {
+		h.DeleteUnallocatedPod(preemptingPods[i])
+	}
+	for _, pod := range preemptingPods {
 		if g, ok := h.affinityGroups[pss[pod.UID].AffinityGroup.Name]; ok {
 			t.Errorf("Group %v is expected to be deleted in scheduler, but not", g.name)
 		}
@@ -612,8 +624,35 @@ func testSuggestedNodes(t *testing.T, h *HivedAlgorithm) {
 	}
 	pod := allPods["pod27"]
 	pod.Annotations[api.AnnotationKeyPodSchedulingSpec] = common.ToYaml(pss[pod.UID])
-	psr := h.Schedule(pod, nodes)
+	psr := h.Schedule(pod, nodes, internal.FilteringPhase)
 	compareSchedulingResult(t, pod, psr)
+
+	nodes = append(nodes, "0.0.3.1")
+	pod.Annotations[api.AnnotationKeyPodSchedulingSpec] = common.ToYaml(pss[pod.UID])
+	// this time scheduling will succeed
+	psr = h.Schedule(pod, nodes, internal.FilteringPhase)
+	h.AddAllocatedPod(internal.NewBindingPod(pod, psr.PodBindInfo))
+	nodes = nodes[:len(nodes)-1]
+	pod = allPods["pod33"]
+	pod.Annotations[api.AnnotationKeyPodSchedulingSpec] = common.ToYaml(pss[pod.UID])
+	psr = h.Schedule(pod, nodes, internal.FilteringPhase)
+	// group should be preempting, even though placement is not within suggested nodes,
+	// because this is Filtering phase
+	if g := h.affinityGroups[pss[pod.UID].AffinityGroup.Name]; g == nil {
+		t.Errorf("Group %v should be preempting but does not exist", g.name)
+	} else if g.state != groupPreempting {
+		t.Errorf("Group %v should be in Preempting state but not", g.name)
+	}
+	psr = h.Schedule(pod, nodes, internal.PreemptingPhase)
+	// group should have been deleted because the placement is not within Preempting-phase suggested nodes
+	if g := h.affinityGroups[pss[pod.UID].AffinityGroup.Name]; g != nil {
+		t.Errorf("Groups %v should have been deleted, but not", g.name)
+	}
+	// try a new scheduling, this should still fail
+	psr = h.Schedule(pod, nodes, internal.PreemptingPhase)
+	if g := h.affinityGroups[pss[pod.UID].AffinityGroup.Name]; g != nil {
+		t.Errorf("Groups %v should have been deleted, but not", g.name)
+	}
 }
 
 func testStatefulPreemption(t *testing.T, configFilePath string) {
@@ -624,7 +663,7 @@ func testStatefulPreemption(t *testing.T, configFilePath string) {
 	for _, podName := range casesForStatefulPreemption {
 		pod := allPods[podName]
 		pod.Annotations[api.AnnotationKeyPodSchedulingSpec] = common.ToYaml(pss[pod.UID])
-		psr = h.Schedule(pod, allNodes)
+		psr = h.Schedule(pod, allNodes, internal.FilteringPhase)
 		compareSchedulingResult(t, pod, psr)
 		if psr.PodBindInfo != nil {
 			allocatedPod := internal.NewBindingPod(pod, psr.PodBindInfo)
@@ -713,7 +752,7 @@ func testReconfiguration(t *testing.T, configFilePath string) {
 			t.Errorf("Group %v is expected to be lazy preempted, but not", g.name)
 		}
 	}
-	testDeleteAllocatedPods(t, h)
+	testDeletePods(t, h)
 }
 
 func testInvalidInitialAssignment(t *testing.T, sConfig *api.Config) {
