@@ -262,7 +262,7 @@ func (c *PhysicalCell) SetVirtualCell(cell *VirtualCell) {
 		vcs := &api.VirtualCellStatus{}
 		// shallow copy the status, clear the pointers to avoid reference
 		*vcs = *(cell.apiStatus)
-		vcs.Children = nil
+		vcs.CellChildren = nil
 		vcs.PhysicalCell = nil
 		c.apiStatus.VirtualCell = vcs
 		c.apiStatus.VC = cell.vc
@@ -361,7 +361,7 @@ func (c *VirtualCell) SetChildren(children CellList) {
 	c.children = children
 	for _, cc := range children {
 		child := cc.(*VirtualCell)
-		c.apiStatus.Children = append(c.apiStatus.Children, child.apiStatus)
+		c.apiStatus.CellChildren = append(c.apiStatus.CellChildren, child.apiStatus)
 	}
 }
 

@@ -166,7 +166,7 @@ func (h *HivedAlgorithm) Schedule(pod *core.Pod, suggestedNodes []string) intern
 	)
 
 	if g := h.affinityGroups[s.AffinityGroup.Name]; g != nil {
-		// state of g can be either allocated or preempting
+		// state of g can be either Allocated or Preempting
 		if g.state == groupAllocated {
 			klog.Infof("[%v]: Pod affinity group is already allocated: %v", internal.Key(pod), s.AffinityGroup.Name)
 			groupPhysicalPlacement = g.physicalGpuPlacement
@@ -303,7 +303,7 @@ func (h *HivedAlgorithm) GetAffinityGroup(name string) api.AffinityGroup {
 	}
 
 	panic(internal.NewBadRequestError(fmt.Sprintf(
-		"Affinity group %v does not exist since it is not allocated",
+		"Affinity group %v does not exist since it is not allocated or preempting",
 		name)))
 }
 
@@ -343,7 +343,10 @@ func (h *HivedAlgorithm) GetVirtualClusterStatus(vcn api.VirtualClusterName) api
 	h.algorithmLock.RLock()
 	defer h.algorithmLock.RUnlock()
 
-	return h.apiClusterStatus.VirtualClusters[vcn].DeepCopy()
+	if vcs := h.apiClusterStatus.VirtualClusters[vcn]; vcs != nil {
+		return vcs.DeepCopy()
+	}
+	panic(internal.NewBadRequestError(fmt.Sprintf("VC %v not found", vcn)))
 }
 
 // initCellNums initiates the data structures for tracking cell usages and healthiness,

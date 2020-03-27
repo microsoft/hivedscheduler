@@ -182,9 +182,9 @@ func NewHivedScheduler() *HivedScheduler {
 			GetAllAffinityGroupsHandler:        s.getAllAffinityGroups,
 			GetAffinityGroupHandler:            s.getAffinityGroup,
 			GetClusterStatusHandler:            s.getClusterStatus,
-			GetPhysicalClusterStatusHandler:    s.getPCStatus,
-			GetAllVirtualClustersStatusHandler: s.getAllVCsStatus,
-			GetVirtualClusterStatusHandler:     s.getVCStatus,
+			GetPhysicalClusterStatusHandler:    s.getPhysicalClusterStatus,
+			GetAllVirtualClustersStatusHandler: s.getAllVirtualClustersStatus,
+			GetVirtualClusterStatusHandler:     s.getVirtualClusterStatus,
 		},
 	)
 
@@ -690,14 +690,14 @@ func (s *HivedScheduler) getClusterStatus() si.ClusterStatus {
 	return s.schedulerAlgorithm.GetClusterStatus()
 }
 
-func (s *HivedScheduler) getPCStatus() si.PhysicalClusterStatus {
+func (s *HivedScheduler) getPhysicalClusterStatus() si.PhysicalClusterStatus {
 	return s.schedulerAlgorithm.GetPhysicalClusterStatus()
 }
 
-func (s *HivedScheduler) getAllVCsStatus() map[si.VirtualClusterName]si.VirtualClusterStatus {
+func (s *HivedScheduler) getAllVirtualClustersStatus() map[si.VirtualClusterName]si.VirtualClusterStatus {
 	return s.schedulerAlgorithm.GetAllVirtualClustersStatus()
 }
 
-func (s *HivedScheduler) getVCStatus(vcn si.VirtualClusterName) si.VirtualClusterStatus {
+func (s *HivedScheduler) getVirtualClusterStatus(vcn si.VirtualClusterName) si.VirtualClusterStatus {
 	return s.schedulerAlgorithm.GetVirtualClusterStatus(vcn)
 }

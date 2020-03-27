@@ -98,9 +98,9 @@ const (
 	// Inspect current allocated AffinityGroup(s)
 	AffinityGroupsPath = InspectPath + "/affinitygroups/"
 	// Inspect current cluster status
-	ClusterStatusPath = InspectPath + "/clusterstatus/"
+	ClusterStatusPath = InspectPath + "/clusterstatus"
 	// Inspect current physical cluster status
-	PhysicalClusterPath = ClusterStatusPath + "physicalcluster"
+	PhysicalClusterPath = ClusterStatusPath + "/physicalcluster"
 	// Inspect current virtual cluster(s)' status
-	VirtualClustersPath = ClusterStatusPath + "virtualclusters/"
+	VirtualClustersPath = ClusterStatusPath + "/virtualclusters/"
 )

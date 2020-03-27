@@ -206,7 +206,7 @@ type PhysicalCellStatus struct {
 
 type VirtualCellStatus struct {
 	CellStatus
-	Children     []*VirtualCellStatus `json:"children,omitempty"`
+	CellChildren []*VirtualCellStatus `json:"cellChildren,omitempty"`
 	PhysicalCell *PhysicalCellStatus  `json:"physicalCell,omitempty"`
 }
 
@@ -250,10 +250,10 @@ func (vcs *VirtualCellStatus) deepCopy() *VirtualCellStatus {
 	copied := &VirtualCellStatus{
 		CellStatus: vcs.CellStatus,
 	}
-	if vcs.Children != nil {
-		copied.Children = make([]*VirtualCellStatus, len(vcs.Children))
-		for i, child := range vcs.Children {
-			copied.Children[i] = child.deepCopy()
+	if vcs.CellChildren != nil {
+		copied.CellChildren = make([]*VirtualCellStatus, len(vcs.CellChildren))
+		for i, child := range vcs.CellChildren {
+			copied.CellChildren[i] = child.deepCopy()
 		}
 	}
 	if vcs.PhysicalCell != nil {
