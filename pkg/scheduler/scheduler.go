@@ -511,7 +511,7 @@ func (s *HivedScheduler) filterRoutine(args ei.ExtenderArgs) *ei.ExtenderFilterR
 	// {PodWaiting, PodPreempting}
 
 	// Carry out a new scheduling
-	result := s.schedulerAlgorithm.Schedule(pod, suggestedNodes)
+	result := s.schedulerAlgorithm.Schedule(pod, suggestedNodes, internal.FilteringPhase)
 
 	if result.PodBindInfo != nil {
 		bindingPod := internal.NewBindingPod(pod, result.PodBindInfo)
@@ -668,7 +668,7 @@ func (s *HivedScheduler) preemptRoutine(args ei.ExtenderPreemptionArgs) *ei.Exte
 	//
 	// So, in either case, we need to schedule again with more suggestedNodes, as
 	// lower priority Pods are ignored by K8S Default Scheduler now.
-	result := s.schedulerAlgorithm.Schedule(pod, suggestedNodes)
+	result := s.schedulerAlgorithm.Schedule(pod, suggestedNodes, internal.PreemptingPhase)
 
 	if result.PodBindInfo != nil {
 		klog.Infof(logPfx+

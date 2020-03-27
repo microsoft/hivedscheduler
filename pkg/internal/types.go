@@ -74,8 +74,8 @@ type InspectHandlers struct {
 //    I.e. once a specific Pod is allocated by AddAllocatedPod, its placement
 //    will never be changed to another one.
 type SchedulerAlgorithm interface {
-	// See details in PodScheduleResult.
-	Schedule(pod *core.Pod, suggestedNodes []string) PodScheduleResult
+	// See details in SchedulingPhase and PodScheduleResult.
+	Schedule(pod *core.Pod, suggestedNodes []string, phase SchedulingPhase) PodScheduleResult
 
 	// Track all current Nodes in the whole cluster.
 	AddNode(node *core.Node)
@@ -98,6 +98,20 @@ type SchedulerAlgorithm interface {
 	GetAllVirtualClustersStatus() map[si.VirtualClusterName]si.VirtualClusterStatus
 	GetVirtualClusterStatus(si.VirtualClusterName) si.VirtualClusterStatus
 }
+
+type SchedulingPhase string
+
+const (
+	// The Schedule is called during filterRoutine:
+	// The suggestedNodes contain all nodes that can fit the pod without any
+	// lower priority Pods preempted.
+	FilteringPhase SchedulingPhase = "Filtering"
+
+	// The Schedule is called during preemptRoutine:
+	// The suggestedNodes contain all nodes that can fit the pod after all
+	// lower priority Pods preempted.
+	PreemptingPhase SchedulingPhase = "Preempting"
+)
 
 // Notes:
 // 1. If the SchedulerAlgorithm found sufficient free resource, only PodBindInfo

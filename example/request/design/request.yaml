@@ -158,11 +158,20 @@ spec:
                 - podNumber: 1
                   gpuNumber: 4
         spec:
-          # PodPriority should be set proportional to above AffinityGroupPriority,
-          # i.e. the hivedscheduler.microsoft.com/pod-scheduling-spec.priority,
-          # otherwise, K8S may be incompatible with hived.
-          # Note, if PodPriority cannot be set directly, set its corresponding
-          # priorityClassName, see ../tf/request.yaml
+          # See ../../run/deploy.yaml for why and how to specify the schedulerName.
+          schedulerName: hivedscheduler
+          # Two kinds of priority need to be set for a single Pod:
+          # K8S-PodPriority:
+          #   pod.spec.priority
+          #   It is used by K8S to control queuing order, preemption, eviction, etc.
+          # HiveD-PodPriority:
+          #   pod.metadata.annotations.hivedscheduler.microsoft.com/pod-scheduling-spec.priority
+          #   It is used by HiveD to control preemption.
+          # K8S-PodPriority should be set proportional to HiveD-PodPriority,
+          # otherwise, K8S may be incompatible with HiveD.
+          #
+          # Note, if K8S-PodPriority cannot be set directly, set its corresponding
+          # pod.spec.priorityClassName, see ../tf/request.yaml
           priority: 1000
           # Setup gpu, cpu and memory isolation for container runtime.
           containers:
@@ -177,7 +186,7 @@ spec:
                 fieldRef:
                   # This annotation will be populated by scheduler when bind the pod.
                   fieldPath: metadata.annotations['hivedscheduler.microsoft.com/pod-gpu-isolation']
-        # K8S port scheduling is incompatible with hived, so the job should detect
+        # K8S port scheduling is incompatible with HiveD, so the job should detect
         # port conflict by itself and fail with transient error, then controller
         # should retry it with new port.
         #    ports:
@@ -203,6 +212,7 @@ spec:
                 - podNumber: 1
                   gpuNumber: 4
         spec:
+          schedulerName: hivedscheduler
           priority: 1000
           containers:
           - resources:
@@ -236,6 +246,7 @@ spec:
                 - podNumber: 1
                   gpuNumber: 4
         spec:
+          schedulerName: hivedscheduler
           priority: 1000
           containers:
           - resources:
@@ -265,6 +276,7 @@ spec:
                 - podNumber: 2
                   gpuNumber: 3
         spec:
+          schedulerName: hivedscheduler
           priority: 1000
           containers:
           - resources:
@@ -292,6 +304,7 @@ spec:
               gpuNumber: 16
               affinityGroup: null
         spec:
+          schedulerName: hivedscheduler
           priority: 1000
           containers:
           - resources:
@@ -321,6 +334,7 @@ spec:
                 - podNumber: 2
                   gpuNumber: 3
         spec:
+          schedulerName: hivedscheduler
           priority: 1000
           containers:
           - resources:
@@ -358,6 +372,7 @@ metadata:
         - podNumber: 1
           gpuNumber: 4
 spec:
+  schedulerName: hivedscheduler
   priority: 1000
   containers:
   - resources:
@@ -392,6 +407,7 @@ metadata:
         - podNumber: 1
           gpuNumber: 4
 spec:
+  schedulerName: hivedscheduler
   priority: 1000
   containers:
   - resources:
@@ -425,6 +441,7 @@ metadata:
         - podNumber: 1
           gpuNumber: 4
 spec:
+  schedulerName: hivedscheduler
   priority: 1000
   containers:
   - resources:
@@ -455,6 +472,7 @@ metadata:
         - podNumber: 2
           gpuNumber: 3
 spec:
+  schedulerName: hivedscheduler
   priority: 1000
   containers:
   - resources:
@@ -481,6 +499,7 @@ metadata:
       gpuNumber: 16
       affinityGroup: null
 spec:
+  schedulerName: hivedscheduler
   priority: 1000
   containers:
   - resources:
@@ -511,6 +530,7 @@ metadata:
         - podNumber: 2
           gpuNumber: 3
 spec:
+  schedulerName: hivedscheduler
   priority: 1000
   containers:
   - resources:

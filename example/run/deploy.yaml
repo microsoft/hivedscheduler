@@ -1,39 +1,34 @@
 # Setup hivedscheduler by "kubectl apply -f deploy.yaml"
 # Notes:
-# 1. This will create an additional K8S default scheduler which pointers to
-#    hivedscheduler serving at http://localhost:30096/v1/extender. So, Pod should
-#    specify schedulerName to be hivedscheduler.
-#    You can also adjust the existing K8S default scheduler without creating the
-#    additional one. So, Pod does not have to specify schedulerName to be
-#    hivedscheduler.
-
+# 1. Currently, K8S Default Scheduler only has one scheduling queue, so one VC's
+#    high priority Pods may head-of-line block other VC's low priority Pods from
+#    getting scheduling chance, even if the high priority Pods cannot fit into
+#    cluster, but the low priority Pods can.
+#    This issue is tracked in
+#    https://github.com/kubernetes/kubernetes/issues/86373
+#
+#    To workaround it, here we create one K8S Default Scheduler for each VC, all
+#    pointer to the same HiveD Scheduler serving at
+#    http://hivedscheduler-service:30096/v1/extender
+#
+#    So, if a Pod needs to be scheduled by HiveD, it should specify its VC's
+#    corresponding schedulerName.
+#
+# 2. To deploy it automatically based on existing VC configuration, see
+#    https://github.com/microsoft/pai/blob/master/src/hivedscheduler/deploy/hivedscheduler.yaml.template
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: hivedscheduler-config
   namespace: default
 data:
-  config.yaml: |
-    apiVersion: kubescheduler.config.k8s.io/v1alpha1
-    kind: KubeSchedulerConfiguration
-    schedulerName: hivedscheduler
-    disablePreemption: false
-    algorithmSource:
-      policy:
-        configMap:
-          name: hivedscheduler-config
-          namespace: default
-    leaderElection:
-      leaderElect: false
-      lockObjectName: hivedscheduler
-      lockObjectNamespace: default
   policy.cfg : |
     {
       "kind": "Policy",
       "apiVersion": "v1",
       "extenders": [
         {
-          "urlPrefix": "http://localhost:30096/v1/extender",
+          "urlPrefix": "http://hivedscheduler-service:30096/v1/extender",
           "filterVerb": "filter",
           "preemptVerb": "preempt",
           "bindVerb": "bind",
@@ -53,37 +48,36 @@ data:
   hivedscheduler.yaml: |
     webServerAddress: ":30096"
     waitingPodSchedulingBlockMilliSec: 50
-    kubeApiServerAddress: http://10.151.41.15:8080
     physicalCluster:
+      gpuTypes:
+        K80:
+          gpu: 1
+          cpu: 5
+          memory: 54Gi
       cellTypes:
-        K80-2GPU:
-          childCellType: K80
-          childCellNumber: 2
         K80-NODE:
-          childCellType: K80-2GPU
-          childCellNumber: 2
+          childCellType: K80
+          childCellNumber: 4
           isNodeLevel: true
-        3-K80-NODE:
+        K80-NODE-POOL:
           childCellType: K80-NODE
           childCellNumber: 3
       physicalCells:
-        - cellType: 3-K80-NODE
-          cellChildren:
-            - cellAddress: 10.151.41.20
-            - cellAddress: 10.151.41.21
-              reservationId: VC2-K80
-            - cellAddress: 10.151.41.22
+      - cellType: K80-NODE-POOL
+        cellChildren:
+        - cellAddress: node1
+        - cellAddress: node2
+        - cellAddress: node3
+
     virtualClusters:
-      VC1:
+      vc1:
         virtualCells:
-          - cellType: 3-K80-NODE.K80-NODE
-            cellNumber: 1
-      VC2:
+        - cellType: K80-NODE-POOL.K80-NODE
+          cellNumber: 1
+      vc2:
         virtualCells:
-          - cellType: 3-K80-NODE.K80-NODE
-            cellNumber: 1
-        reservedCells:
-          - reservationId: VC2-K80
+        - cellType: K80-NODE-POOL.K80-NODE
+          cellNumber: 2
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -108,49 +102,122 @@ roleRef:
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: hivedscheduler
+  name: hivedscheduler-hs
   namespace: default
 spec:
-  serviceName: hivedscheduler
+  serviceName: hivedscheduler-hs
   selector:
     matchLabels:
-      app: hivedscheduler
+      app: hivedscheduler-hs
   replicas: 1
   template:
     metadata:
       labels:
-        app: hivedscheduler
+        app: hivedscheduler-hs
     spec:
       serviceAccountName: hivedscheduler-account
       containers:
-      - name: defaultscheduler
-        image: gcr.io/google_containers/kube-scheduler:v1.14.2
-        command: [
-          "/usr/local/bin/kube-scheduler",
-          "--master=http://10.151.41.15:8080",
-          "--config=/hivedscheduler-config/config.yaml",
-          "--feature-gates=PodPriority=true",
-          "--leader-elect=false",
-          "--v=4"]
-        volumeMounts:
-        - name: hivedscheduler-config
-          mountPath: /hivedscheduler-config
       - name: hivedscheduler
         image: hivedscheduler/hivedscheduler
         command: [
           "bash", "-c",
           "cp /hivedscheduler-config/hivedscheduler.yaml . &&
           ./start.sh"]
-        env:
-          - name: KUBE_APISERVER_ADDRESS
-            value: http://10.151.41.15:8080
         volumeMounts:
-          - name: hivedscheduler-config
-            mountPath: /hivedscheduler-config
+        - name: hivedscheduler-config
+          mountPath: /hivedscheduler-config
       volumes:
       - name: hivedscheduler-config
         configMap:
           name: hivedscheduler-config
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: hivedscheduler-ds-vc1
+  namespace: default
+spec:
+  serviceName: hivedscheduler-ds-vc1
+  selector:
+    matchLabels:
+      app: hivedscheduler-ds-vc1
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: hivedscheduler-ds-vc1
+    spec:
+      nodeSelector:
+        pai-master: "true"
+      serviceAccountName: hivedscheduler-account
+      imagePullSecrets:
+      - name: {{ cluster_cfg["cluster"]["docker-registry"]["secret-name"] }}
+      containers:
+      - name: defaultscheduler
+        image: gcr.io/google_containers/kube-scheduler:v1.14.2
+        command: [
+          "sh", "-c",
+          "echo \"apiVersion: kubescheduler.config.k8s.io/v1alpha1\" >> config.yaml &&
+           echo \"kind: KubeSchedulerConfiguration\" >> config.yaml &&
+           echo \"schedulerName: hivedscheduler-ds-vc1\" >> config.yaml &&
+           echo \"disablePreemption: false\" >> config.yaml &&
+           echo \"percentageOfNodesToScore: 100\" >> config.yaml &&
+           echo \"algorithmSource:\" >> config.yaml &&
+           echo \"  policy:\" >> config.yaml &&
+           echo \"    configMap:\" >> config.yaml &&
+           echo \"      name: hivedscheduler-config\" >> config.yaml &&
+           echo \"      namespace: default\" >> config.yaml &&
+           echo \"leaderElection:\" >> config.yaml &&
+           echo \"  leaderElect: false\" >> config.yaml &&
+           /usr/local/bin/kube-scheduler
+           --config=config.yaml
+           --feature-gates=PodPriority=true
+           --leader-elect=false
+           --v=4"]
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: hivedscheduler-ds-vc2
+  namespace: default
+spec:
+  serviceName: hivedscheduler-ds-vc2
+  selector:
+    matchLabels:
+      app: hivedscheduler-ds-vc2
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: hivedscheduler-ds-vc2
+    spec:
+      nodeSelector:
+        pai-master: "true"
+      serviceAccountName: hivedscheduler-account
+      imagePullSecrets:
+      - name: {{ cluster_cfg["cluster"]["docker-registry"]["secret-name"] }}
+      containers:
+      - name: defaultscheduler
+        image: gcr.io/google_containers/kube-scheduler:v1.14.2
+        command: [
+          "sh", "-c",
+          "echo \"apiVersion: kubescheduler.config.k8s.io/v1alpha1\" >> config.yaml &&
+           echo \"kind: KubeSchedulerConfiguration\" >> config.yaml &&
+           echo \"schedulerName: hivedscheduler-ds-vc2\" >> config.yaml &&
+           echo \"disablePreemption: false\" >> config.yaml &&
+           echo \"percentageOfNodesToScore: 100\" >> config.yaml &&
+           echo \"algorithmSource:\" >> config.yaml &&
+           echo \"  policy:\" >> config.yaml &&
+           echo \"    configMap:\" >> config.yaml &&
+           echo \"      name: hivedscheduler-config\" >> config.yaml &&
+           echo \"      namespace: default\" >> config.yaml &&
+           echo \"leaderElection:\" >> config.yaml &&
+           echo \"  leaderElect: false\" >> config.yaml &&
+           /usr/local/bin/kube-scheduler
+           --config=config.yaml
+           --feature-gates=PodPriority=true
+           --leader-elect=false
+           --v=4"]
 ---
 apiVersion: v1
 kind: Service
