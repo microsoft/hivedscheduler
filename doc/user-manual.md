@@ -19,7 +19,7 @@
 
     Assume you have some `K80` nodes of the same SKU in your cluster, and you want to schedule Pods on them:
 
-    1. Using `kubectl describe nodes` to check if these `K80` nodes have nearly the same [Allocatable Resources](https://kubernetes.io/docs/tasks/administer-cluster/reserve-compute-resources), especially for gpu, cpu, memory. If not, please fix it. Assume the aligned resources are: 4 gpus, 23 cpus, and 219GB memory.
+    1. Using `kubectl describe nodes` to check if these `K80` nodes have nearly the same ([Allocatable Resources](https://kubernetes.io/docs/tasks/administer-cluster/reserve-compute-resources) - [All Daemon Pods Requests, such as Pods for Device Plugin,  Network Plugin, etc](https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container/#resource-requests-and-limits-of-pod-and-container)), especially for gpu, cpu, memory. If not, please fix it. Assume the aligned minimal resources are: 4 gpus, 23 cpus, and 219GB memory.
 
     2. Then proportionally, each gpu request should also has floor(23/4)=5 cpus and floor(219/4)=54GB memory along with it, so config the `K80` `gpuType` as below:
         ```yaml

@@ -77,6 +77,7 @@ spec:
           spec:
             schedulerName: hivedscheduler
             restartPolicy: Never
+            priority: 1000
             containers:
             - name: ubuntu
               image: ubuntu:trusty
@@ -123,6 +124,7 @@ spec:
           spec:
             schedulerName: hivedscheduler
             restartPolicy: Never
+            priority: 1000
             containers:
             - name: ubuntu
               image: ubuntu:trusty
@@ -169,6 +171,7 @@ spec:
           spec:
             schedulerName: hivedscheduler
             restartPolicy: Never
+            priority: 1000
             containers:
             - name: ubuntu
               image: ubuntu:trusty
@@ -203,6 +206,7 @@ metadata:
 spec:
   schedulerName: hivedscheduler
   restartPolicy: Never
+  priority: 1000
   containers:
   - name: ubuntu
     image: ubuntu:trusty
@@ -233,6 +237,7 @@ metadata:
 spec:
   schedulerName: hivedscheduler
   restartPolicy: Never
+  priority: 1000
   containers:
   - name: ubuntu
     image: ubuntu:trusty
@@ -263,6 +268,7 @@ metadata:
 spec:
   schedulerName: hivedscheduler
   restartPolicy: Never
+  priority: 1000
   containers:
   - name: ubuntu
     image: ubuntu:trusty
