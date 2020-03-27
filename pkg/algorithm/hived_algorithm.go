@@ -188,7 +188,9 @@ func (h *HivedAlgorithm) Schedule(
 				// If we find a preempting group's placement is not fully within suggested nodes, we should cancel
 				// the preemption so as to reschedule it to other places. We should do this only in Preempting phase
 				// because the suggested nodes in Filtering phase does not consider preemption.
-				h.deletePreemptingAffinityGroup(g, "", pod)
+				klog.Infof("[%v]: Placement not fully within Preempting-phase suggested nodes, "+
+					"deleting preempting affinity group %v", internal.Key(pod), g.name)
+				h.deletePreemptingAffinityGroup(g, pod)
 			} else {
 				groupPhysicalPlacement = g.physicalGpuPlacement
 				groupVirtualPlacement = g.virtualGpuPlacement
@@ -216,7 +218,10 @@ func (h *HivedAlgorithm) Schedule(
 			}
 		} else {
 			for preemptor := range overlappingPreemptors.Items() {
-				h.deletePreemptingAffinityGroup(preemptor.(*AlgoAffinityGroup), s.AffinityGroup.Name, pod)
+				klog.Infof("[%v]: Affinity group %v cancels an ongoing preemption, "+
+					"deleting the ongoing preempting affinity group %v",
+					internal.Key(pod), s.AffinityGroup.Name, preemptor.(*AlgoAffinityGroup).name)
+				h.deletePreemptingAffinityGroup(preemptor.(*AlgoAffinityGroup), pod)
 			}
 			if len(preemptionVictims) != 0 {
 				h.createPreemptingAffinityGroup(s, groupPhysicalPlacement, groupVirtualPlacement, pod)
@@ -253,7 +258,9 @@ func (h *HivedAlgorithm) DeleteUnallocatedPod(pod *core.Pod) {
 			delete(g.preemptingPods, pod.UID)
 		}
 		if len(g.preemptingPods) == 0 {
-			h.deletePreemptingAffinityGroup(g, "", pod)
+			klog.Infof("[%v]: All pods deleted, deleting preempting affinity group %v",
+				internal.Key(pod), g.name)
+			h.deletePreemptingAffinityGroup(g, pod)
 		}
 	}
 }
@@ -370,7 +377,7 @@ func (h *HivedAlgorithm) GetVirtualClusterStatus(vcn api.VirtualClusterName) api
 	h.algorithmLock.RLock()
 	defer h.algorithmLock.RUnlock()
 
-	if vcs := h.apiClusterStatus.VirtualClusters[vcn]; vcs != nil {
+	if vcs, ok := h.apiClusterStatus.VirtualClusters[vcn]; ok {
 		return vcs.DeepCopy()
 	}
 	panic(internal.NewBadRequestError(fmt.Sprintf("VC %v not found", vcn)))
@@ -963,14 +970,7 @@ func (h *HivedAlgorithm) createPreemptingAffinityGroup(
 
 // deletePreemptingAffinityGroup revokes a preemption and deletes the affinity group that is
 // still waiting for the completion of the preemption.
-func (h *HivedAlgorithm) deletePreemptingAffinityGroup(g *AlgoAffinityGroup, newGroupName string, pod *core.Pod) {
-	if newGroupName == "" {
-		klog.Infof("[%v]: All pods deleted, deleting preempting affinity group %v",
-			internal.Key(pod), g.name)
-	} else {
-		klog.Infof("[%v]: Affinity group %v cancels an ongoing preemption, deleting the ongoing preempting affinity group %v",
-			internal.Key(pod), newGroupName, g.name)
-	}
+func (h *HivedAlgorithm) deletePreemptingAffinityGroup(g *AlgoAffinityGroup, pod *core.Pod) {
 	for gpuNum := range g.physicalGpuPlacement {
 		for podIndex := range g.physicalGpuPlacement[gpuNum] {
 			for _, gpu := range g.physicalGpuPlacement[gpuNum][podIndex] {

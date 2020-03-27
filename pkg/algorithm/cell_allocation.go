@@ -216,7 +216,9 @@ func bindCell(pc *PhysicalCell, vc *VirtualCell) {
 		pc.SetVirtualCell(vc)
 		vc.SetPhysicalCell(pc)
 		klog.Infof("Virtual cell %v is bound to physical cell %v", vc.GetAddress(), pc.GetAddress())
-		if pc.GetAPIStatus().CellHealthiness == api.CellBad && (vc.GetParent() == nil || pc.GetParent().(*PhysicalCell).GetAPIStatus().CellHealthiness == api.CellHealthy) {
+		if pc.GetAPIStatus().CellHealthiness == api.CellBad &&
+			(vc.GetParent() == nil ||
+				pc.GetParent().(*PhysicalCell).GetAPIStatus().CellHealthiness == api.CellHealthy) {
 			// If a physical cell is marked as Bad, that means all of its children are bad. In this case, we should also
 			// mark all of the virtual cell's children as bad. We need to do it explicitly because some of the virtual
 			// cell's children might be not bound to a physical cell, so it won't be marked as bad by cell binding.

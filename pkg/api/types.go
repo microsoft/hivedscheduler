@@ -152,10 +152,12 @@ type AffinityGroup struct {
 type AffinityGroupState string
 
 type AffinityGroupStatus struct {
-	VC                   VirtualClusterName            `json:"vc"`
-	Priority             int32                         `json:"priority"`
-	State                AffinityGroupState            `json:"state"`
-	PhysicalPlacement    map[string][]int32            `json:"physicalPlacement,omitempty"`
+	VC       VirtualClusterName `json:"vc"`
+	Priority int32              `json:"priority"`
+	State    AffinityGroupState `json:"state"`
+	// node -> GPU indices
+	PhysicalPlacement map[string][]int32 `json:"physicalPlacement,omitempty"`
+	// preassigned cell -> leaf cells
 	VirtualPlacement     map[CellAddress][]CellAddress `json:"virtualPlacement,omitempty"`
 	AllocatedPods        []types.UID                   `json:"allocatedPods,omitempty"`
 	PreemptingPods       []types.UID                   `json:"preemptingPods,omitempty"`
@@ -182,7 +184,7 @@ const (
 type CellStatus struct {
 	GpuType     string   `json:"gpuType,omitempty"`
 	CellType    CellType `json:"cellType"`
-	IsNodeLevel bool     `json:"isNodeLevel"`
+	IsNodeLevel bool     `json:"isNodeLevel,omitempty"`
 	// Address of a physical cell consists of its address (or index) in each level
 	// (e.g., node0/0/0/0 may represent node0, CPU socket 0, PCIe switch 0, GPU 0.
 	// Address of a virtual cell consists of its VC name, index of the preassigned cell,
