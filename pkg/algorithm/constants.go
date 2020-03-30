@@ -32,9 +32,38 @@ const (
 	maxGuaranteedPriority = CellPriority(api.MaxGuaranteedPriority)
 	minGuaranteedPriority = CellPriority(api.MinGuaranteedPriority)
 	opportunisticPriority = CellPriority(api.OpportunisticPriority)
-	freePriority          = CellPriority(-2)
+	freePriority          = opportunisticPriority - 1
 
 	// lowest and highest levels in a cell chain
-	lowestLevel  = CellLevel(1)
-	highestLevel = CellLevel(math.MaxInt32)
+	lowestLevel  CellLevel = 1
+	highestLevel CellLevel = math.MaxInt32
+
+	// internal cell states
+
+	// No affinity group is using, acquiring or has acquired the cell.
+	// A Free cell's priority must be freePriority.
+	cellFree CellState = "Free"
+	// An affinity group is using this cell, and no other group is acquiring it.
+	// A Used cell's priority is that of the group using the cell.
+	cellUsed CellState = "Used"
+	// An affinity group is using this cell, and another group is acquiring it.
+	// An Acquiring cell's priority is that of the group acquiring the cell. This means the scheduling algorithm
+	// will respect the acquiring group, i.e., a group with a non-higher priority cannot get this cell.
+	cellAcquiring CellState = "Acquiring"
+	// No affinity group is using this cell, and a group has acquired it.
+	// An Acquired cell's priority is that of the group that acquired the cell. This means the scheduling algorithm
+	// will respect the group that acquired the cell, i.e., a group with a non-higher priority cannot get this cell.
+	cellAcquired CellState = "Acquired"
+
+	// internal affinity group states
+
+	// The affinity group has been allocated cells and is allowed to run.
+	// All cells in the group must be in Used state.
+	groupAllocated AffinityGroupState = "Allocated"
+	// The affinity group is preempting other groups to get free resource.
+	// Cells in the group must be in either Acquiring or Acquired states.
+	groupPreempting AffinityGroupState = "Preempting"
+	// The affinity group is being preempted by some other groups.
+	// Cells in the group must be in either Used or Acquiring states.
+	groupBeingPreempted AffinityGroupState = "BeingPreempted"
 )

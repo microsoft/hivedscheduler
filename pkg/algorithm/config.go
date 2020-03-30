@@ -187,7 +187,8 @@ func (c *physicalCellConstructor) addCell(
 	reservationId api.ReservationId,
 	address api.CellAddress) *PhysicalCell {
 
-	cellInstance := NewPhysicalCell(c.buildingChain, ce.level, ce.hasNode, ce.gpuNumber, ce.cellType, address)
+	cellInstance := NewPhysicalCell(
+		c.buildingChain, ce.level, ce.hasNode, ce.gpuNumber, ce.cellType, address, ce.hasNode && !ce.isMultiNodes)
 	if _, ok := c.fullCellList[chain]; !ok {
 		c.fullCellList[chain] = ChainCellList{}
 	}
@@ -284,7 +285,7 @@ func (c *virtualCellConstructor) addCell(
 	address api.CellAddress) *VirtualCell {
 
 	cellInstance := NewVirtualCell(
-		vc, c.buildingChain, ce.level, ce.hasNode, ce.gpuNumber, nil, ce.cellType, address)
+		vc, c.buildingChain, ce.level, ce.hasNode, ce.gpuNumber, nil, ce.cellType, address, ce.hasNode && !ce.isMultiNodes)
 	if c.buildingReservation == "" {
 		if _, ok := c.nonReservedFullList[vc][chain]; !ok {
 			c.nonReservedFullList[vc][chain] = ChainCellList{}

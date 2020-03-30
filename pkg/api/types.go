@@ -25,6 +25,7 @@ package api
 import (
 	"fmt"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 ///////////////////////////////////////////////////////////////////////////////////////
@@ -148,8 +149,19 @@ type AffinityGroup struct {
 	Status     AffinityGroupStatus `json:"status"`
 }
 
+type AffinityGroupState string
+
 type AffinityGroupStatus struct {
-	LazyPreemptionStatus *LazyPreemptionStatus `json:"lazyPreemptionStatus"`
+	VC       VirtualClusterName `json:"vc"`
+	Priority int32              `json:"priority"`
+	State    AffinityGroupState `json:"state"`
+	// node -> GPU indices
+	PhysicalPlacement map[string][]int32 `json:"physicalPlacement,omitempty"`
+	// preassigned cell -> leaf cells
+	VirtualPlacement     map[CellAddress][]CellAddress `json:"virtualPlacement,omitempty"`
+	AllocatedPods        []types.UID                   `json:"allocatedPods,omitempty"`
+	PreemptingPods       []types.UID                   `json:"preemptingPods,omitempty"`
+	LazyPreemptionStatus *LazyPreemptionStatus         `json:"lazyPreemptionStatus,omitempty"`
 }
 
 type LazyPreemptionStatus struct {
@@ -159,14 +171,10 @@ type LazyPreemptionStatus struct {
 	PreemptionTime meta.Time `json:"preemptionTime"`
 }
 
-type CellState string
-
-const (
-	CellFree CellState = "Free"
-	CellUsed CellState = "Used"
+type (
+	CellState       string
+	CellHealthiness string
 )
-
-type CellHealthiness string
 
 const (
 	CellHealthy CellHealthiness = "Healthy"
@@ -174,8 +182,9 @@ const (
 )
 
 type CellStatus struct {
-	GpuType  string   `json:"gpuType,omitempty"`
-	CellType CellType `json:"cellType"`
+	GpuType     string   `json:"gpuType,omitempty"`
+	CellType    CellType `json:"cellType"`
+	IsNodeLevel bool     `json:"isNodeLevel,omitempty"`
 	// Address of a physical cell consists of its address (or index) in each level
 	// (e.g., node0/0/0/0 may represent node0, CPU socket 0, PCIe switch 0, GPU 0.
 	// Address of a virtual cell consists of its VC name, index of the preassigned cell,
@@ -199,7 +208,7 @@ type PhysicalCellStatus struct {
 
 type VirtualCellStatus struct {
 	CellStatus
-	Children     []*VirtualCellStatus `json:"children,omitempty"`
+	CellChildren []*VirtualCellStatus `json:"cellChildren,omitempty"`
 	PhysicalCell *PhysicalCellStatus  `json:"physicalCell,omitempty"`
 }
 
@@ -243,10 +252,10 @@ func (vcs *VirtualCellStatus) deepCopy() *VirtualCellStatus {
 	copied := &VirtualCellStatus{
 		CellStatus: vcs.CellStatus,
 	}
-	if vcs.Children != nil {
-		copied.Children = make([]*VirtualCellStatus, len(vcs.Children))
-		for i, child := range vcs.Children {
-			copied.Children[i] = child.deepCopy()
+	if vcs.CellChildren != nil {
+		copied.CellChildren = make([]*VirtualCellStatus, len(vcs.CellChildren))
+		for i, child := range vcs.CellChildren {
+			copied.CellChildren[i] = child.deepCopy()
 		}
 	}
 	if vcs.PhysicalCell != nil {
