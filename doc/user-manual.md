@@ -5,15 +5,16 @@
 
 ## <a name="Config">Config</a>
 ### <a name="ConfigQuickStart">Config QuickStart</a>
-1. Config `gpuTypes`
+1. Config `skuTypes`
 
     **Description:**
 
-    A `gpuType` defines a **resource unit** in all resource dimensions.
+    A `skuType` defines a **resource unit** in all resource dimensions.
 
     Notes:
     1. It is like the [Azure VM Series](https://docs.microsoft.com/en-us/azure/virtual-machines/windows/sizes-gpu) or [GCP Machine Types](https://cloud.google.com/compute/docs/machine-types).
-    2. Currently, the `gpuTypes` is not directly used by HivedScheduler, but it is used by [OpenPAI RestServer](https://github.com/microsoft/pai/tree/master/src/rest-server) to setup proportional Pod resource requests and limits. So, if you are not using with [OpenPAI RestServer](https://github.com/microsoft/pai/tree/master/src/rest-server), you can skip to config it.
+    2. Currently, the `skuTypes` is not directly used by HivedScheduler, but it is used by [OpenPAI RestServer](https://github.com/microsoft/pai/tree/master/src/rest-server) to setup proportional Pod resource requests and limits. So, if you are not using with [OpenPAI RestServer](https://github.com/microsoft/pai/tree/master/src/rest-server), you can skip to config it.
+    3. It is previously known as `gpuTypes`, and we are in the progress to rename it to `skuTypes`, as HiveD only awares the abstract `cell` concept instead of the concrete hardware that the `cell` represents.
 
     **Example:**
 
@@ -21,10 +22,10 @@
 
     1. Using `kubectl describe nodes` to check if these `K80` nodes have nearly the same ([Allocatable Resources](https://kubernetes.io/docs/tasks/administer-cluster/reserve-compute-resources) - [All Daemon Pods Requests, such as Pods for Device Plugin,  Network Plugin, etc](https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container/#resource-requests-and-limits-of-pod-and-container)), especially for gpu, cpu, memory. If not, please fix it. Assume the aligned minimal resources are: 4 gpus, 23 cpus, and 219GB memory.
 
-    2. Then proportionally, each gpu request should also has floor(23/4)=5 cpus and floor(219/4)=54GB memory along with it, so config the `K80` `gpuType` as below:
+    2. Then proportionally, each gpu request should also has floor(23/4)=5 cpus and floor(219/4)=54GB memory along with it, so config the `K80` `skuType` as below:
         ```yaml
         physicalCluster:
-          gpuTypes:
+          skuTypes:
             K80:
               gpu: 1
               cpu: 5
@@ -35,10 +36,10 @@
 
     **Description:**
 
-    A `cellType` defines a **resource topology** of a `gpuType`.
+    A `cellType` defines a **resource topology** of a `skuType`.
 
     Notes:
-    1. `gpuTypes` are also `cellTypes`, but they are all leaf `cellTypes` which do not have internal topology anymore.
+    1. `skuTypes` are also `cellTypes`, but they are all leaf `cellTypes` which do not have internal topology anymore.
 
     **Example:**
 
@@ -120,7 +121,7 @@
     Finally, after above steps, your config would be:
     ```yaml
     physicalCluster:
-      gpuTypes:
+      skuTypes:
         K80:
           gpu: 1
           cpu: 5
