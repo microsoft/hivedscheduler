@@ -536,26 +536,22 @@ func (s *HivedScheduler) filterRoutine(args ei.ExtenderArgs) *ei.ExtenderFilterR
 			NodeNames: &[]string{bindingPod.Spec.NodeName},
 		}
 	} else if result.PodPreemptInfo != nil {
-		s.podScheduleStatuses[pod.UID] = &internal.PodScheduleStatus{
-			Pod:               pod,
-			PodState:          internal.PodPreempting,
-			PodScheduleResult: &result,
-		}
-
 		// Return FailedNodes to tell K8S Default Scheduler that preemption may help.
 		failedNodes := map[string]string{}
 		for _, victim := range result.PodPreemptInfo.VictimPods {
 			node := victim.Spec.NodeName
 			if _, ok := failedNodes[node]; !ok {
 				failedNodes[node] = fmt.Sprintf(
-					"node(%v) is waiting for victim Pod(s) to be preempted: %v",
+					"node(%v) has preemptible Pods: %v",
 					node, internal.Key(victim))
 			} else {
 				failedNodes[node] += ", " + internal.Key(victim)
 			}
 		}
 
-		klog.Infof(logPfx+"Pod is preempting: %v", common.ToJson(failedNodes))
+		klog.Infof(logPfx+
+			"Pod is waiting for preemptRoutine as preemptible resource appeared: %v",
+			common.ToJson(failedNodes))
 		return &ei.ExtenderFilterResult{
 			FailedNodes: failedNodes,
 		}
@@ -672,8 +668,7 @@ func (s *HivedScheduler) preemptRoutine(args ei.ExtenderPreemptionArgs) *ei.Exte
 
 	if result.PodBindInfo != nil {
 		klog.Infof(logPfx+
-			"Pod already can be bound on the free resource, so no need to preempt "+
-			"anymore, and just need to wait for future filterRoutine: %v",
+			"Pod is waiting for filterRoutine as free resource appeared: %v",
 			common.ToJson(result.PodBindInfo))
 		return &ei.ExtenderPreemptionResult{}
 	} else if result.PodPreemptInfo != nil {
@@ -685,6 +680,7 @@ func (s *HivedScheduler) preemptRoutine(args ei.ExtenderPreemptionArgs) *ei.Exte
 
 		victims := result.PodPreemptInfo.VictimPods
 		nodesVictims := map[string]*ei.MetaVictims{}
+		nodesVictimsMsg := map[string][]string{}
 
 		for _, victim := range victims {
 			node := victim.Spec.NodeName
@@ -699,8 +695,10 @@ func (s *HivedScheduler) preemptRoutine(args ei.ExtenderPreemptionArgs) *ei.Exte
 			}
 			nodeVictims.Pods = append(nodeVictims.Pods,
 				&ei.MetaPod{UID: string(victim.UID)})
+			nodesVictimsMsg[node] = append(nodesVictimsMsg[node], internal.Key(victim))
 		}
 
+		klog.Infof(logPfx+"Pod is preempting: %v", common.ToJson(nodesVictimsMsg))
 		return &ei.ExtenderPreemptionResult{
 			NodeNameToMetaVictims: nodesVictims,
 		}
@@ -711,9 +709,7 @@ func (s *HivedScheduler) preemptRoutine(args ei.ExtenderPreemptionArgs) *ei.Exte
 			PodScheduleResult: &result,
 		}
 
-		waitReason :=
-			"Pod is waiting for preemptible or free resource to appear, " +
-				"so no need to preempt anymore"
+		waitReason := "Pod is waiting for preemptible or free resource to appear"
 		if result.PodWaitInfo != nil {
 			waitReason += ": " + result.PodWaitInfo.Reason
 		}
