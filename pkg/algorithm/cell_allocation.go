@@ -100,23 +100,18 @@ func mapNonPreassignedVirtualToPhysical(c *VirtualCell, suggestedNodes common.Se
 }
 
 // getFewestOpporPhysicalCell selects a physical cell with the minimum number of opportunistic pods from a cell list.
-// This function will try to avoid using cells whose resources are not within the suggested nodes if possible.
-// In case there is no cell within the suggested nodes, it will try to randomly return a healthy node with at least
-// one opportunistic pod to try preemption. If that also fails, it just returns the min-opportunistic cell,
-// regardless of if it is suggested or healthy.
+// This function will try to avoid using cells whose resources are not fully within the suggested nodes if possible.
+// In case there is no cell fully within the suggested nodes, we will still return a cell because some of its children
+// may be within suggested nodes, and we can find them when binding the lower-level cells. We will return a random
+// cell in this case to avoid getting stuck in the same cell where we cannot find a child within suggested nodes.
 func getFewestOpporPhysicalCell(cl CellList, suggestedNodes common.Set) *PhysicalCell {
-	fewestOpporNum := int32(math.MaxInt32)
+	var cellsNotBound []*PhysicalCell
 	fewestOpporNumSuggested := int32(math.MaxInt32)
-	var fewestOpporCell *PhysicalCell
 	var fewestOpporCellSuggested *PhysicalCell
-	var preemptibleCells []*PhysicalCell
 	for _, c := range cl {
 		if pc := c.(*PhysicalCell); pc.GetVirtualCell() == nil && pc.GetPreBoundVirtualCell() == nil {
+			cellsNotBound = append(cellsNotBound, pc)
 			opporNum := pc.GetUsedGpuNumAtPriorities()[opportunisticPriority]
-			if opporNum < fewestOpporNum {
-				fewestOpporNum = opporNum
-				fewestOpporCell = pc
-			}
 			allNodesInSuggested := true
 			nodes, _ := pc.GetPhysicalPlacement()
 			for _, n := range nodes {
@@ -129,36 +124,21 @@ func getFewestOpporPhysicalCell(cl CellList, suggestedNodes common.Set) *Physica
 				fewestOpporNumSuggested = opporNum
 				fewestOpporCellSuggested = pc
 			}
-			if opporNum > 0 {
-				preemptibleCells = append(preemptibleCells, pc)
-			}
 		}
 	}
-	var selectedCell *PhysicalCell
 	if fewestOpporCellSuggested != nil {
-		selectedCell = fewestOpporCellSuggested
-		nodes, _ := selectedCell.GetPhysicalPlacement()
-		klog.Infof("Selected a cell within suggested nodes: %v, nodes %v", selectedCell.GetAddress(), common.ToJson(nodes))
-	} else if len(preemptibleCells) > 0 {
-		// If we cannot find a cell within suggested nodes, we will try to preempt some pods instead of
-		// directly returning the fewestOpporCell (because this cell could be a bad node, we should not return it).
-		// Also, we will choose a random cell, to avoid always returning the same cell (similar to above,
-		// if we always return the same cell, it might be a bad node, preempting pods on a bad node won't bring
-		// it back to the suggested nodes)
-		selectedCell = preemptibleCells[rand.Int31n(int32(len(preemptibleCells)))]
-		nodes, _ := selectedCell.GetPhysicalPlacement()
-		klog.Infof("Selected a cell not fully within suggested nodes (some of its children may be within); "+
-			"preempting opportunistic pods may help: %v, nodes %v",
-			selectedCell.GetAddress(), common.ToJson(nodes))
-	} else if fewestOpporCell == nil {
-		panic("VC Safety Broken: Cannot find any physical cell that has not been bound to a virtual cell")
-	} else {
-		selectedCell = fewestOpporCell
-		nodes, _ := selectedCell.GetPhysicalPlacement()
-		klog.Infof("Selected a cell not fully within suggested nodes (some of its children may be within); "+
-			"no preemption can help: %v, nodes %v",
-			selectedCell.GetAddress(), common.ToJson(nodes))
+		nodes, _ := fewestOpporCellSuggested.GetPhysicalPlacement()
+		klog.Infof("Selected a cell within suggested nodes: %v, nodes %v",
+			fewestOpporCellSuggested.GetAddress(), common.ToJson(nodes))
+		return fewestOpporCellSuggested
 	}
+	// select a random cell to avoid always picking the same cell in which there might be
+	// no child fully within suggested nodes
+	selectedCell := cellsNotBound[rand.Int31n(int32(len(cellsNotBound)))]
+	nodes, _ := selectedCell.GetPhysicalPlacement()
+	klog.Infof("Selected a cell randomly from the cell list because we cannot find a cell fully within "+
+		"suggested nodes (children of the cell may be within): %v, nodes %v",
+		selectedCell.GetAddress(), common.ToJson(nodes))
 	return selectedCell
 }
 

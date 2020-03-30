@@ -171,7 +171,7 @@ func (h *HivedAlgorithm) Schedule(
 	)
 
 	if g := h.affinityGroups[s.AffinityGroup.Name]; g != nil {
-		// state of g can be either Allocated or Preempting
+		// state of an existing group can be either Allocated or Preempting
 		if g.state == groupAllocated {
 			klog.Infof("[%v]: Pod affinity group is already allocated: %v", internal.Key(pod), s.AffinityGroup.Name)
 			groupPhysicalPlacement = g.physicalGpuPlacement
@@ -188,8 +188,9 @@ func (h *HivedAlgorithm) Schedule(
 				// If we find a preempting group's placement is not fully within suggested nodes, we should cancel
 				// the preemption so as to reschedule it to other places. We should do this only in Preempting phase
 				// because the suggested nodes in Filtering phase does not consider preemption.
-				klog.Infof("[%v]: Placement not fully within Preempting-phase suggested nodes, "+
-					"deleting preempting affinity group %v", internal.Key(pod), g.name)
+				klog.Infof("[%v]: Canceling affinity group %v's preemption because its placement is no longer "+
+					"fully within Preempting-phase suggested nodes (non-suggested nodes: %v)",
+					internal.Key(pod), g.name, nodesNotInSuggested)
 				h.deletePreemptingAffinityGroup(g, pod)
 			} else {
 				groupPhysicalPlacement = g.physicalGpuPlacement
@@ -207,24 +208,31 @@ func (h *HivedAlgorithm) Schedule(
 		var overlappingPreemptors common.Set
 		preemptionVictims, overlappingPreemptors = collectPreemptionVictims(groupPhysicalPlacement)
 		nodesNotInSuggested = collectNodesNotSuggested(groupPhysicalPlacement, suggestedNodeSet)
-		if phase == internal.PreemptingPhase && !nodesNotInSuggested.IsEmpty() {
-			// Preemption is prohibited in this case, because the group cannot be scheduled to suggested nodes
-			// of Preempting phase even with preemption
-			if len(preemptionVictims) != 0 {
-				klog.Infof("[%v]: Found preemption victims %v, but we do not allow this preemption "+
-					"because the placement is not fully within Preempting-phase suggested nodes",
-					internal.Key(pod), victimsToString(preemptionVictims))
-				preemptionVictims = nil
-			}
-		} else {
+		// we allow a new preemption only when in Preempting phase
+		// and the placement is fully within suggested nodes
+		if phase == internal.PreemptingPhase && nodesNotInSuggested.IsEmpty() {
 			for preemptor := range overlappingPreemptors.Items() {
-				klog.Infof("[%v]: Affinity group %v cancels an ongoing preemption, "+
-					"deleting the ongoing preempting affinity group %v",
-					internal.Key(pod), s.AffinityGroup.Name, preemptor.(*AlgoAffinityGroup).name)
+				klog.Infof("[%v]: Canceling affinity group %v's preemption because it is "+
+					"further preempted by a higher-priority affinity group %v",
+					internal.Key(pod), preemptor.(*AlgoAffinityGroup).name, s.AffinityGroup.Name)
 				h.deletePreemptingAffinityGroup(preemptor.(*AlgoAffinityGroup), pod)
 			}
-			if len(preemptionVictims) != 0 {
+		}
+		if len(preemptionVictims) != 0 {
+			if phase == internal.PreemptingPhase && nodesNotInSuggested.IsEmpty() {
 				h.createPreemptingAffinityGroup(s, groupPhysicalPlacement, groupVirtualPlacement, pod)
+			} else if phase == internal.FilteringPhase {
+				klog.Infof("[%v]: Found preemption victims %v, but we do not allow preemption "+
+					"in Filtering phase", internal.Key(pod), victimsToString(preemptionVictims))
+				groupPhysicalPlacement = nil
+				groupVirtualPlacement = nil
+				preemptionVictims = nil
+			} else {
+				klog.Infof("[%v]: Found preemption victims %v, but we do not allow this preemption "+
+					"because the placement is not fully within Preempting-phase suggested nodes "+
+					"(non-suggested nodes: %v)",
+					internal.Key(pod), victimsToString(preemptionVictims), nodesNotInSuggested)
+				preemptionVictims = nil
 			}
 		}
 	}
@@ -258,7 +266,7 @@ func (h *HivedAlgorithm) DeleteUnallocatedPod(pod *core.Pod) {
 			delete(g.preemptingPods, pod.UID)
 		}
 		if len(g.preemptingPods) == 0 {
-			klog.Infof("[%v]: All pods deleted, deleting preempting affinity group %v",
+			klog.Infof("[%v]: Canceling affinity group %v's preemption because its pods are all deleted",
 				internal.Key(pod), g.name)
 			h.deletePreemptingAffinityGroup(g, pod)
 		}
