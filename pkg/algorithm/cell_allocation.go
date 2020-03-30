@@ -105,12 +105,12 @@ func mapNonPreassignedVirtualToPhysical(c *VirtualCell, suggestedNodes common.Se
 // may be within suggested nodes, and we can find them when binding the lower-level cells. We will return a random
 // cell in this case to avoid getting stuck in the same cell where we cannot find a child within suggested nodes.
 func getFewestOpporPhysicalCell(cl CellList, suggestedNodes common.Set) *PhysicalCell {
-	var cellsNotBound []*PhysicalCell
+	var freeCells []*PhysicalCell
 	fewestOpporNumSuggested := int32(math.MaxInt32)
 	var fewestOpporCellSuggested *PhysicalCell
 	for _, c := range cl {
 		if pc := c.(*PhysicalCell); pc.GetVirtualCell() == nil && pc.GetPreBoundVirtualCell() == nil {
-			cellsNotBound = append(cellsNotBound, pc)
+			freeCells = append(freeCells, pc)
 			opporNum := pc.GetUsedGpuNumAtPriorities()[opportunisticPriority]
 			allNodesInSuggested := true
 			nodes, _ := pc.GetPhysicalPlacement()
@@ -134,7 +134,7 @@ func getFewestOpporPhysicalCell(cl CellList, suggestedNodes common.Set) *Physica
 	}
 	// select a random cell to avoid always picking the same cell in which there might be
 	// no child fully within suggested nodes
-	selectedCell := cellsNotBound[rand.Int31n(int32(len(cellsNotBound)))]
+	selectedCell := freeCells[rand.Int31n(int32(len(freeCells)))]
 	nodes, _ := selectedCell.GetPhysicalPlacement()
 	klog.Infof("Selected a cell randomly from the cell list because we cannot find a cell fully within "+
 		"suggested nodes (children of the cell may be within): %v, nodes %v",

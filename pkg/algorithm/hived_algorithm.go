@@ -222,8 +222,9 @@ func (h *HivedAlgorithm) Schedule(
 			if phase == internal.PreemptingPhase && nodesNotInSuggested.IsEmpty() {
 				h.createPreemptingAffinityGroup(s, groupPhysicalPlacement, groupVirtualPlacement, pod)
 			} else if phase == internal.FilteringPhase {
-				klog.Infof("[%v]: Found preemption victims %v, but we do not allow preemption "+
-					"in Filtering phase", internal.Key(pod), victimsToString(preemptionVictims))
+				klog.Infof("[%v]: Found preemption victims %v, but we do not allow preemption in Filtering "+
+					"phase because K8s won't call preempt, creating preemption state here is misleading",
+					internal.Key(pod), victimsToString(preemptionVictims))
 				groupPhysicalPlacement = nil
 				groupVirtualPlacement = nil
 				preemptionVictims = nil
