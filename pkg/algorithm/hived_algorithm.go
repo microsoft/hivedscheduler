@@ -719,11 +719,11 @@ func (h *HivedAlgorithm) scheduleAffinityGroupForGivenGpuType(
 		for _, chain := range chains {
 			if h.vcSchedulers[sr.vc].getNonReservedFullCellList()[chain] != nil {
 				vcHasType = true
-				sr.chain = chain
-				physicalPlacement, virtualPlacement := h.processSchedulingRequest(sr, suggestedNodes)
-				if physicalPlacement != nil {
-					return physicalPlacement, virtualPlacement
-				}
+			}
+			sr.chain = chain
+			physicalPlacement, virtualPlacement := h.processSchedulingRequest(sr, suggestedNodes)
+			if physicalPlacement != nil {
+				return physicalPlacement, virtualPlacement
 			}
 		}
 		if sr.priority >= minGuaranteedPriority && !vcHasType {
@@ -743,12 +743,10 @@ func (h *HivedAlgorithm) scheduleAffinityGroupForAnyGpuType(
 
 	for _, chains := range h.chains {
 		for _, chain := range chains {
-			if h.vcSchedulers[sr.vc].getNonReservedFullCellList()[chain] != nil {
-				sr.chain = chain
-				physicalPlacement, virtualPlacement := h.processSchedulingRequest(sr, suggestedNodes)
-				if physicalPlacement != nil {
-					return physicalPlacement, virtualPlacement
-				}
+			sr.chain = chain
+			physicalPlacement, virtualPlacement := h.processSchedulingRequest(sr, suggestedNodes)
+			if physicalPlacement != nil {
+				return physicalPlacement, virtualPlacement
 			}
 		}
 	}
@@ -777,10 +775,13 @@ func (h *HivedAlgorithm) processSchedulingRequest(
 	sr schedulingRequest,
 	suggestedNodes common.Set) (groupPhysicalPlacement, groupVirtualPlacement) {
 
-	if sr.priority >= minGuaranteedPriority {
+	if sr.priority < minGuaranteedPriority {
+		return h.scheduleOpportunisticAffinityGroup(sr, suggestedNodes), nil
+	} else if sr.reservationId != "" ||
+		h.vcSchedulers[sr.vc].getNonReservedFullCellList()[sr.chain] != nil {
 		return h.scheduleGuaranteedAffinityGroup(sr, suggestedNodes)
 	} else {
-		return h.scheduleOpportunisticAffinityGroup(sr, suggestedNodes), nil
+		return nil, nil
 	}
 }
 
