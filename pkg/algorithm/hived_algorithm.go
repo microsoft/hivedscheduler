@@ -204,10 +204,10 @@ func (h *HivedAlgorithm) Schedule(
 	}
 	if h.affinityGroups[s.AffinityGroup.Name] == nil {
 		klog.Infof("[%v]: Scheduling new affinity group %v", internal.Key(pod), s.AffinityGroup.Name)
-		groupPhysicalPlacement, groupVirtualPlacement = h.scheduleNewAffinityGroup(pod, s, suggestedNodeSet)
+		groupPhysicalPlacement, groupVirtualPlacement, nodesNotInSuggested = h.scheduleNewAffinityGroup(
+			pod, s, suggestedNodeSet)
 		var overlappingPreemptors common.Set
 		preemptionVictims, overlappingPreemptors = collectPreemptionVictims(groupPhysicalPlacement)
-		nodesNotInSuggested = collectNodesNotSuggested(groupPhysicalPlacement, suggestedNodeSet)
 		// we allow a new preemption only when in Preempting phase
 		// and the placement is fully within suggested nodes
 		if phase == internal.PreemptingPhase && nodesNotInSuggested.IsEmpty() {
@@ -671,7 +671,10 @@ func (h *HivedAlgorithm) updateVCDoomedBadCells(c CellChain, l CellLevel) {
 func (h *HivedAlgorithm) scheduleNewAffinityGroup(
 	pod *core.Pod,
 	s *api.PodSchedulingSpec,
-	suggestedNodes common.Set) (physicalPlacement groupPhysicalPlacement, virtualPlacement groupVirtualPlacement) {
+	suggestedNodes common.Set) (
+	physicalPlacement groupPhysicalPlacement,
+	virtualPlacement groupVirtualPlacement,
+	nodesNotInSuggested common.Set) {
 
 	priority := CellPriority(s.Priority)
 	sr := schedulingRequest{
@@ -689,17 +692,20 @@ func (h *HivedAlgorithm) scheduleNewAffinityGroup(
 	if sr.reservationId != "" {
 		klog.Infof("Use reservation %v", s.ReservationId)
 		physicalPlacement, virtualPlacement = h.processSchedulingRequest(sr, suggestedNodes)
+		nodesNotInSuggested = collectNodesNotSuggested(physicalPlacement, suggestedNodes)
 	} else if s.GpuType != "" {
-		physicalPlacement, virtualPlacement = h.scheduleAffinityGroupForGivenGpuType(sr, s.GpuType, pod, suggestedNodes)
+		physicalPlacement, virtualPlacement, nodesNotInSuggested = h.scheduleAffinityGroupForGivenGpuType(
+			sr, s.GpuType, pod, suggestedNodes)
 	} else {
-		physicalPlacement, virtualPlacement = h.scheduleAffinityGroupForAnyGpuType(sr, suggestedNodes)
+		physicalPlacement, virtualPlacement, nodesNotInSuggested = h.scheduleAffinityGroupForAnyGpuType(
+			sr, suggestedNodes)
 	}
 	if physicalPlacement != nil {
 		klog.Infof("Succeeded in scheduling group %v", s.AffinityGroup.Name)
 	} else {
 		klog.Infof("Failed to schedule group %v", s.AffinityGroup.Name)
 	}
-	return physicalPlacement, virtualPlacement
+	return physicalPlacement, virtualPlacement, nodesNotInSuggested
 }
 
 // scheduleAffinityGroupForGivenGpuType schedules an affinity group in a certain cell chain
@@ -708,7 +714,10 @@ func (h *HivedAlgorithm) scheduleAffinityGroupForGivenGpuType(
 	sr schedulingRequest,
 	gpuType string,
 	pod *core.Pod,
-	suggestedNodes common.Set) (groupPhysicalPlacement, groupVirtualPlacement) {
+	suggestedNodes common.Set) (
+	physicalPlacement groupPhysicalPlacement,
+	virtualPlacement groupVirtualPlacement,
+	nodesNotInSuggested common.Set) {
 
 	if chains := h.chains[gpuType]; chains == nil {
 		panic(internal.NewBadRequestError(fmt.Sprintf(
@@ -721,9 +730,10 @@ func (h *HivedAlgorithm) scheduleAffinityGroupForGivenGpuType(
 				vcHasType = true
 			}
 			sr.chain = chain
-			physicalPlacement, virtualPlacement := h.processSchedulingRequest(sr, suggestedNodes)
-			if physicalPlacement != nil {
-				return physicalPlacement, virtualPlacement
+			physicalPlacement, virtualPlacement = h.processSchedulingRequest(sr, suggestedNodes)
+			nodesNotInSuggested = collectNodesNotSuggested(physicalPlacement, suggestedNodes)
+			if physicalPlacement != nil && nodesNotInSuggested.IsEmpty() {
+				return physicalPlacement, virtualPlacement, nodesNotInSuggested
 			}
 		}
 		if sr.priority >= minGuaranteedPriority && !vcHasType {
@@ -732,25 +742,29 @@ func (h *HivedAlgorithm) scheduleAffinityGroupForGivenGpuType(
 				internal.Key(pod), gpuType, sr.vc)))
 		}
 	}
-	return nil, nil
+	return physicalPlacement, virtualPlacement, nodesNotInSuggested
 }
 
 // scheduleAffinityGroupForAnyGpuType schedules an affinity group in a certain cell chain,
 // trying every possible GPU type (as the user does not specify a GPU type).
 func (h *HivedAlgorithm) scheduleAffinityGroupForAnyGpuType(
 	sr schedulingRequest,
-	suggestedNodes common.Set) (groupPhysicalPlacement, groupVirtualPlacement) {
+	suggestedNodes common.Set) (
+	physicalPlacement groupPhysicalPlacement,
+	virtualPlacement groupVirtualPlacement,
+	nodesNotInSuggested common.Set) {
 
 	for _, chains := range h.chains {
 		for _, chain := range chains {
 			sr.chain = chain
-			physicalPlacement, virtualPlacement := h.processSchedulingRequest(sr, suggestedNodes)
-			if physicalPlacement != nil {
-				return physicalPlacement, virtualPlacement
+			physicalPlacement, virtualPlacement = h.processSchedulingRequest(sr, suggestedNodes)
+			nodesNotInSuggested = collectNodesNotSuggested(physicalPlacement, suggestedNodes)
+			if physicalPlacement != nil && nodesNotInSuggested.IsEmpty() {
+				return physicalPlacement, virtualPlacement, nodesNotInSuggested
 			}
 		}
 	}
-	return nil, nil
+	return physicalPlacement, virtualPlacement, nodesNotInSuggested
 }
 
 // validateSchedulingRequest checks the existence of VC and reservation ID, and the legality of priority.
