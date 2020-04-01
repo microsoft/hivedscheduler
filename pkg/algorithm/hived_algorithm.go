@@ -690,78 +690,90 @@ func (h *HivedAlgorithm) scheduleNewAffinityGroup(
 	}
 	h.validateSchedulingRequest(sr, pod)
 	if sr.reservationId != "" {
-		klog.Infof("Use reservation %v", s.ReservationId)
+		klog.Infof("Using reservation %v", s.ReservationId)
 		physicalPlacement, virtualPlacement = h.processSchedulingRequest(sr, suggestedNodes)
 		nodesNotInSuggested = collectNodesNotSuggested(physicalPlacement, suggestedNodes)
 	} else if s.GpuType != "" {
-		physicalPlacement, virtualPlacement, nodesNotInSuggested = h.scheduleAffinityGroupForGivenGpuType(
-			sr, s.GpuType, pod, suggestedNodes)
+		if _, ok := h.chains[s.GpuType]; !ok {
+			panic(internal.NewBadRequestError(fmt.Sprintf(
+				"[%v]: Pod requesting GPU type %v which the whole cluster does not have",
+				internal.Key(pod), s.GpuType)))
+		}
+		klog.Infof("Using specified GPU type %v", s.GpuType)
+		physicalPlacement, virtualPlacement, nodesNotInSuggested = h.scheduleAffinityGroupForGpuType(
+			sr, s.GpuType, pod, suggestedNodes, true)
 	} else {
 		physicalPlacement, virtualPlacement, nodesNotInSuggested = h.scheduleAffinityGroupForAnyGpuType(
-			sr, suggestedNodes)
+			sr, pod, suggestedNodes)
 	}
-	if physicalPlacement != nil {
-		klog.Infof("Succeeded in scheduling group %v", s.AffinityGroup.Name)
+	if physicalPlacement != nil && nodesNotInSuggested.IsEmpty() {
+		klog.Infof("Successfully found placement group %v in suggested nodes", s.AffinityGroup.Name)
+	} else if physicalPlacement != nil {
+		klog.Infof("Found placement for group %v but not fully in within suggested nodes", s.AffinityGroup.Name)
 	} else {
-		klog.Infof("Failed to schedule group %v", s.AffinityGroup.Name)
+		klog.Infof("Failed to find placement for group %v", s.AffinityGroup.Name)
 	}
 	return physicalPlacement, virtualPlacement, nodesNotInSuggested
 }
 
-// scheduleAffinityGroupForGivenGpuType schedules an affinity group in a certain cell chain
-// that matches the specified GPU type.
-func (h *HivedAlgorithm) scheduleAffinityGroupForGivenGpuType(
+// scheduleAffinityGroupForGpuType schedules an affinity group in a certain cell chain
+// that matches the given GPU type.
+func (h *HivedAlgorithm) scheduleAffinityGroupForGpuType(
 	sr schedulingRequest,
 	gpuType string,
+	pod *core.Pod,
+	suggestedNodes common.Set,
+	typeSpecified bool) (
+	physicalPlacement groupPhysicalPlacement,
+	virtualPlacement groupVirtualPlacement,
+	nodesNotInSuggested common.Set) {
+
+	vcHasType := false
+	for _, chain := range h.chains[gpuType] {
+		if h.vcSchedulers[sr.vc].getNonReservedFullCellList()[chain] != nil {
+			vcHasType = true
+		}
+		klog.Infof("Searching chain %v", chain)
+		sr.chain = chain
+		physicalPlacement, virtualPlacement = h.processSchedulingRequest(sr, suggestedNodes)
+		nodesNotInSuggested = collectNodesNotSuggested(physicalPlacement, suggestedNodes)
+		if physicalPlacement != nil && nodesNotInSuggested.IsEmpty() {
+			klog.Infof("Successfully found placement in chain %v fully within suggested nodes: %v",
+				chain, physicalPlacement)
+			return physicalPlacement, virtualPlacement, nodesNotInSuggested
+		} else if physicalPlacement != nil {
+			klog.Infof("Found placement in chain %v but not fully within suggested nodes: "+
+				"%v, non-suggested nodes: %v. Continue to search other chains",
+				chain, physicalPlacement, nodesNotInSuggested)
+		} else {
+			klog.Infof("No placement found in chain %v", chain)
+		}
+	}
+	if typeSpecified && sr.priority >= minGuaranteedPriority && !vcHasType {
+		panic(internal.NewBadRequestError(fmt.Sprintf(
+			"[%v]: Pod requesting GPU type %v which VC %v does not have",
+			internal.Key(pod), gpuType, sr.vc)))
+	}
+	return physicalPlacement, virtualPlacement, nodesNotInSuggested
+}
+
+// scheduleAffinityGroupForAnyGpuType schedules an affinity group in every possible GPU type
+// (when the user does not specify a GPU type).
+func (h *HivedAlgorithm) scheduleAffinityGroupForAnyGpuType(
+	sr schedulingRequest,
 	pod *core.Pod,
 	suggestedNodes common.Set) (
 	physicalPlacement groupPhysicalPlacement,
 	virtualPlacement groupVirtualPlacement,
 	nodesNotInSuggested common.Set) {
 
-	if chains := h.chains[gpuType]; chains == nil {
-		panic(internal.NewBadRequestError(fmt.Sprintf(
-			"[%v]: Pod requesting GPU type %v which the whole cluster does not have",
-			internal.Key(pod), gpuType)))
-	} else {
-		vcHasType := false
-		for _, chain := range chains {
-			if h.vcSchedulers[sr.vc].getNonReservedFullCellList()[chain] != nil {
-				vcHasType = true
-			}
-			sr.chain = chain
-			physicalPlacement, virtualPlacement = h.processSchedulingRequest(sr, suggestedNodes)
-			nodesNotInSuggested = collectNodesNotSuggested(physicalPlacement, suggestedNodes)
-			if physicalPlacement != nil && nodesNotInSuggested.IsEmpty() {
-				return physicalPlacement, virtualPlacement, nodesNotInSuggested
-			}
-		}
-		if sr.priority >= minGuaranteedPriority && !vcHasType {
-			panic(internal.NewBadRequestError(fmt.Sprintf(
-				"[%v]: Pod requesting GPU type %v which VC %v does not have",
-				internal.Key(pod), gpuType, sr.vc)))
-		}
-	}
-	return physicalPlacement, virtualPlacement, nodesNotInSuggested
-}
-
-// scheduleAffinityGroupForAnyGpuType schedules an affinity group in a certain cell chain,
-// trying every possible GPU type (as the user does not specify a GPU type).
-func (h *HivedAlgorithm) scheduleAffinityGroupForAnyGpuType(
-	sr schedulingRequest,
-	suggestedNodes common.Set) (
-	physicalPlacement groupPhysicalPlacement,
-	virtualPlacement groupVirtualPlacement,
-	nodesNotInSuggested common.Set) {
-
-	for _, chains := range h.chains {
-		for _, chain := range chains {
-			sr.chain = chain
-			physicalPlacement, virtualPlacement = h.processSchedulingRequest(sr, suggestedNodes)
-			nodesNotInSuggested = collectNodesNotSuggested(physicalPlacement, suggestedNodes)
-			if physicalPlacement != nil && nodesNotInSuggested.IsEmpty() {
-				return physicalPlacement, virtualPlacement, nodesNotInSuggested
-			}
+	for gpuType := range h.chains {
+		klog.Infof("Searching GPU type %v", gpuType)
+		physicalPlacement, virtualPlacement, nodesNotInSuggested = h.scheduleAffinityGroupForGpuType(
+			sr, gpuType, pod, suggestedNodes, false)
+		if physicalPlacement != nil && nodesNotInSuggested.IsEmpty() {
+			klog.Infof("Successfully found placement in GPU type %v fully within suggested nodes", gpuType)
+			return physicalPlacement, virtualPlacement, nodesNotInSuggested
 		}
 	}
 	return physicalPlacement, virtualPlacement, nodesNotInSuggested
