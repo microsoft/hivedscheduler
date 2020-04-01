@@ -171,71 +171,12 @@ func (h *HivedAlgorithm) Schedule(
 	)
 
 	if g := h.affinityGroups[s.AffinityGroup.Name]; g != nil {
-		// state of an existing group can be either Allocated or Preempting
-		if g.state == groupAllocated {
-			klog.Infof("[%v]: Pod affinity group is already allocated: %v", internal.Key(pod), s.AffinityGroup.Name)
-			groupPhysicalPlacement = g.physicalGpuPlacement
-			groupVirtualPlacement = g.virtualGpuPlacement
-			if podIndex = getNewPodIndex(g.allocatedPods[s.GpuNumber]); podIndex == -1 {
-				panic(internal.NewBadRequestError(fmt.Sprintf(
-					"Requesting more pods than the configured number for %v GPUs (%v pods) in affinity group %v",
-					s.GpuNumber, g.totalPodNums[s.GpuNumber], s.AffinityGroup.Name)))
-			}
-		} else { // groupPreempting
-			klog.Infof("[%v]: Pod affinity group is preempting others: %v", internal.Key(pod), s.AffinityGroup.Name)
-			nodesNotInSuggested = collectNodesNotSuggested(g.physicalGpuPlacement, suggestedNodeSet)
-			if phase == internal.PreemptingPhase && !nodesNotInSuggested.IsEmpty() {
-				// If we find a preempting group's placement is not fully within suggested nodes, we should cancel
-				// the preemption so as to reschedule it to other places. We should do this only in Preempting phase
-				// because the suggested nodes in Filtering phase does not consider preemption.
-				klog.Infof("[%v]: Canceling affinity group %v's preemption because its placement is no longer "+
-					"fully within Preempting-phase suggested nodes (non-suggested nodes: %v)",
-					internal.Key(pod), g.name, nodesNotInSuggested)
-				h.deletePreemptingAffinityGroup(g, pod)
-			} else {
-				groupPhysicalPlacement = g.physicalGpuPlacement
-				groupVirtualPlacement = g.virtualGpuPlacement
-				if preemptionVictims, _ = collectPreemptionVictims(groupPhysicalPlacement); len(preemptionVictims) == 0 {
-					klog.Infof("Preemption victims have been cleaned up for the preemptor affinity group %v", g.name)
-				}
-				g.preemptingPods[pod.UID] = pod
-			}
-		}
+		groupPhysicalPlacement, groupVirtualPlacement, preemptionVictims, nodesNotInSuggested, podIndex =
+			h.schedulePodFromExistingGroup(g, s, suggestedNodeSet, phase, pod)
 	}
 	if h.affinityGroups[s.AffinityGroup.Name] == nil {
-		klog.Infof("[%v]: Scheduling new affinity group %v", internal.Key(pod), s.AffinityGroup.Name)
-		groupPhysicalPlacement, groupVirtualPlacement, nodesNotInSuggested = h.scheduleNewAffinityGroup(
-			pod, s, suggestedNodeSet)
-		var overlappingPreemptors common.Set
-		preemptionVictims, overlappingPreemptors = collectPreemptionVictims(groupPhysicalPlacement)
-		// we allow a new preemption only when in Preempting phase
-		// and the placement is fully within suggested nodes
-		if phase == internal.PreemptingPhase && nodesNotInSuggested.IsEmpty() {
-			for preemptor := range overlappingPreemptors.Items() {
-				klog.Infof("[%v]: Canceling affinity group %v's preemption because it is "+
-					"further preempted by a higher-priority affinity group %v",
-					internal.Key(pod), preemptor.(*AlgoAffinityGroup).name, s.AffinityGroup.Name)
-				h.deletePreemptingAffinityGroup(preemptor.(*AlgoAffinityGroup), pod)
-			}
-		}
-		if len(preemptionVictims) != 0 {
-			if phase == internal.PreemptingPhase && nodesNotInSuggested.IsEmpty() {
-				h.createPreemptingAffinityGroup(s, groupPhysicalPlacement, groupVirtualPlacement, pod)
-			} else if phase == internal.FilteringPhase {
-				klog.Infof("[%v]: Found preemption victims %v, but we do not allow preemption in Filtering "+
-					"phase because K8s won't call preempt, creating preemption state here is misleading",
-					internal.Key(pod), victimsToString(preemptionVictims))
-				groupPhysicalPlacement = nil
-				groupVirtualPlacement = nil
-				preemptionVictims = nil
-			} else {
-				klog.Infof("[%v]: Found preemption victims %v, but we do not allow this preemption "+
-					"because the placement is not fully within Preempting-phase suggested nodes "+
-					"(non-suggested nodes: %v)",
-					internal.Key(pod), victimsToString(preemptionVictims), nodesNotInSuggested)
-				preemptionVictims = nil
-			}
-		}
+		groupPhysicalPlacement, groupVirtualPlacement, preemptionVictims, nodesNotInSuggested =
+			h.schedulePodFromNewGroup(s, suggestedNodeSet, phase, pod)
 	}
 	return generatePodScheduleResult(
 		groupPhysicalPlacement,
@@ -666,6 +607,102 @@ func (h *HivedAlgorithm) updateVCDoomedBadCells(c CellChain, l CellLevel) {
 	}
 }
 
+// schedulePodFromExistingGroup schedules a pod from an allocated or preempting affinity group.
+// If it is from an allocated group, we will schedule the pod to the corresponding placement.
+// If it is from a preempting group, we will continue its preemption, or schedule it when the preemption is done.
+func (h *HivedAlgorithm) schedulePodFromExistingGroup(
+	g *AlgoAffinityGroup,
+	s *api.PodSchedulingSpec,
+	suggestedNodes common.Set,
+	phase internal.SchedulingPhase,
+	pod *core.Pod) (
+	groupPhysicalPlacement groupPhysicalPlacement,
+	groupVirtualPlacement groupVirtualPlacement,
+	preemptionVictims map[string]common.Set,
+	nodesNotInSuggested common.Set,
+	podIndex int32) {
+
+	// state of an existing group can be either Allocated or Preempting
+	if g.state == groupAllocated {
+		klog.Infof("[%v]: Pod affinity group is already allocated: %v", internal.Key(pod), s.AffinityGroup.Name)
+		groupPhysicalPlacement = g.physicalGpuPlacement
+		groupVirtualPlacement = g.virtualGpuPlacement
+		if podIndex = getNewPodIndex(g.allocatedPods[s.GpuNumber]); podIndex == -1 {
+			panic(internal.NewBadRequestError(fmt.Sprintf(
+				"Requesting more pods than the configured number for %v GPUs (%v pods) in affinity group %v",
+				s.GpuNumber, g.totalPodNums[s.GpuNumber], s.AffinityGroup.Name)))
+		}
+	} else { // groupPreempting
+		klog.Infof("[%v]: Pod affinity group is preempting others: %v",
+			internal.Key(pod), s.AffinityGroup.Name)
+		nodesNotInSuggested = collectNodesNotSuggested(g.physicalGpuPlacement, suggestedNodes)
+		if phase == internal.PreemptingPhase && !nodesNotInSuggested.IsEmpty() {
+			// If we find a preempting group's placement is not fully within suggested nodes, we should cancel
+			// the preemption so as to reschedule it to other places. We should do this only in Preempting phase
+			// because the suggested nodes in Filtering phase does not consider preemption.
+			klog.Infof("[%v]: Canceling affinity group %v's preemption because its placement is "+
+				"no longer fully within Preempting-phase suggested nodes (non-suggested nodes: %v)",
+				internal.Key(pod), g.name, nodesNotInSuggested)
+			h.deletePreemptingAffinityGroup(g, pod)
+		} else {
+			groupPhysicalPlacement = g.physicalGpuPlacement
+			groupVirtualPlacement = g.virtualGpuPlacement
+			if preemptionVictims, _ = collectPreemptionVictims(groupPhysicalPlacement); len(preemptionVictims) == 0 {
+				klog.Infof("Preemption victims have been cleaned up for the preemptor affinity group %v", g.name)
+			}
+			g.preemptingPods[pod.UID] = pod
+		}
+	}
+	return groupPhysicalPlacement, groupVirtualPlacement, preemptionVictims, nodesNotInSuggested, podIndex
+}
+
+// schedulePodFromNewGroup schedules a pod from a new affinity group, find placement for the group,
+// and checks if the group needs preemption.
+func (h *HivedAlgorithm) schedulePodFromNewGroup(
+	s *api.PodSchedulingSpec,
+	suggestedNodes common.Set,
+	phase internal.SchedulingPhase,
+	pod *core.Pod) (
+	groupPhysicalPlacement groupPhysicalPlacement,
+	groupVirtualPlacement groupVirtualPlacement,
+	preemptionVictims map[string]common.Set,
+	nodesNotInSuggested common.Set) {
+
+	groupPhysicalPlacement, groupVirtualPlacement, nodesNotInSuggested = h.scheduleNewAffinityGroup(
+		pod, s, suggestedNodes)
+	var overlappingPreemptors common.Set
+	preemptionVictims, overlappingPreemptors = collectPreemptionVictims(groupPhysicalPlacement)
+	// we allow a new preemption only when in Preempting phase
+	// and the placement is fully within suggested nodes
+	if phase == internal.PreemptingPhase && nodesNotInSuggested.IsEmpty() {
+		for preemptor := range overlappingPreemptors.Items() {
+			klog.Infof("[%v]: Canceling affinity group %v's preemption because it is "+
+				"further preempted by a higher-priority affinity group %v",
+				internal.Key(pod), preemptor.(*AlgoAffinityGroup).name, s.AffinityGroup.Name)
+			h.deletePreemptingAffinityGroup(preemptor.(*AlgoAffinityGroup), pod)
+		}
+	}
+	if len(preemptionVictims) != 0 {
+		if phase == internal.PreemptingPhase && nodesNotInSuggested.IsEmpty() {
+			h.createPreemptingAffinityGroup(s, groupPhysicalPlacement, groupVirtualPlacement, pod)
+		} else if phase == internal.FilteringPhase {
+			klog.Infof("[%v]: Found preemption victims %v, but we do not allow preemption in Filtering "+
+				"phase because K8s won't call preempt, creating preemption state here is misleading",
+				internal.Key(pod), victimsToString(preemptionVictims))
+			groupPhysicalPlacement = nil
+			groupVirtualPlacement = nil
+			preemptionVictims = nil
+		} else {
+			klog.Infof("[%v]: Found preemption victims %v, but we do not allow this preemption "+
+				"because the placement is not fully within Preempting-phase suggested nodes "+
+				"(non-suggested nodes: %v)",
+				internal.Key(pod), victimsToString(preemptionVictims), nodesNotInSuggested)
+			preemptionVictims = nil
+		}
+	}
+	return groupPhysicalPlacement, groupVirtualPlacement, preemptionVictims, nodesNotInSuggested
+}
+
 // scheduleNewAffinityGroup schedules each pod of a new affinity group to a set of GPUs
 // (in both the physical cluster and the VC). This is the entrance of a new scheduling attempt.
 func (h *HivedAlgorithm) scheduleNewAffinityGroup(
@@ -676,6 +713,7 @@ func (h *HivedAlgorithm) scheduleNewAffinityGroup(
 	virtualPlacement groupVirtualPlacement,
 	nodesNotInSuggested common.Set) {
 
+	klog.Infof("[%v]: Scheduling new affinity group %v", internal.Key(pod), s.AffinityGroup.Name)
 	priority := CellPriority(s.Priority)
 	sr := schedulingRequest{
 		vc:                   s.VirtualCluster,
