@@ -394,6 +394,7 @@ func (c *VirtualCell) SetPhysicalCell(cell *PhysicalCell) {
 	if cell == nil {
 		c.apiStatus.PhysicalCell = nil
 		c.apiStatus.CellHealthiness = api.CellHealthy
+		c.apiStatus.CellState = api.CellState(cellFree)
 	} else {
 		pcs := &api.PhysicalCellStatus{}
 		// shallow copy the status, clear the pointers to avoid reference
