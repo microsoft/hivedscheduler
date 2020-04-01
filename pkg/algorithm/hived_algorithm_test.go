@@ -424,6 +424,14 @@ var pss = map[types.UID]api.PodSchedulingSpec{
 		GpuType:              "DGX2-V100",
 		GpuNumber:            16,
 		AffinityGroup:        group26,
+	}, "pod36": { // will iterate the GPU types until find a placement within suggested nodes
+		VirtualCluster:       "VC1",
+		Priority:             -1,
+		LazyPreemptionEnable: true,
+		ReservationId:        "",
+		GpuType:              "",
+		GpuNumber:            1,
+		AffinityGroup:        group1,
 	},
 }
 
@@ -468,6 +476,7 @@ var expectedBindInfos = map[string]result{
 	"pod25": {node: "0.0.0.1", gpuIsolation: []int32{0, 1}},
 	"pod28": {node: "0.0.3.0", gpuIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
 	"pod34": {node: "0.0.3.0", gpuIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
+	"pod36": {node: "0.0.1.0", gpuIsolation: []int32{0}},
 }
 
 var expectedPreemptInfos = map[string]common.Set{
@@ -616,17 +625,21 @@ func testDeletePods(t *testing.T, h *HivedAlgorithm) {
 }
 
 func testSuggestedNodes(t *testing.T, h *HivedAlgorithm) {
+	pod := allPods["pod36"]
+	pod.Annotations[api.AnnotationKeyPodSchedulingSpec] = common.ToYaml(pss[pod.UID])
+	psr := h.Schedule(pod, []string{"0.0.1.0"}, internal.PreemptingPhase)
+	compareSchedulingResult(t, pod, psr)
+
 	var nodes []string
 	for _, node := range allNodes {
 		if node != "0.0.3.1" {
 			nodes = append(nodes, node)
 		}
 	}
-	pod := allPods["pod27"]
+	pod = allPods["pod27"]
 	pod.Annotations[api.AnnotationKeyPodSchedulingSpec] = common.ToYaml(pss[pod.UID])
-	psr := h.Schedule(pod, nodes, internal.PreemptingPhase)
+	psr = h.Schedule(pod, nodes, internal.PreemptingPhase)
 	compareSchedulingResult(t, pod, psr)
-
 	nodes = append(nodes, "0.0.3.1")
 	pod.Annotations[api.AnnotationKeyPodSchedulingSpec] = common.ToYaml(pss[pod.UID])
 	// this time scheduling will succeed
@@ -647,7 +660,8 @@ func testSuggestedNodes(t *testing.T, h *HivedAlgorithm) {
 	// this time group will be preempting
 	psr = h.Schedule(pod, nodes, internal.PreemptingPhase)
 	if g := h.affinityGroups[pss[pod.UID].AffinityGroup.Name]; g == nil {
-		t.Errorf("Group %v should be preempting but does not exist", g.name)
+		t.Errorf("Group %v should be preempting but does not exist",
+			pss[pod.UID].AffinityGroup.Name)
 	} else if g.state != groupPreempting {
 		t.Errorf("Group %v should be in Preempting state but not", g.name)
 	}
