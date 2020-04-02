@@ -174,6 +174,8 @@ func (h *HivedAlgorithm) Schedule(
 		groupPhysicalPlacement, groupVirtualPlacement, preemptionVictims, podIndex =
 			h.schedulePodFromExistingGroup(g, s, suggestedNodeSet, phase, pod)
 	}
+	// we need to re-evaluate the existence of the group here (instead of an "else") because it is
+	// possible that the group was a preempting group and deleted in h.schedulePodFromExistingGroup
 	if h.affinityGroups[s.AffinityGroup.Name] == nil {
 		groupPhysicalPlacement, groupVirtualPlacement, preemptionVictims, waitReason =
 			h.schedulePodFromNewGroup(s, suggestedNodeSet, phase, pod)
@@ -619,16 +621,17 @@ func (h *HivedAlgorithm) schedulePodFromExistingGroup(
 	preemptionVictims map[string]common.Set,
 	podIndex int32) {
 
+	nodesNotInSuggested := collectNodesNotSuggested(g.physicalGpuPlacement, suggestedNodes)
 	// state of an existing group can be either Allocated or Preempting
 	if g.state == groupAllocated {
-		klog.Infof("[%v]: Pod affinity group is already allocated: %v", internal.Key(pod), s.AffinityGroup.Name)
+		klog.Infof("[%v]: Pod is from an affinity group that is already allocated: %v",
+			internal.Key(pod), s.AffinityGroup.Name)
 		groupPhysicalPlacement = g.physicalGpuPlacement
 		groupVirtualPlacement = g.virtualGpuPlacement
-		nodesNotInSuggested := collectNodesNotSuggested(g.physicalGpuPlacement, suggestedNodes)
 		if !nodesNotInSuggested.IsEmpty() {
 			// for an allocated group, we always insist the previous scheduling decision
 			// even if some pods are now not within suggested nodes
-			klog.Warningf("Some nodes used by affinity group %v are no longer "+
+			klog.Warningf("Some nodes allocated to affinity group %v are no longer "+
 				"within K8s suggested nodes: %v", g.name, nodesNotInSuggested)
 		}
 		if podIndex = getNewPodIndex(g.allocatedPods[s.GpuNumber]); podIndex == -1 {
@@ -637,13 +640,12 @@ func (h *HivedAlgorithm) schedulePodFromExistingGroup(
 				s.GpuNumber, g.totalPodNums[s.GpuNumber], s.AffinityGroup.Name)))
 		}
 	} else { // groupPreempting
-		klog.Infof("[%v]: Pod affinity group is preempting others: %v",
+		klog.Infof("[%v]: Pod is from an affinity group that is preempting others: %v",
 			internal.Key(pod), s.AffinityGroup.Name)
-		nodesNotInSuggested := collectNodesNotSuggested(g.physicalGpuPlacement, suggestedNodes)
 		if phase == internal.PreemptingPhase && !nodesNotInSuggested.IsEmpty() {
 			// If we find a preempting group's placement is not fully within suggested nodes, we should cancel
 			// the preemption so as to reschedule it to other places. We should do this only in Preempting phase
-			// because the suggested nodes in Filtering phase does not consider preemption.
+			// because only suggested nodes of this phase consider preemption.
 			klog.Infof("[%v]: Canceling affinity group %v's preemption because its placement is "+
 				"no longer fully within Preempting-phase suggested nodes (non-suggested nodes: %v)",
 				internal.Key(pod), g.name, nodesNotInSuggested)
@@ -651,8 +653,10 @@ func (h *HivedAlgorithm) schedulePodFromExistingGroup(
 		} else {
 			groupPhysicalPlacement = g.physicalGpuPlacement
 			groupVirtualPlacement = g.virtualGpuPlacement
-			if preemptionVictims, _ = collectPreemptionVictims(groupPhysicalPlacement); len(preemptionVictims) == 0 {
-				klog.Infof("Preemption victims have been cleaned up for the preemptor affinity group %v", g.name)
+			preemptionVictims, _ = collectPreemptionVictims(groupPhysicalPlacement)
+			if len(preemptionVictims) == 0 {
+				klog.Infof(
+					"Preemption victims have been cleaned up for the preemptor affinity group %v", g.name)
 			}
 			g.preemptingPods[pod.UID] = pod
 		}
@@ -683,7 +687,7 @@ func (h *HivedAlgorithm) schedulePodFromNewGroup(
 		} else {
 			// for an unallocated group,
 			// we will keep it waiting if not all of its pods are scheduled to suggested nodes
-			waitReason = fmt.Sprintf("affinity group is decided to be scheduled to some nodes "+
+			waitReason = fmt.Sprintf("affinity group has to be scheduled to some nodes "+
 				"not within K8s suggested nodes: %v", nodesNotInSuggested)
 		}
 		return nil, nil, nil, waitReason
@@ -692,6 +696,7 @@ func (h *HivedAlgorithm) schedulePodFromNewGroup(
 	// we allow a new preemption only when in Preempting phase
 	// and the placement is fully within suggested nodes
 	if phase == internal.PreemptingPhase {
+		// first cancel preemption of other groups whose resources overlap with the current group
 		for preemptor := range overlappingPreemptors.Items() {
 			klog.Infof("[%v]: Canceling affinity group %v's preemption because it is "+
 				"further preempted by a higher-priority affinity group %v",
@@ -699,16 +704,13 @@ func (h *HivedAlgorithm) schedulePodFromNewGroup(
 			h.deletePreemptingAffinityGroup(preemptor.(*AlgoAffinityGroup), pod)
 		}
 		if len(preemptionVictims) != 0 {
+			// create preemption state to avoid resource contention among multiple preemptors
 			h.createPreemptingAffinityGroup(s, groupPhysicalPlacement, groupVirtualPlacement, pod)
 		}
 	} else if len(preemptionVictims) != 0 {
-		klog.Infof("[%v]: Found preemption victims %v, but we do not allow preemption in Filtering "+
-			"phase because K8s won't call preempt, creating preemption state here is misleading",
+		// here we won't create preemption state since we call preempt only in Preempting phase
+		klog.Infof("[%v]: Found preemption victims %v in non-Preempting phase, skipping it",
 			internal.Key(pod), victimsToString(preemptionVictims))
-		groupPhysicalPlacement = nil
-		groupVirtualPlacement = nil
-		preemptionVictims = nil
-		waitReason = "affinity group wants to preempt in Filtering phase"
 	}
 	return groupPhysicalPlacement, groupVirtualPlacement, preemptionVictims, waitReason
 }
@@ -770,18 +772,19 @@ func (h *HivedAlgorithm) scheduleAffinityGroupForGpuType(
 
 	vcHasType := false
 	for _, chain := range h.chains[gpuType] {
-		if h.vcSchedulers[sr.vc].getNonReservedFullCellList()[chain] != nil {
+		if sr.priority < minGuaranteedPriority ||
+			h.vcSchedulers[sr.vc].getNonReservedFreeCellList()[chain] != nil {
 			vcHasType = true
-		}
-		klog.Infof("Searching chain %v", chain)
-		sr.chain = chain
-		physicalPlacement, virtualPlacement, chainNodesNotInSuggested :=
-			h.processSchedulingRequest(sr, suggestedNodes)
-		if physicalPlacement != nil {
-			return physicalPlacement, virtualPlacement, chainNodesNotInSuggested
-		}
-		if !chainNodesNotInSuggested.IsEmpty() {
-			nodesNotInSuggested = chainNodesNotInSuggested
+			klog.Infof("Searching chain %v", chain)
+			sr.chain = chain
+			physicalPlacement, virtualPlacement, chainNodesNotInSuggested :=
+				h.processSchedulingRequest(sr, suggestedNodes)
+			if physicalPlacement != nil {
+				return physicalPlacement, virtualPlacement, chainNodesNotInSuggested
+			}
+			if !chainNodesNotInSuggested.IsEmpty() {
+				nodesNotInSuggested = chainNodesNotInSuggested
+			}
 		}
 	}
 	if typeSpecified && sr.priority >= minGuaranteedPriority && !vcHasType {
@@ -847,20 +850,17 @@ func (h *HivedAlgorithm) processSchedulingRequest(
 	}
 	klog.Infof("Processing scheduling request: %v, GPU numbers %v, priority %v",
 		str, common.ToJson(sr.affinityGroupPodNums), sr.priority)
-
-	if sr.priority < minGuaranteedPriority {
-		physicalPlacement = h.scheduleOpportunisticAffinityGroup(sr, suggestedNodes)
-	} else if sr.reservationId != "" ||
-		h.vcSchedulers[sr.vc].getNonReservedFullCellList()[sr.chain] != nil {
+	if sr.priority >= minGuaranteedPriority {
 		physicalPlacement, virtualPlacement = h.scheduleGuaranteedAffinityGroup(sr, suggestedNodes)
 	} else {
-		return nil, nil, nodesNotInSuggested
+		physicalPlacement = h.scheduleOpportunisticAffinityGroup(sr, suggestedNodes)
 	}
 	if physicalPlacement == nil {
 		klog.Infof("Cannot find placement in %v", str)
 		return nil, nil, nodesNotInSuggested
-	} else if nodesNotInSuggested = collectNodesNotSuggested(
-		physicalPlacement, suggestedNodes); !nodesNotInSuggested.IsEmpty() {
+	}
+	nodesNotInSuggested = collectNodesNotSuggested(physicalPlacement, suggestedNodes)
+	if !nodesNotInSuggested.IsEmpty() {
 		klog.Infof("Found placement in %v NOT fully within suggested nodes, "+
 			"placement: %v, non-suggested nodes: %v", str, physicalPlacement, nodesNotInSuggested)
 		return nil, nil, nodesNotInSuggested
