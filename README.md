@@ -38,7 +38,7 @@ HiveD supports multiple job **priorities**. Higher-priority jobs can **[preempt]
 4. Optimized Resource Fragmentation and Less Starvation
 5. [Priorities](example/feature/README.md#Guaranteed-Job), [Overuse with Low Priority](example/feature/README.md#Opportunistic-Job), and [Inter-](example/feature/README.md#Inter-VC-Preemption)/[Intra-VC Preemption](example/feature/README.md#Intra-VC-Preemption)
 6. [Job (Full/Partial) Gang Scheduling/Preemption](example/feature/README.md#Gang-Scheduling)
-7. Fault-Tolerance, [Hardware Failure-Awareness](example/feature/README.md#Bad-Hardware-Awareness), [Work-Preserving Reconfiguration](example/feature/README.md#Work-Preserving-Reconfiguration)
+7. Fault-Tolerance, [Bad Hardware Awareness](example/feature/README.md#Bad-Hardware-Awareness), [Work-Preserving Reconfiguration](example/feature/README.md#Work-Preserving-Reconfiguration)
 8. [Leverage K8S Default Scheduler](example/feature/README.md#Leverage-K8S-Default-Scheduler)
 
 ## Prerequisite

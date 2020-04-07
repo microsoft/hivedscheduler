@@ -88,26 +88,23 @@ func (s *defaultIntraVCScheduler) getReservedCellList() map[api.ReservationId]Ch
 	return s.reservedCellList
 }
 
-func (s *defaultIntraVCScheduler) schedule(sr schedulingRequest) groupVirtualPlacement {
-	var scheduler *topologyAwareScheduler
-	var str string
+func (s *defaultIntraVCScheduler) schedule(sr schedulingRequest) (placement groupVirtualPlacement) {
+	scheduler := s.nonReservedSchedulers[sr.chain]
+	str := fmt.Sprintf("chain %v", sr.chain)
 	if sr.reservationId != "" {
 		scheduler = s.reservedSchedulers[sr.reservationId]
 		str = fmt.Sprintf("reservation %v", sr.reservationId)
-	} else {
-		scheduler = s.nonReservedSchedulers[sr.chain]
-		str = fmt.Sprintf("chain %v", sr.chain)
 	}
-	var placement groupVirtualPlacement
+	klog.Infof("Processing scheduling request in VC %v: %v, GPU numbers %v, priority %v",
+		sr.vc, str, common.ToJson(sr.affinityGroupPodNums), sr.priority)
 	if scheduler != nil {
 		placement = scheduler.Schedule(sr.affinityGroupPodNums, sr.priority, common.NewSet())
 	}
 	if placement == nil {
-		klog.Infof("Insufficient capacity in VC %v for scheduling request: %v, GPU numbers %v, priority %v",
-			sr.vc, str, sr.affinityGroupPodNums, sr.priority)
+		klog.Infof("Cannot find placement in VC %v", sr.vc)
 	} else {
-		klog.Infof("Succeeded in scheduling in VC %v for scheduling request: %v, GPU numbers %v, priority %v",
-			sr.vc, str, sr.affinityGroupPodNums, sr.priority)
+		klog.Infof("Found placement in VC %v: %v",
+			sr.vc, placement)
 	}
 	return placement
 }

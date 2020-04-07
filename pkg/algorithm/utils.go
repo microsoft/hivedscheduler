@@ -37,16 +37,14 @@ import (
 func generatePodScheduleResult(
 	groupPhysicalPlacement groupPhysicalPlacement,
 	groupVirtualPlacement groupVirtualPlacement,
-	priority CellPriority,
 	preemptionVictims map[string]common.Set,
-	nodesNotInSuggested common.Set,
+	waitReason string,
 	cellLevelToType map[CellChain]map[CellLevel]api.CellType,
 	currentGpuNum int32,
 	currentPodIndex int32,
 	group *AlgoAffinityGroup,
 	groupName string,
 	suggestedNodes common.Set,
-	vc api.VirtualClusterName,
 	pod *core.Pod) internal.PodScheduleResult {
 
 	klog.V(4).Infof("[%v]: Got K8s suggested nodes: %v", internal.Key(pod), suggestedNodes)
@@ -57,25 +55,6 @@ func generatePodScheduleResult(
 	if len(preemptionVictims) > 0 {
 		return internal.PodScheduleResult{
 			PodPreemptInfo: generatePodPreemptInfo(preemptionVictims, pod),
-		}
-	}
-	var waitReason string
-	if groupPhysicalPlacement == nil {
-		waitReason = "insufficient capacity in physical cluster"
-		if priority >= minGuaranteedPriority {
-			waitReason = fmt.Sprintf("insufficient capacity in VC %v", vc)
-		}
-	} else if !nodesNotInSuggested.IsEmpty() {
-		if group == nil || group.state == groupPreempting {
-			// for an unallocated group, we will keep it waiting if not all of its pods are scheduled to suggested nodes
-			waitReason = fmt.Sprintf(
-				"affinity group is decided to be scheduled to some nodes not within K8s suggested nodes: %v",
-				nodesNotInSuggested)
-		} else {
-			// for an existing group, we always insist the previous scheduling decision
-			// even if some pods are now not within suggested nodes
-			klog.Warningf("Some nodes used by affinity group %v are no longer within K8s suggested nodes: %v",
-				group.name, nodesNotInSuggested)
 		}
 	}
 	if waitReason != "" {
@@ -100,7 +79,8 @@ func generatePodScheduleResult(
 
 // generatePodPreemptInfo writes the preemption victims into a PodPreemptInfo.
 func generatePodPreemptInfo(preemptionVictims map[string]common.Set, pod *core.Pod) *internal.PodPreemptInfo {
-	klog.Infof("[%v]: Preemption victim candidates: %v", internal.Key(pod), victimsToString(preemptionVictims))
+	klog.Infof("[%v]: Preemption victim candidates: %v",
+		internal.Key(pod), victimsToString(preemptionVictims))
 	var (
 		nodesHavingVictims []string
 		victimPods         []*core.Pod
