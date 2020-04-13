@@ -32,9 +32,9 @@ import (
 // General Types
 ///////////////////////////////////////////////////////////////////////////////////////
 type (
-	CellType      string
-	CellAddress   string
-	ReservationId string
+	CellType     string
+	CellAddress  string
+	PinnedCellId string
 )
 
 // Physical cluster definition
@@ -51,18 +51,19 @@ type CellTypeSpec struct {
 
 // Specify physical Cell instances.
 type PhysicalCellSpec struct {
-	CellType      CellType           `yaml:"cellType"`
-	CellAddress   CellAddress        `yaml:"cellAddress"`
-	ReservationId ReservationId      `yaml:"reservationId"`
-	CellChildren  []PhysicalCellSpec `yaml:"cellChildren,omitempty"`
+	CellType    CellType    `yaml:"cellType"`
+	CellAddress CellAddress `yaml:"cellAddress"`
+	// TODO: rename yaml field name
+	PinnedCellId PinnedCellId       `yaml:"reservationId"`
+	CellChildren []PhysicalCellSpec `yaml:"cellChildren,omitempty"`
 }
 
 // Virtual cluster definition
 type VirtualClusterName string
 
 type VirtualClusterSpec struct {
-	VirtualCells  []VirtualCellSpec  `yaml:"virtualCells"`
-	ReservedCells []ReservedCellSpec `yaml:"reservedCells,omitempty"`
+	VirtualCells []VirtualCellSpec `yaml:"virtualCells"`
+	PinnedCells  []PinnedCellSpec  `yaml:"reservedCells,omitempty"`
 }
 
 type VirtualCellSpec struct {
@@ -70,14 +71,14 @@ type VirtualCellSpec struct {
 	CellType   CellType `yaml:"cellType"`
 }
 
-type ReservedCellSpec struct {
-	ReservationId ReservationId `yaml:"reservationId"`
+type PinnedCellSpec struct {
+	PinnedCellId PinnedCellId `yaml:"reservationId"`
 }
 
 type PodSchedulingSpec struct {
 	VirtualCluster       VirtualClusterName `yaml:"virtualCluster"`
 	Priority             int32              `yaml:"priority"`
-	ReservationId        ReservationId      `yaml:"reservationId"`
+	PinnedCellId         PinnedCellId       `yaml:"reservationId"`
 	GpuType              string             `yaml:"gpuType"`
 	GpuNumber            int32              `yaml:"gpuNumber"`
 	GangReleaseEnable    bool               `yaml:"gangReleaseEnable"`

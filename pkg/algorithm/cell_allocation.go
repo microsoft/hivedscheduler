@@ -218,7 +218,7 @@ func bindCell(pc *PhysicalCell, vc *VirtualCell) {
 // unbindCell unbinds a virtual cell with a physical cell and its parent recursively.
 func unbindCell(c *PhysicalCell) {
 	boundVirtual := c.GetVirtualCell()
-	for !boundVirtual.GetPhysicalCell().IsReserved() {
+	for !boundVirtual.GetPhysicalCell().IsPinned() {
 		boundPhysical := boundVirtual.GetPhysicalCell()
 		klog.Infof("Virtual cell %v is unbound from physical cell %v",
 			boundVirtual.GetAddress(), boundPhysical.GetAddress())

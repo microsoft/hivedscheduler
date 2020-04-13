@@ -128,7 +128,7 @@ type PhysicalCell struct {
 	virtualCell         *VirtualCell       // points to the bound virtual cell
 	preBoundVirtualCell *VirtualCell       // points to the temporarily bound virtual cell (before the binding is confirmed)
 	split               bool               // true when the cell has been split
-	reserved            bool               // true when this is a reserved cell
+	pinned              bool               // true when this is a pinned cell
 	// This status only contains the statuses that need to be exposed to external,
 	// and should not be used for internal status management
 	apiStatus *api.PhysicalCellStatus
@@ -285,12 +285,12 @@ func (c *PhysicalCell) SetSplit(split bool) {
 	c.split = split
 }
 
-func (c *PhysicalCell) IsReserved() bool {
-	return c.reserved
+func (c *PhysicalCell) IsPinned() bool {
+	return c.pinned
 }
 
-func (c *PhysicalCell) SetReserved(reserved bool) {
-	c.reserved = reserved
+func (c *PhysicalCell) SetPinned(pinned bool) {
+	c.pinned = pinned
 }
 
 func (c *PhysicalCell) GetAPIStatus() *api.PhysicalCellStatus {
@@ -311,7 +311,7 @@ func (c *PhysicalCell) SetHealthiness(h api.CellHealthiness) {
 type VirtualCell struct {
 	GenericCell
 	vc                   api.VirtualClusterName // name of its VC
-	rid                  api.ReservationId      // reservation ID
+	pid                  api.PinnedCellId       // pinned cell ID
 	preAssignedCell      *VirtualCell           // top level cell of this cell chain
 	physicalCell         *PhysicalCell          // points to the bound physical cell
 	preBoundPhysicalCell *PhysicalCell          // points to the temporarily bound physical cell (before the binding is confirmed)
@@ -373,8 +373,8 @@ func (c *VirtualCell) SetPriority(p CellPriority) {
 	}
 }
 
-func (c *VirtualCell) SetReservation(rid api.ReservationId) {
-	c.rid = rid
+func (c *VirtualCell) SetPinnedCellId(pid api.PinnedCellId) {
+	c.pid = pid
 }
 
 func (c *VirtualCell) GetPreAssignedCell() *VirtualCell {
