@@ -193,7 +193,7 @@ type CellStatus struct {
 	// (e.g., VC1/0/0 may represent VC1, preassigned cell 0, index 0 among its children)
 	CellAddress CellAddress `json:"cellAddress"`
 	// CellState and CellHealthiness are two orthogonal fields.
-	// CellState represents whether the cell is being used (or acquired) by an affinity group.
+	// CellState represents whether the cell is being used (or reserved) by an affinity group.
 	// CellHealthiness represents whether the physical hardware is working normally.
 	CellState       CellState       `json:"cellState"`
 	CellHealthiness CellHealthiness `json:"cellHealthiness"`

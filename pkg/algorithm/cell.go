@@ -124,7 +124,7 @@ type PhysicalCell struct {
 	nodes               []string           // node names inside the cell
 	gpuIndices          []int32            // [-1] for cells at levels higher than node
 	usingGroup          *AlgoAffinityGroup // affinity group using this cell (i.e., has running pod on the cell)
-	acquiringGroup      *AlgoAffinityGroup // affinity group that is acquiring, or has acquired the cell (e.g., waiting for preemption)
+	reservingGroup      *AlgoAffinityGroup // affinity group that is reserving, or has reserved the cell (e.g., waiting for preemption)
 	virtualCell         *VirtualCell       // points to the bound virtual cell
 	preBoundVirtualCell *VirtualCell       // points to the temporarily bound virtual cell (before the binding is confirmed)
 	split               bool               // true when the cell has been split
@@ -209,8 +209,8 @@ func (c *PhysicalCell) SetPhysicalResources(nodes []string, gpuIndices []int32) 
 
 func (c *PhysicalCell) AddUsingGroup(g *AlgoAffinityGroup) {
 	if c.usingGroup != nil {
-		klog.Errorf("Error when adding using affinity group %v to cell %v: already another using group %v",
-			g.name, c.address, c.usingGroup.name)
+		klog.Errorf("Found another using affinity group %v when adding "+
+			"using affinity group %v to cell %v", c.reservingGroup.name, g.name, c.address)
 	}
 	c.usingGroup = g
 	klog.Infof("Cell %v is now used by affinity group %v", c.address, g.name)
@@ -218,7 +218,7 @@ func (c *PhysicalCell) AddUsingGroup(g *AlgoAffinityGroup) {
 
 func (c *PhysicalCell) DeleteUsingGroup(g *AlgoAffinityGroup) {
 	if c.usingGroup == nil || c.usingGroup.name != g.name {
-		klog.Errorf("Error when deleting affinity group %v from cell %v: not found", g.name, c.address)
+		klog.Errorf("Using affinity group %v not found when deleting it from cell %v", g.name, c.address)
 	}
 	c.usingGroup = nil
 	klog.Infof("Cell %v is no longer used by affinity group %v", c.address, g.name)
@@ -228,25 +228,25 @@ func (c *PhysicalCell) GetUsingGroup() *AlgoAffinityGroup {
 	return c.usingGroup
 }
 
-func (c *PhysicalCell) AddAcquiringGroup(g *AlgoAffinityGroup) {
-	if c.acquiringGroup != nil {
-		klog.Errorf("Error when adding acquiring affinity group %v to cell %v: already another acquiring group %v",
-			g.name, c.address, c.acquiringGroup.name)
+func (c *PhysicalCell) AddReservingGroup(g *AlgoAffinityGroup) {
+	if c.reservingGroup != nil {
+		klog.Errorf("Found another reserving affinity group %v when adding "+
+			"reserving affinity group %v to cell %v", c.reservingGroup.name, g.name, c.address)
 	}
-	c.acquiringGroup = g
-	klog.Infof("Cell %v is now being acquired by affinity group %v", c.address, g.name)
+	c.reservingGroup = g
+	klog.Infof("Cell %v is now being reserved by affinity group %v", c.address, g.name)
 }
 
-func (c *PhysicalCell) DeleteAcquiringGroup(g *AlgoAffinityGroup) {
-	if c.acquiringGroup == nil || c.acquiringGroup.name != g.name {
-		klog.Errorf("Error when deleting acquiring affinity group %v from cell %v: not found", g.name, c.address)
+func (c *PhysicalCell) DeleteReservingGroup(g *AlgoAffinityGroup) {
+	if c.reservingGroup == nil || c.reservingGroup.name != g.name {
+		klog.Errorf("Reserving affinity group %v not found when deleting it from cell %v", g.name, c.address)
 	}
-	c.acquiringGroup = nil
-	klog.Infof("Cell %v is no longer acquired by affinity group %v", c.address, g.name)
+	c.reservingGroup = nil
+	klog.Infof("Cell %v is no longer reserved by affinity group %v", c.address, g.name)
 }
 
-func (c *PhysicalCell) GetAcquiringGroup() *AlgoAffinityGroup {
-	return c.acquiringGroup
+func (c *PhysicalCell) GetReservingGroup() *AlgoAffinityGroup {
+	return c.reservingGroup
 }
 
 func (c *PhysicalCell) GetVirtualCell() *VirtualCell {
