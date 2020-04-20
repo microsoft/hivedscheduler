@@ -26,7 +26,7 @@ physicalCluster:
     cellChildren:
     - cellAddress: 10.151.41.19
     - cellAddress: 10.151.41.25
-      reservationId: VC2-K80
+      pinnedCellId: VC2-K80
     - cellAddress: 10.151.41.26
   - cellType: 2-K80-NODE
     cellChildren:
@@ -42,8 +42,8 @@ virtualClusters:
     virtualCells:
     - cellType: 3-K80-NODE.K80-NODE
       cellNumber: 1
-    reservedCells:
-    - reservationId: VC2-K80
+    pinnedCells:
+    - pinnedCellId: VC2-K80
   default:
     virtualCells:
     - cellType: 2-K80-NODE

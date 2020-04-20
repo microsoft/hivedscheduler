@@ -2,8 +2,8 @@
 # [Optional]: Job User -> RestServer Request
 #
 # Constrains:
-# 1. For one task, only need to specify gpuType or reservationId, not both.
-# 2. All gpuTypes or reservationIds under the same affinityGroup must be the same.
+# 1. For one task, only need to specify gpuType or pinnedCellId, not both.
+# 2. All gpuTypes or pinnedCellIds under the same affinityGroup must be the same.
 #
 # affinityGroupName:
 # An affinityGroup forms a cell request and scheduler will try all candidate
@@ -11,10 +11,10 @@
 # 1. All candidate cellTypes:
 #    All the sufficient cellTypes with the smallest cellLevel.
 # 2. All candidate physicalCells:
-#    If reservationId not specified:
-#       All the sufficient physicalCells, except for all reservedCells.
+#    If pinnedCellId not specified:
+#       All the sufficient physicalCells, except for all pinnedCells.
 #    Else:
-#       All the sufficient physicalCells, only within the specified reservedCell.
+#       All the sufficient physicalCells, only within the specified pinned cell.
 #
 # Allocate task within its affinityGroup cell:
 # 1. Avoid allocating one task across multiple nodes:
@@ -76,13 +76,13 @@ taskRoles:
   # All tasks in role F should be within the same cell named PCN-F.
   #
   # Total request of PCN-F:
-  #   reservationId: VC1-YQW-IB-DGX2
+  #   pinnedCellId: VC1-YQW-IB-DGX2
   #   gpuNumber: 2 * CP2(3) = 2 * 4 = 8 GPUs
   # Candidate physicalCells:
   #   VC1-YQW-IB-DGX2.
   F:
     taskNumber: 2
-    reservationId: VC1-YQW-IB-DGX2
+    pinnedCellId: VC1-YQW-IB-DGX2
     gpuNumber: 3
     affinityGroupName: PCN-F
 
@@ -94,8 +94,8 @@ taskRoles:
 # things in advance.
 # For example:
 # Pod Spec cpu, memory.
-# 1. Given gpuType or reservationId, just pick the corresponding cpu, memory unit.
-# 2. No gpuType or reservationId is given, choose the minimal cpu, memory unit.
+# 1. Given gpuType or pinnedCellId, just pick the corresponding cpu, memory unit.
+# 2. No gpuType or pinnedCellId is given, choose the minimal cpu, memory unit.
 physicalCluster:
   gpuTypes:
     # Check resource value format in
@@ -326,7 +326,7 @@ spec:
             hivedscheduler.microsoft.com/pod-scheduling-spec: |-
               virtualCluster: VC1
               priority: 1000
-              reservationId: VC1-YQW-IB-DGX2
+              pinnedCellId: VC1-YQW-IB-DGX2
               gpuNumber: 3
               affinityGroup:
                 name: JOBX/PCN-F
@@ -522,7 +522,7 @@ metadata:
     hivedscheduler.microsoft.com/pod-scheduling-spec: |-
       virtualCluster: VC1
       priority: 1000
-      reservationId: VC1-YQW-IB-DGX2
+      pinnedCellId: VC1-YQW-IB-DGX2
       gpuNumber: 3
       affinityGroup:
         name: JOBX/PCN-F

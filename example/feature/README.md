@@ -11,7 +11,7 @@ HiveD guarantees **quota safety for all VCs**, in the sense that the requests to
 
 VC's cells can be described by Hardware Quantity, [Topology](#VC-Safety), [Type](#GPU-Type), [Reservation](#Reservation), etc. To guarantee safety, HiveD never allows a VC to "invade" other VCs' cells. For example, to guarantee all VCs' topology, one VC's [guaranteed jobs](#Guaranteed-Job) should never make fragmentation inside other VCs:
 
-Two DGX-2s, two VCs each owns one DGX-2 node. For normal scheduler, this will translate into two VCs each owning 16 GPUs. When user submits 16 1-GPU jobs to VC1, the user in VC2 might not be able to run a 16-GPU job, due to possible fragmentation issue caused by VC1. While HiveD can guarantee each VC always has one entire node reserved for its dedicated use.
+Two DGX-2s, two VCs each owns one DGX-2 node. For a traditional scheduler, this will translate into two VCs each owning 16 GPUs. When a user submits 16 1-GPU jobs to VC1, the user in VC2 might not be able to run a 16-GPU job, due to possible fragmentation issue caused by VC1. While HiveD can guarantee each VC always has one entire node reserved for its dedicated use.
 
 ### Reproduce Steps
 1. Use [hived-config-1](file/hived-config-1.yaml).
@@ -19,15 +19,15 @@ Two DGX-2s, two VCs each owns one DGX-2 node. For normal scheduler, this will tr
    <img src="file/itc-safety-1.png" width="900"/>
    <img src="file/itc-safety-2.png" width="900"/>
 
-## Reservation
+## Pinned Cells
 ### Description
-One VC contains two DGX-2 nodes. The VC admin would like to reserve one DGX-2 for dedicated use, i.e. without explicit `reservationId` specified, job will not run on the reserved DGX-2.
+One VC contains two DGX-2 node cells. The VC admin would like to pin one DGX-2 node cell in the physical cluster for dedicated use, i.e. that cell will be bound to a node statically. Without explicit `pinnedCellId` specified, a job will not be allowed to run on the pinned node.
 
 This is similar to [K8S Taints and Tolerations](https://kubernetes.io/docs/concepts/configuration/taint-and-toleration/#example-use-cases), but with [VC Safety](#VC-Safety) guaranteed.
 
 ### Reproduce Steps
 1. Use [hived-config-1](file/hived-config-1.yaml).
-2. Submit job [itc-reserve](file/itc-reserve.yaml) to VC2, all tasks in task role vc2rsv will be on node 10.151.41.25 (it is reserved), all tasks in task role vc2norsv will NOT be on node 10.151.41.25.
+2. Submit job [itc-pin](file/itc-pin.yaml) to VC2, all tasks in task role vc2pinned will be on node 10.151.41.25 (it is pinned), all tasks in task role vc2nopinned will NOT be on node 10.151.41.25.
    <img src="file/itc-reserve.png" width="900"/>
 
 ## GPU Type

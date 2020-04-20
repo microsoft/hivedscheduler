@@ -51,10 +51,9 @@ type CellTypeSpec struct {
 
 // Specify physical Cell instances.
 type PhysicalCellSpec struct {
-	CellType    CellType    `yaml:"cellType"`
-	CellAddress CellAddress `yaml:"cellAddress"`
-	// TODO: rename yaml field name
-	PinnedCellId PinnedCellId       `yaml:"reservationId"`
+	CellType     CellType           `yaml:"cellType"`
+	CellAddress  CellAddress        `yaml:"cellAddress"`
+	PinnedCellId PinnedCellId       `yaml:"pinnedCellId"`
 	CellChildren []PhysicalCellSpec `yaml:"cellChildren,omitempty"`
 }
 
@@ -63,7 +62,7 @@ type VirtualClusterName string
 
 type VirtualClusterSpec struct {
 	VirtualCells []VirtualCellSpec `yaml:"virtualCells"`
-	PinnedCells  []PinnedCellSpec  `yaml:"reservedCells,omitempty"`
+	PinnedCells  []PinnedCellSpec  `yaml:"pinnedCells,omitempty"`
 }
 
 type VirtualCellSpec struct {
@@ -72,13 +71,13 @@ type VirtualCellSpec struct {
 }
 
 type PinnedCellSpec struct {
-	PinnedCellId PinnedCellId `yaml:"reservationId"`
+	PinnedCellId PinnedCellId `yaml:"pinnedCellId"`
 }
 
 type PodSchedulingSpec struct {
 	VirtualCluster       VirtualClusterName `yaml:"virtualCluster"`
 	Priority             int32              `yaml:"priority"`
-	PinnedCellId         PinnedCellId       `yaml:"reservationId"`
+	PinnedCellId         PinnedCellId       `yaml:"pinnedCellId"`
 	GpuType              string             `yaml:"gpuType"`
 	GpuNumber            int32              `yaml:"gpuNumber"`
 	GangReleaseEnable    bool               `yaml:"gangReleaseEnable"`

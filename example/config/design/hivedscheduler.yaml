@@ -14,7 +14,7 @@ kubeApiServerAddress: http://10.10.10.10:8080
 # 2. All physicalCells should contain at most one physical specific GPU.
 # 3. Each physicalCell should contain exactly one node level cellType.
 # 4. Each physicalCell should specify full hierarchies defined by its cellType.
-# 5. A reservationId should can be universally locate one physicalCell.
+# 5. A pinnedCellId should can be universally locate one physicalCell.
 #
 # Best Practice:
 # 1. Best effort to merge to large cell and reflect physical facts, unless need
@@ -155,7 +155,7 @@ physicalCluster:
     cellAddress: 1.0.0.2  # NODE Name
     cellChildren:
     - cellAddress: 8  # GPU Index
-      reservationId: VC1-YQW-CT1
+      pinnedCellId: VC1-YQW-CT1
     - cellAddress: 9  # GPU Index
   # One cell has non-standard gpu indices
   - cellType: 3-DGX1-P100-NODE
@@ -221,7 +221,7 @@ physicalCluster:
     - cellAddress: 0.0.2.2
   - cellType: 4-DGX2-V100-NODE
     cellChildren:
-    - reservationId: VC1-YQW-DGX2
+    - pinnedCellId: VC1-YQW-DGX2
       cellChildren:
       - cellAddress: 0.0.3.0
       - cellAddress: 0.0.3.1
@@ -237,7 +237,7 @@ physicalCluster:
       - cellAddress: 0.0.4.2
       - cellAddress: 0.0.4.3
   - cellType: 2-IB-DGX2-V100-NODE
-    reservationId: VC1-YQW-IB-DGX2
+    pinnedCellId: VC1-YQW-IB-DGX2
     cellChildren:
     - cellAddress: 0.1.0.0
     - cellAddress: 0.1.0.1
@@ -250,7 +250,7 @@ physicalCluster:
 # 1. The whole VCs must be able to be fitted into the PC.
 # 2. The cellType field should be full qualified and should be started with a
 #    cellType which is referred in physicalCells.
-# 3. A reservationId should can only be referred in one VC for one time.
+# 3. A pinnedCellId should can only be referred in one VC for one time.
 #
 # Best Practice:
 # 1. Best effort to just plan its own VC quota based on the PC facts, unless need
@@ -271,13 +271,13 @@ virtualClusters:
     # 2 DGX2-V100-NODE must be within the same rack.
     - cellType: 4-DGX2-V100-NODE.2-DGX2-V100-NODE
       cellNumber: 1
-    reservedCells:
+    pinnedCells:
     # 1 CT1 GPU must be the VC1-YQW-CT1 GPU.
-    - reservationId: VC1-YQW-CT1
+    - pinnedCellId: VC1-YQW-CT1
     # 2 DGX2-V100-NODE must be within the VC1-YQW-DGX2 rack.
-    - reservationId: VC1-YQW-DGX2
+    - pinnedCellId: VC1-YQW-DGX2
     # 2 IB-DGX2-V100-NODE must be within the VC1-YQW-IB-DGX2 rack.
-    - reservationId: VC1-YQW-IB-DGX2
+    - pinnedCellId: VC1-YQW-IB-DGX2
   VC2:
     virtualCells:
     # 2 DGX1-P100-NODE may not be within the same rack.

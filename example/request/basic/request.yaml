@@ -12,7 +12,7 @@ taskRoles:
     affinityGroupName: null
 ---
 jobVC: VC2
-jobName: demo2norsv
+jobName: demo2nopinned
 jobPriorityClass: PROD
 taskRoles:
   a:
@@ -22,12 +22,12 @@ taskRoles:
     affinityGroupName: null
 ---
 jobVC: VC2
-jobName: demo2rsv
+jobName: demo2pinned
 jobPriorityClass: PROD
 taskRoles:
   a:
     taskNumber: 5
-    reservationId: VC2-K80
+    pinnedCellId: VC2-K80
     gpuNumber: 1
     affinityGroupName: null
 
@@ -96,7 +96,7 @@ spec:
 apiVersion: frameworkcontroller.microsoft.com/v1
 kind: Framework
 metadata:
-  name: demo2norsv
+  name: demo2nopinned
 spec:
   executionType: Start
   retryPolicy:
@@ -143,7 +143,7 @@ spec:
 apiVersion: frameworkcontroller.microsoft.com/v1
 kind: Framework
 metadata:
-  name: demo2rsv
+  name: demo2pinned
 spec:
   executionType: Start
   retryPolicy:
@@ -165,7 +165,7 @@ spec:
               hivedscheduler.microsoft.com/pod-scheduling-spec: |-
                 virtualCluster: VC2
                 priority: 1000
-                reservationId: VC2-K80
+                pinnedCellId: VC2-K80
                 gpuNumber: 1
                 affinityGroup: null
           spec:
@@ -225,8 +225,8 @@ spec:
 apiVersion: v1
 kind: Pod
 metadata:
-  # demo2norsv-a-{1-4} are the same
-  name: demo2norsv-a-0
+  # demo2nopinned-a-{1-4} are the same
+  name: demo2nopinned-a-0
   annotations:
     hivedscheduler.microsoft.com/pod-scheduling-spec: |-
       virtualCluster: VC2
@@ -256,13 +256,13 @@ spec:
 apiVersion: v1
 kind: Pod
 metadata:
-  # demo2rsv-a-{1-4} are the same
-  name: demo2rsv-a-0
+  # demo2pinned-a-{1-4} are the same
+  name: demo2pinned-a-0
   annotations:
     hivedscheduler.microsoft.com/pod-scheduling-spec: |-
       virtualCluster: VC2
       priority: 1000
-      reservationId: VC2-K80
+      pinnedCellId: VC2-K80
       gpuNumber: 1
       affinityGroup: null
 spec:

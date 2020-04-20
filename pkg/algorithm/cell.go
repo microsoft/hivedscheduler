@@ -210,7 +210,7 @@ func (c *PhysicalCell) SetPhysicalResources(nodes []string, gpuIndices []int32) 
 func (c *PhysicalCell) AddUsingGroup(g *AlgoAffinityGroup) {
 	if c.usingGroup != nil {
 		klog.Errorf("Found another using affinity group %v when adding "+
-			"using affinity group %v to cell %v", c.reservingGroup.name, g.name, c.address)
+			"using affinity group %v to cell %v", c.usingGroup.name, g.name, c.address)
 	}
 	c.usingGroup = g
 	klog.Infof("Cell %v is now used by affinity group %v", c.address, g.name)
