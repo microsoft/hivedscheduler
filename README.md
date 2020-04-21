@@ -57,7 +57,7 @@ HiveD supports multiple job **priorities**. Higher-priority jobs can **[preempt]
 * [DockerHub](https://hub.docker.com/u/hivedscheduler)
 
 ## Related Project
-* [FrameworkController](https://github.com/microsoft/frameworkcontroller): A General-Purpose Kubernetes Pod Controller, which can easily leverage HiveD to schedule jobs .
+* [FrameworkController](https://github.com/microsoft/frameworkcontroller): A General-Purpose Kubernetes Pod Controller, which can easily leverage HiveD to schedule jobs.
 * [OpenPAI](https://github.com/microsoft/pai): A complete solution for AI platform. HiveD will be more user-friendly when working in tandem with OpenPAI.
 
 ## Contributing
