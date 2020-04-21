@@ -194,7 +194,7 @@ func (h *HivedAlgorithm) Schedule(
 		pod)
 }
 
-func (h *HivedAlgorithm) AddUnallocatedPod(pod *core.Pod) {
+func (h *HivedAlgorithm) AddUnallocatedPod(*core.Pod) {
 }
 
 func (h *HivedAlgorithm) DeleteUnallocatedPod(pod *core.Pod) {
@@ -986,7 +986,7 @@ func (h *HivedAlgorithm) createAllocatedAffinityGroup(s *api.PodSchedulingSpec, 
 
 // deleteAllocatedAffinityGroup deletes a new affinity group and release the resources (that are not
 // allocated to a preempting group).
-func (h HivedAlgorithm) deleteAllocatedAffinityGroup(g *AlgoAffinityGroup, pod *core.Pod) {
+func (h *HivedAlgorithm) deleteAllocatedAffinityGroup(g *AlgoAffinityGroup, pod *core.Pod) {
 	klog.Infof("[%v]: All pods complete, deleting allocated affinity group: %v",
 		internal.Key(pod), g.name)
 	for _, podPlacements := range g.physicalGpuPlacement {
