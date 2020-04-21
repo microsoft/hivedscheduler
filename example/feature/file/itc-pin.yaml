@@ -35,7 +35,7 @@ taskRoles:
     - python mnist_cnn.py
 
 defaults:
-  virtualCluster: vc1
+  virtualCluster: VC1
 
 extras:
   hivedScheduler:
