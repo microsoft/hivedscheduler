@@ -207,7 +207,7 @@ func collectPreemptionVictims(placement groupPhysicalPlacement) (
 				}
 				pGpu := gpu.(*PhysicalCell)
 				state := pGpu.GetState()
-				if state == cellUsed || state == cellAcquiring {
+				if state == cellUsed || state == cellReserving {
 					// for any victim pod, gang-preempt all the other pods from the same affinity group
 					for _, pods := range pGpu.GetUsingGroup().allocatedPods {
 						for _, v := range pods {
@@ -220,8 +220,8 @@ func collectPreemptionVictims(placement groupPhysicalPlacement) (
 						}
 					}
 				}
-				if state == cellAcquiring || state == cellAcquired {
-					overlappingPreemptorGroups.Add(pGpu.GetAcquiringGroup())
+				if state == cellReserving || state == cellReserved {
+					overlappingPreemptorGroups.Add(pGpu.GetReservingOrReservedGroup())
 				}
 			}
 		}
@@ -406,7 +406,7 @@ func inFreeCellList(c *PhysicalCell) bool {
 }
 
 // setCellState sets state for a cell and its parent recursively. A parent cell will be in Used state
-// if any of its children is in Used state. For the other states (Free, Acquired, Acquiring),
+// if any of its children is in Used state. For the other states (Free, Reserving, Reserved),
 // a parent will be in the state if all of this children are in the state.
 // setCellState always starts from the lowest level, i.e., GPU-level cells.
 func setCellState(c *PhysicalCell, s CellState) {

@@ -32,9 +32,9 @@ import (
 // General Types
 ///////////////////////////////////////////////////////////////////////////////////////
 type (
-	CellType      string
-	CellAddress   string
-	ReservationId string
+	CellType     string
+	CellAddress  string
+	PinnedCellId string
 )
 
 // Physical cluster definition
@@ -51,18 +51,18 @@ type CellTypeSpec struct {
 
 // Specify physical Cell instances.
 type PhysicalCellSpec struct {
-	CellType      CellType           `yaml:"cellType"`
-	CellAddress   CellAddress        `yaml:"cellAddress"`
-	ReservationId ReservationId      `yaml:"reservationId"`
-	CellChildren  []PhysicalCellSpec `yaml:"cellChildren,omitempty"`
+	CellType     CellType           `yaml:"cellType"`
+	CellAddress  CellAddress        `yaml:"cellAddress"`
+	PinnedCellId PinnedCellId       `yaml:"pinnedCellId"`
+	CellChildren []PhysicalCellSpec `yaml:"cellChildren,omitempty"`
 }
 
 // Virtual cluster definition
 type VirtualClusterName string
 
 type VirtualClusterSpec struct {
-	VirtualCells  []VirtualCellSpec  `yaml:"virtualCells"`
-	ReservedCells []ReservedCellSpec `yaml:"reservedCells,omitempty"`
+	VirtualCells []VirtualCellSpec `yaml:"virtualCells"`
+	PinnedCells  []PinnedCellSpec  `yaml:"pinnedCells,omitempty"`
 }
 
 type VirtualCellSpec struct {
@@ -70,14 +70,14 @@ type VirtualCellSpec struct {
 	CellType   CellType `yaml:"cellType"`
 }
 
-type ReservedCellSpec struct {
-	ReservationId ReservationId `yaml:"reservationId"`
+type PinnedCellSpec struct {
+	PinnedCellId PinnedCellId `yaml:"pinnedCellId"`
 }
 
 type PodSchedulingSpec struct {
 	VirtualCluster       VirtualClusterName `yaml:"virtualCluster"`
 	Priority             int32              `yaml:"priority"`
-	ReservationId        ReservationId      `yaml:"reservationId"`
+	PinnedCellId         PinnedCellId       `yaml:"pinnedCellId"`
 	GpuType              string             `yaml:"gpuType"`
 	GpuNumber            int32              `yaml:"gpuNumber"`
 	GangReleaseEnable    bool               `yaml:"gangReleaseEnable"`
@@ -192,7 +192,7 @@ type CellStatus struct {
 	// (e.g., VC1/0/0 may represent VC1, preassigned cell 0, index 0 among its children)
 	CellAddress CellAddress `json:"cellAddress"`
 	// CellState and CellHealthiness are two orthogonal fields.
-	// CellState represents whether the cell is being used (or acquired) by an affinity group.
+	// CellState represents whether the cell is used (or reserved) by an affinity group.
 	// CellHealthiness represents whether the physical hardware is working normally.
 	CellState       CellState       `json:"cellState"`
 	CellHealthiness CellHealthiness `json:"cellHealthiness"`

@@ -148,7 +148,7 @@ var pss = map[types.UID]api.PodSchedulingSpec{
 		VirtualCluster:       "VC1",
 		Priority:             0,
 		LazyPreemptionEnable: true,
-		ReservationId:        "",
+		PinnedCellId:         "",
 		GpuType:              "DGX2-V100",
 		GpuNumber:            1,
 		AffinityGroup:        group1,
@@ -156,7 +156,7 @@ var pss = map[types.UID]api.PodSchedulingSpec{
 		VirtualCluster:       "VC1",
 		Priority:             1,
 		LazyPreemptionEnable: true,
-		ReservationId:        "",
+		PinnedCellId:         "",
 		GpuType:              "DGX2-V100",
 		GpuNumber:            1,
 		AffinityGroup:        group2,
@@ -164,7 +164,7 @@ var pss = map[types.UID]api.PodSchedulingSpec{
 		VirtualCluster:       "VC1",
 		Priority:             2,
 		LazyPreemptionEnable: true,
-		ReservationId:        "",
+		PinnedCellId:         "",
 		GpuType:              "DGX2-V100",
 		GpuNumber:            8,
 		AffinityGroup:        group3,
@@ -172,23 +172,23 @@ var pss = map[types.UID]api.PodSchedulingSpec{
 		VirtualCluster:       "VC1",
 		Priority:             -1,
 		LazyPreemptionEnable: true,
-		ReservationId:        "",
+		PinnedCellId:         "",
 		GpuType:              "DGX2-V100",
 		GpuNumber:            1,
 		AffinityGroup:        group4,
-	}, "pod5": { // use reservation
+	}, "pod5": { // use pinned cell
 		VirtualCluster:       "VC1",
 		Priority:             1,
 		LazyPreemptionEnable: true,
-		ReservationId:        "VC1-YQW-DGX2",
+		PinnedCellId:         "VC1-YQW-DGX2",
 		GpuType:              "DGX2-V100",
 		GpuNumber:            16,
 		AffinityGroup:        group5,
-	}, "pod6": { // use reservation
+	}, "pod6": { // use pinned cell
 		VirtualCluster:       "VC1",
 		Priority:             1,
 		LazyPreemptionEnable: true,
-		ReservationId:        "VC1-YQW-DGX2",
+		PinnedCellId:         "VC1-YQW-DGX2",
 		GpuType:              "DGX2-V100",
 		GpuNumber:            16,
 		AffinityGroup:        group5,
@@ -196,7 +196,7 @@ var pss = map[types.UID]api.PodSchedulingSpec{
 		VirtualCluster:       "VC2",
 		Priority:             1,
 		LazyPreemptionEnable: true,
-		ReservationId:        "",
+		PinnedCellId:         "",
 		GpuType:              "DGX1-P100",
 		GpuNumber:            8,
 		AffinityGroup:        group7,
@@ -204,7 +204,7 @@ var pss = map[types.UID]api.PodSchedulingSpec{
 		VirtualCluster:       "VC2",
 		Priority:             1,
 		LazyPreemptionEnable: true,
-		ReservationId:        "",
+		PinnedCellId:         "",
 		GpuType:              "",
 		GpuNumber:            7,
 		AffinityGroup:        group9,
@@ -212,7 +212,7 @@ var pss = map[types.UID]api.PodSchedulingSpec{
 		VirtualCluster:       "VC2",
 		Priority:             1,
 		LazyPreemptionEnable: true,
-		ReservationId:        "",
+		PinnedCellId:         "",
 		GpuType:              "",
 		GpuNumber:            5,
 		AffinityGroup:        group9,
@@ -220,7 +220,7 @@ var pss = map[types.UID]api.PodSchedulingSpec{
 		VirtualCluster:       "VC2",
 		Priority:             1,
 		LazyPreemptionEnable: true,
-		ReservationId:        "",
+		PinnedCellId:         "",
 		GpuType:              "DGX2-V100",
 		GpuNumber:            1,
 		AffinityGroup:        group6,
@@ -228,7 +228,7 @@ var pss = map[types.UID]api.PodSchedulingSpec{
 		VirtualCluster:       "VC2",
 		Priority:             1,
 		LazyPreemptionEnable: true,
-		ReservationId:        "",
+		PinnedCellId:         "",
 		GpuType:              "DGX1-P100",
 		GpuNumber:            2,
 		AffinityGroup:        group8,
@@ -236,7 +236,7 @@ var pss = map[types.UID]api.PodSchedulingSpec{
 		VirtualCluster:       "VC2",
 		Priority:             1,
 		LazyPreemptionEnable: true,
-		ReservationId:        "",
+		PinnedCellId:         "",
 		GpuType:              "DGX1-P100",
 		GpuNumber:            2,
 		AffinityGroup:        group8,
@@ -244,15 +244,15 @@ var pss = map[types.UID]api.PodSchedulingSpec{
 		VirtualCluster:       "surprise!",
 		Priority:             1,
 		LazyPreemptionEnable: true,
-		ReservationId:        "",
+		PinnedCellId:         "",
 		GpuType:              "DGX1-P100",
 		GpuNumber:            1,
 		AffinityGroup:        group10,
-	}, "pod14": { // invalid reservation
+	}, "pod14": { // invalid pinned cell
 		VirtualCluster:       "VC2",
 		Priority:             1,
 		LazyPreemptionEnable: true,
-		ReservationId:        "surprise!",
+		PinnedCellId:         "surprise!",
 		GpuType:              "DGX1-P100",
 		GpuNumber:            1,
 		AffinityGroup:        group10,
@@ -260,7 +260,7 @@ var pss = map[types.UID]api.PodSchedulingSpec{
 		VirtualCluster:       "VC2",
 		Priority:             1001,
 		LazyPreemptionEnable: true,
-		ReservationId:        "",
+		PinnedCellId:         "",
 		GpuType:              "DGX1-P100",
 		GpuNumber:            1,
 		AffinityGroup:        group10,
@@ -268,7 +268,7 @@ var pss = map[types.UID]api.PodSchedulingSpec{
 		VirtualCluster:       "VC1",
 		Priority:             2,
 		LazyPreemptionEnable: true,
-		ReservationId:        "VC1-YQW-DGX2",
+		PinnedCellId:         "VC1-YQW-DGX2",
 		GpuType:              "DGX2-V100",
 		GpuNumber:            16,
 		AffinityGroup:        group11,
@@ -276,7 +276,7 @@ var pss = map[types.UID]api.PodSchedulingSpec{
 		VirtualCluster:       "VC1",
 		Priority:             2,
 		LazyPreemptionEnable: true,
-		ReservationId:        "VC1-YQW-DGX2",
+		PinnedCellId:         "VC1-YQW-DGX2",
 		GpuType:              "DGX2-V100",
 		GpuNumber:            16,
 		AffinityGroup:        group11,
@@ -284,7 +284,7 @@ var pss = map[types.UID]api.PodSchedulingSpec{
 		VirtualCluster:       "VC1",
 		Priority:             1,
 		LazyPreemptionEnable: true,
-		ReservationId:        "",
+		PinnedCellId:         "",
 		GpuType:              "DGX2-V100",
 		GpuNumber:            16,
 		AffinityGroup:        group12,
@@ -292,7 +292,7 @@ var pss = map[types.UID]api.PodSchedulingSpec{
 		VirtualCluster:       "VC1",
 		Priority:             1,
 		LazyPreemptionEnable: true,
-		ReservationId:        "",
+		PinnedCellId:         "",
 		GpuType:              "DGX2-V100",
 		GpuNumber:            16,
 		AffinityGroup:        group12,
@@ -300,7 +300,7 @@ var pss = map[types.UID]api.PodSchedulingSpec{
 		VirtualCluster:       "VC1",
 		Priority:             1,
 		LazyPreemptionEnable: true,
-		ReservationId:        "",
+		PinnedCellId:         "",
 		GpuType:              "DGX2-V100",
 		GpuNumber:            16,
 		AffinityGroup:        group13,
@@ -308,7 +308,7 @@ var pss = map[types.UID]api.PodSchedulingSpec{
 		VirtualCluster:       "VC1",
 		Priority:             1,
 		LazyPreemptionEnable: true,
-		ReservationId:        "",
+		PinnedCellId:         "",
 		GpuType:              "DGX2-V100",
 		GpuNumber:            16,
 		AffinityGroup:        group13,
@@ -316,7 +316,7 @@ var pss = map[types.UID]api.PodSchedulingSpec{
 		VirtualCluster:       "VC1",
 		Priority:             -1,
 		LazyPreemptionEnable: true,
-		ReservationId:        "",
+		PinnedCellId:         "",
 		GpuType:              "DGX2-V100",
 		GpuNumber:            16,
 		AffinityGroup:        group14,
@@ -324,7 +324,7 @@ var pss = map[types.UID]api.PodSchedulingSpec{
 		VirtualCluster:       "VC1",
 		Priority:             -1,
 		LazyPreemptionEnable: true,
-		ReservationId:        "",
+		PinnedCellId:         "",
 		GpuType:              "DGX2-V100",
 		GpuNumber:            16,
 		AffinityGroup:        group14,
@@ -332,7 +332,7 @@ var pss = map[types.UID]api.PodSchedulingSpec{
 		VirtualCluster:       "VC2",
 		Priority:             0,
 		LazyPreemptionEnable: true,
-		ReservationId:        "",
+		PinnedCellId:         "",
 		GpuType:              "CT1",
 		GpuNumber:            2,
 		AffinityGroup:        group15,
@@ -340,7 +340,7 @@ var pss = map[types.UID]api.PodSchedulingSpec{
 		VirtualCluster:       "VC2",
 		Priority:             1,
 		LazyPreemptionEnable: false,
-		ReservationId:        "",
+		PinnedCellId:         "",
 		GpuType:              "CT1",
 		GpuNumber:            2,
 		AffinityGroup:        group16,
@@ -348,7 +348,7 @@ var pss = map[types.UID]api.PodSchedulingSpec{
 		VirtualCluster:       "VC2",
 		Priority:             2,
 		LazyPreemptionEnable: false,
-		ReservationId:        "",
+		PinnedCellId:         "",
 		GpuType:              "CT1",
 		GpuNumber:            2,
 		AffinityGroup:        group17,
@@ -356,7 +356,7 @@ var pss = map[types.UID]api.PodSchedulingSpec{
 		VirtualCluster:       "VC1",
 		Priority:             1,
 		LazyPreemptionEnable: false,
-		ReservationId:        "VC1-YQW-DGX2",
+		PinnedCellId:         "VC1-YQW-DGX2",
 		GpuType:              "DGX2-V100",
 		GpuNumber:            16,
 		AffinityGroup:        group18,
@@ -364,7 +364,7 @@ var pss = map[types.UID]api.PodSchedulingSpec{
 		VirtualCluster:       "VC1",
 		Priority:             1,
 		LazyPreemptionEnable: false,
-		ReservationId:        "VC1-YQW-DGX2",
+		PinnedCellId:         "VC1-YQW-DGX2",
 		GpuType:              "DGX2-V100",
 		GpuNumber:            16,
 		AffinityGroup:        group19,
@@ -372,7 +372,7 @@ var pss = map[types.UID]api.PodSchedulingSpec{
 		VirtualCluster:       "VC1",
 		Priority:             2,
 		LazyPreemptionEnable: true,
-		ReservationId:        "VC1-YQW-DGX2",
+		PinnedCellId:         "VC1-YQW-DGX2",
 		GpuType:              "DGX2-V100",
 		GpuNumber:            16,
 		AffinityGroup:        group20,
@@ -380,7 +380,7 @@ var pss = map[types.UID]api.PodSchedulingSpec{
 		VirtualCluster:       "VC1",
 		Priority:             1,
 		LazyPreemptionEnable: true,
-		ReservationId:        "VC1-YQW-DGX2",
+		PinnedCellId:         "VC1-YQW-DGX2",
 		GpuType:              "DGX2-V100",
 		GpuNumber:            16,
 		AffinityGroup:        group21,
@@ -388,7 +388,7 @@ var pss = map[types.UID]api.PodSchedulingSpec{
 		VirtualCluster:       "VC1",
 		Priority:             2,
 		LazyPreemptionEnable: true,
-		ReservationId:        "VC1-YQW-DGX2",
+		PinnedCellId:         "VC1-YQW-DGX2",
 		GpuType:              "DGX2-V100",
 		GpuNumber:            16,
 		AffinityGroup:        group22,
@@ -396,7 +396,7 @@ var pss = map[types.UID]api.PodSchedulingSpec{
 		VirtualCluster:       "VC1",
 		Priority:             2,
 		LazyPreemptionEnable: true,
-		ReservationId:        "VC1-YQW-DGX2",
+		PinnedCellId:         "VC1-YQW-DGX2",
 		GpuType:              "DGX2-V100",
 		GpuNumber:            16,
 		AffinityGroup:        group23,
@@ -404,7 +404,7 @@ var pss = map[types.UID]api.PodSchedulingSpec{
 		VirtualCluster:       "VC1",
 		Priority:             3,
 		LazyPreemptionEnable: true,
-		ReservationId:        "VC1-YQW-DGX2",
+		PinnedCellId:         "VC1-YQW-DGX2",
 		GpuType:              "DGX2-V100",
 		GpuNumber:            16,
 		AffinityGroup:        group24,
@@ -412,7 +412,7 @@ var pss = map[types.UID]api.PodSchedulingSpec{
 		VirtualCluster:       "VC1",
 		Priority:             4,
 		LazyPreemptionEnable: false,
-		ReservationId:        "VC1-YQW-DGX2",
+		PinnedCellId:         "VC1-YQW-DGX2",
 		GpuType:              "DGX2-V100",
 		GpuNumber:            16,
 		AffinityGroup:        group25,
@@ -420,7 +420,7 @@ var pss = map[types.UID]api.PodSchedulingSpec{
 		VirtualCluster:       "VC1",
 		Priority:             5,
 		LazyPreemptionEnable: true,
-		ReservationId:        "VC1-YQW-DGX2",
+		PinnedCellId:         "VC1-YQW-DGX2",
 		GpuType:              "DGX2-V100",
 		GpuNumber:            16,
 		AffinityGroup:        group26,
@@ -428,7 +428,7 @@ var pss = map[types.UID]api.PodSchedulingSpec{
 		VirtualCluster:       "VC1",
 		Priority:             -1,
 		LazyPreemptionEnable: true,
-		ReservationId:        "",
+		PinnedCellId:         "",
 		GpuType:              "",
 		GpuNumber:            1,
 		AffinityGroup:        group1,
@@ -504,7 +504,7 @@ func TestHivedAlgorithm(t *testing.T) {
 	h := NewHivedAlgorithm(sConfig)
 	initNodes(h)
 	// sort chains of each GPU type for stability of the test
-	for _, chains := range h.chains {
+	for _, chains := range h.cellChains {
 		sortChains(chains)
 	}
 
@@ -533,17 +533,17 @@ func printConfig(t *testing.T, h *HivedAlgorithm) {
 	}
 	for vc, vcs := range h.vcSchedulers {
 		t.Logf("%v", vc)
-		for chain, ccl := range vcs.getNonReservedFullCellList() {
+		for chain, ccl := range vcs.getNonPinnedFullCellList() {
 			t.Logf("%v", chain)
 			t.Logf("%v", ccl)
 		}
-		t.Logf("Reservation")
-		for rid, ccl := range vcs.getReservedCellList() {
-			t.Logf(string(rid))
+		t.Logf("Pinned cells")
+		for pid, ccl := range vcs.getPinnedCellList() {
+			t.Logf(string(pid))
 			t.Logf("%v", ccl)
 		}
 	}
-	for gpuType, chains := range h.chains {
+	for gpuType, chains := range h.cellChains {
 		t.Logf("%v: %v", gpuType, chains)
 	}
 }
@@ -725,7 +725,7 @@ func testStatefulPreemption(t *testing.T, configFilePath string) {
 func testReconfiguration(t *testing.T, configFilePath string) {
 	oldConfig := api.NewConfig(api.InitRawConfig(&configFilePath))
 	h := NewHivedAlgorithm(oldConfig)
-	for _, chains := range h.chains {
+	for _, chains := range h.cellChains {
 		sortChains(chains)
 	}
 	testCasesThatShouldSucceed(t, h)
@@ -756,7 +756,7 @@ func testReconfiguration(t *testing.T, configFilePath string) {
 	(*newConfig.PhysicalCluster).PhysicalCells = append((*newConfig.PhysicalCluster).PhysicalCells, originalCell)
 
 	h = NewHivedAlgorithm(newConfig)
-	for _, chains := range h.chains {
+	for _, chains := range h.cellChains {
 		sortChains(chains)
 	}
 	for _, pod := range allocatedPods {

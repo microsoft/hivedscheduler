@@ -33,8 +33,8 @@ HiveD supports multiple job **priorities**. Higher-priority jobs can **[preempt]
 
 ## Feature
 1. [Multi-Tenancy: Virtual Cluster (VC)](example/feature/README.md#VC-Safety)
-2. [Fine-Grained VC Resource Guarantee](example/feature/README.md#VC-Safety): Quantity, [Topology](example/feature/README.md#VC-Safety), [Type](example/feature/README.md#GPU-Type), [Reservation](example/feature/README.md#Reservation), etc.
-3. Flexible Intra-VC Scheduling: [Topology-Awareness](example/feature/README.md#Topology-Aware-Intra-VC-Scheduling), [Flexible GPU Types](example/feature/README.md#GPU-Type), [Reservation](example/feature/README.md#Reservation), Scheduling Policy Customization, etc.
+2. [Fine-Grained VC Resource Guarantee](example/feature/README.md#VC-Safety): Quantity, [Topology](example/feature/README.md#VC-Safety), [Type](example/feature/README.md#GPU-Type), [Pinned VC Resource](example/feature/README.md#Pinned-Cells), etc.
+3. Flexible Intra-VC Scheduling: [Topology-Awareness](example/feature/README.md#Topology-Aware-Intra-VC-Scheduling), [Flexible GPU Types](example/feature/README.md#GPU-Type), [Pinned VC Resource](example/feature/README.md#Pinned-Cells), Scheduling Policy Customization, etc.
 4. Optimized Resource Fragmentation and Less Starvation
 5. [Priorities](example/feature/README.md#Guaranteed-Job), [Overuse with Low Priority](example/feature/README.md#Opportunistic-Job), and [Inter-](example/feature/README.md#Inter-VC-Preemption)/[Intra-VC Preemption](example/feature/README.md#Intra-VC-Preemption)
 6. [Job (Full/Partial) Gang Scheduling/Preemption](example/feature/README.md#Gang-Scheduling)
@@ -57,7 +57,7 @@ HiveD supports multiple job **priorities**. Higher-priority jobs can **[preempt]
 * [DockerHub](https://hub.docker.com/u/hivedscheduler)
 
 ## Related Project
-* [FrameworkController](https://github.com/microsoft/frameworkcontroller): A General-Purpose Kubernetes Pod Controller, which can easily leverage HiveD to schedule jobs .
+* [FrameworkController](https://github.com/microsoft/frameworkcontroller): A General-Purpose Kubernetes Pod Controller, which can easily leverage HiveD to schedule jobs.
 * [OpenPAI](https://github.com/microsoft/pai): A complete solution for AI platform. HiveD will be more user-friendly when working in tandem with OpenPAI.
 
 ## Contributing

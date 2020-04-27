@@ -1,5 +1,5 @@
 protocolVersion: 2
-name: itc-reserve
+name: itc-pin
 type: job
 prerequisites:
   - protocolVersion: 2
@@ -7,8 +7,8 @@ prerequisites:
     type: dockerimage
     uri: openpai/pai.example.keras.tensorflow
 taskRoles:
-  vc2norsv:
-    instances: 5
+  vc1nopinned:
+    instances: 4
     completion:
       minFailedInstances: 1
       minSucceededInstances: 4
@@ -20,8 +20,8 @@ taskRoles:
     commands:
     - rm /usr/local/cuda/lib64/stubs/libcuda.so.1
     - python mnist_cnn.py
-  vc2rsv:
-    instances: 5
+  vc1pinned:
+    instances: 4
     completion:
       minFailedInstances: 1
       minSucceededInstances: 4
@@ -35,13 +35,15 @@ taskRoles:
     - python mnist_cnn.py
 
 defaults:
-  virtualCluster: VC2
+  virtualCluster: VC1
 
 extras:
   hivedScheduler:
     jobPriorityClass: prod
     taskRoles:
-      vc2norsv:
+      vc1nopinned:
         gpuType: K80
-      vc2rsv:
-        reservationId: VC2-K80
+        affinityGroupName: vc1nopinned
+      vc1pinned:
+        pinnedCellId: VC1-K80
+        affinityGroupName: vc1pinned

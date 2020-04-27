@@ -30,70 +30,70 @@ import (
 )
 
 // intraVCScheduler is an interface for scheduling pods inside a VC.
-// It stores two maps of ChainCellList, one for reserved cells, the other for non-reserved ones.
+// It stores two maps of ChainCellList, one for pinned cells, the other for non-pinned ones.
 // It should be able to return a set of GPU placements in the VC for a scheduling request.
 type intraVCScheduler interface {
-	getNonReservedFullCellList() map[CellChain]ChainCellList
-	getNonReservedFreeCellList() map[CellChain]ChainCellList
-	getReservedCellList() map[api.ReservationId]ChainCellList
+	getNonPinnedFullCellList() map[CellChain]ChainCellList
+	getNonPinnedFreeCellList() map[CellChain]ChainCellList
+	getPinnedCellList() map[api.PinnedCellId]ChainCellList
 
-	// Scheduling an affinity group inside a VC. We use topologyAwareScheduler by default.
+	// Schedule an affinity group inside a VC. We use topologyAwareScheduler by default.
 	schedule(schedulingRequest) groupVirtualPlacement
 }
 
 type defaultIntraVCScheduler struct {
-	nonReservedFullCellList map[CellChain]ChainCellList
-	nonReservedFreeCellList map[CellChain]ChainCellList
-	reservedCellList        map[api.ReservationId]ChainCellList
-	// currently we create a topologyAwareScheduler for each cluster view (each chain, each reservation).
-	// we plan to support multiple cluster views in one scheduler, and to support schedule pods
+	nonPinnedFullCellList map[CellChain]ChainCellList
+	nonPinnedFreeCellList map[CellChain]ChainCellList
+	pinnedCellList        map[api.PinnedCellId]ChainCellList
+	// Currently we create a topologyAwareScheduler for each cluster view (each chain, each pinned cell).
+	// We plan to support multiple cluster views in one scheduler, and to support schedule pods
 	// across different cluster views.
 	// TODO: Support an affinity group can relax to be allocated across multiple chains.
-	nonReservedSchedulers map[CellChain]*topologyAwareScheduler
-	reservedSchedulers    map[api.ReservationId]*topologyAwareScheduler
+	nonPinnedCellSchedulers map[CellChain]*topologyAwareScheduler
+	pinnedCellSchedulers    map[api.PinnedCellId]*topologyAwareScheduler
 }
 
 func newDefaultIntraVCScheduler(
-	nonReservedFull map[CellChain]ChainCellList,
-	nonReservedFree map[CellChain]ChainCellList,
-	reservedVcl map[api.ReservationId]ChainCellList,
+	nonPinnedFullList map[CellChain]ChainCellList,
+	nonPinnedFreeList map[CellChain]ChainCellList,
+	pinnedList map[api.PinnedCellId]ChainCellList,
 	gpuNums map[CellChain]map[CellLevel]int32) *defaultIntraVCScheduler {
 
 	snr := map[CellChain]*topologyAwareScheduler{}
-	sr := map[api.ReservationId]*topologyAwareScheduler{}
-	for chain, ccl := range nonReservedFull {
+	sr := map[api.PinnedCellId]*topologyAwareScheduler{}
+	for chain, ccl := range nonPinnedFullList {
 		snr[chain] = NewTopologyAwareScheduler(ccl, gpuNums[chain], true, false)
 	}
-	for rid, ccl := range reservedVcl {
-		sr[rid] = NewTopologyAwareScheduler(ccl, gpuNums[ccl[CellLevel(1)][0].GetChain()], true, false)
+	for pid, ccl := range pinnedList {
+		sr[pid] = NewTopologyAwareScheduler(ccl, gpuNums[ccl[CellLevel(1)][0].GetChain()], true, false)
 	}
 	return &defaultIntraVCScheduler{
-		nonReservedFullCellList: nonReservedFull,
-		nonReservedFreeCellList: nonReservedFree,
-		reservedCellList:        reservedVcl,
-		nonReservedSchedulers:   snr,
-		reservedSchedulers:      sr,
+		nonPinnedFullCellList:   nonPinnedFullList,
+		nonPinnedFreeCellList:   nonPinnedFreeList,
+		pinnedCellList:          pinnedList,
+		nonPinnedCellSchedulers: snr,
+		pinnedCellSchedulers:    sr,
 	}
 }
 
-func (s *defaultIntraVCScheduler) getNonReservedFullCellList() map[CellChain]ChainCellList {
-	return s.nonReservedFullCellList
+func (s *defaultIntraVCScheduler) getNonPinnedFullCellList() map[CellChain]ChainCellList {
+	return s.nonPinnedFullCellList
 }
 
-func (s *defaultIntraVCScheduler) getNonReservedFreeCellList() map[CellChain]ChainCellList {
-	return s.nonReservedFreeCellList
+func (s *defaultIntraVCScheduler) getNonPinnedFreeCellList() map[CellChain]ChainCellList {
+	return s.nonPinnedFreeCellList
 }
 
-func (s *defaultIntraVCScheduler) getReservedCellList() map[api.ReservationId]ChainCellList {
-	return s.reservedCellList
+func (s *defaultIntraVCScheduler) getPinnedCellList() map[api.PinnedCellId]ChainCellList {
+	return s.pinnedCellList
 }
 
 func (s *defaultIntraVCScheduler) schedule(sr schedulingRequest) (placement groupVirtualPlacement) {
-	scheduler := s.nonReservedSchedulers[sr.chain]
+	scheduler := s.nonPinnedCellSchedulers[sr.chain]
 	str := fmt.Sprintf("chain %v", sr.chain)
-	if sr.reservationId != "" {
-		scheduler = s.reservedSchedulers[sr.reservationId]
-		str = fmt.Sprintf("reservation %v", sr.reservationId)
+	if sr.pinnedCellId != "" {
+		scheduler = s.pinnedCellSchedulers[sr.pinnedCellId]
+		str = fmt.Sprintf("pinned cell %v", sr.pinnedCellId)
 	}
 	klog.Infof("Processing scheduling request in VC %v: %v, GPU numbers %v, priority %v",
 		sr.vc, str, common.ToJson(sr.affinityGroupPodNums), sr.priority)

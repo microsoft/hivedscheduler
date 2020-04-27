@@ -41,7 +41,7 @@ type (
 
 type schedulingRequest struct {
 	vc                   api.VirtualClusterName
-	reservationId        api.ReservationId
+	pinnedCellId         api.PinnedCellId
 	chain                CellChain
 	affinityGroupName    string
 	affinityGroupPodNums map[int32]int32 // gpu number -> pod number

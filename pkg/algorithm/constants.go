@@ -40,20 +40,20 @@ const (
 
 	// internal cell states
 
-	// No affinity group is using, acquiring or has acquired the cell.
+	// No affinity group is using, reserving, or has reserved the cell.
 	// A Free cell's priority must be freePriority.
 	cellFree CellState = "Free"
-	// An affinity group is using this cell, and no other group is acquiring it.
+	// An affinity group is using this cell, and no other group is reserving or has reserved it.
 	// A Used cell's priority is that of the group using the cell.
 	cellUsed CellState = "Used"
-	// An affinity group is using this cell, and another group is acquiring it.
-	// An Acquiring cell's priority is that of the group acquiring the cell. This means the scheduling algorithm
-	// will respect the acquiring group, i.e., a group with a non-higher priority cannot get this cell.
-	cellAcquiring CellState = "Acquiring"
-	// No affinity group is using this cell, and a group has acquired it.
-	// An Acquired cell's priority is that of the group that acquired the cell. This means the scheduling algorithm
-	// will respect the group that acquired the cell, i.e., a group with a non-higher priority cannot get this cell.
-	cellAcquired CellState = "Acquired"
+	// An affinity group is using this cell, and another group is reserving it.
+	// A Reserving cell's priority is that of the group reserving it. This means the scheduling algorithm
+	// will respect the reserving group, i.e., a group with a non-higher priority cannot get this cell.
+	cellReserving CellState = "Reserving"
+	// No affinity group is using this cell, and a group has reserved it.
+	// A Reserved cell's priority is that of the group that reserved it. This means the scheduling algorithm
+	// will respect the group that reserved the cell, i.e., a group with a non-higher priority cannot get this cell.
+	cellReserved CellState = "Reserved"
 
 	// internal affinity group states
 
@@ -61,9 +61,9 @@ const (
 	// All cells in the group must be in Used state.
 	groupAllocated AffinityGroupState = "Allocated"
 	// The affinity group is preempting other groups to get free resource.
-	// Cells in the group must be in either Acquiring or Acquired states.
+	// Cells in the group must be in either Reserving or Reserved states.
 	groupPreempting AffinityGroupState = "Preempting"
 	// The affinity group is being preempted by some other groups.
-	// Cells in the group must be in either Used or Acquiring states.
+	// Cells in the group must be in either Used or Reserving states.
 	groupBeingPreempted AffinityGroupState = "BeingPreempted"
 )

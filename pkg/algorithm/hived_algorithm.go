@@ -67,7 +67,7 @@ type HivedAlgorithm struct {
 	// bad nodes in the physical cluster
 	badNodes common.Set
 	// map each GPU type to all chains that contain this type
-	chains map[string][]CellChain
+	cellChains map[string][]CellChain
 	// map each level in a chain to the specific cell type name
 	cellTypes map[CellChain]map[CellLevel]api.CellType
 	// cluster status exposed to external
@@ -78,8 +78,8 @@ type HivedAlgorithm struct {
 
 // NewHivedAlgorithm initializes a HivedAlgorithm from the config file.
 func NewHivedAlgorithm(sConfig *api.Config) *HivedAlgorithm {
-	fullPcl, freePcl, vcFreeCellNum, nonReservedFullVcl, nonReservedFreeVcl, reservedVcl, reservedPc,
-		gpuNums, gpuTypeToChain, cellLevelToType := ParseConfig(sConfig)
+	fullPcl, freePcl, vcFreeCellNum, nonPinnedFullVcl, nonPinnedFreeVcl, pinnedVcl, pinnedPcl,
+		gpuNums, chains, cellTypes := ParseConfig(sConfig)
 
 	h := &HivedAlgorithm{
 		vcSchedulers:            map[api.VirtualClusterName]intraVCScheduler{},
@@ -92,25 +92,25 @@ func NewHivedAlgorithm(sConfig *api.Config) *HivedAlgorithm {
 		badFreeCellNum:          map[CellChain]map[CellLevel]int32{},
 		vcDoomedBadCellNum:      map[api.VirtualClusterName]map[CellChain]map[CellLevel]int32{},
 		badNodes:                common.NewSet(),
-		chains:                  gpuTypeToChain,
-		cellTypes:               cellLevelToType,
+		cellChains:              chains,
+		cellTypes:               cellTypes,
 		affinityGroups:          map[string]*AlgoAffinityGroup{},
 		apiClusterStatus: api.ClusterStatus{
 			PhysicalCluster: api.PhysicalClusterStatus{},
 			VirtualClusters: map[api.VirtualClusterName]api.VirtualClusterStatus{},
 		},
 	}
-	for vcName := range nonReservedFullVcl {
+	for vcName := range nonPinnedFullVcl {
 		// TODO: Support per-VC configurable intra VC scheduling algo.
 		h.vcSchedulers[vcName] = newDefaultIntraVCScheduler(
-			nonReservedFullVcl[vcName], nonReservedFreeVcl[vcName], reservedVcl[vcName], gpuNums)
+			nonPinnedFullVcl[vcName], nonPinnedFreeVcl[vcName], pinnedVcl[vcName], gpuNums)
 	}
 	for chain, ccl := range h.fullCellList {
 		h.opportunisticSchedulers[chain] = NewTopologyAwareScheduler(ccl, gpuNums[chain], false, true)
 	}
 	h.initCellNums()
 	h.initAPIClusterStatus()
-	h.initReservations(reservedPc)
+	h.initPinnedCells(pinnedPcl)
 	h.initBadNodes()
 	return h
 }
@@ -194,7 +194,7 @@ func (h *HivedAlgorithm) Schedule(
 		pod)
 }
 
-func (h *HivedAlgorithm) AddUnallocatedPod(pod *core.Pod) {
+func (h *HivedAlgorithm) AddUnallocatedPod(*core.Pod) {
 }
 
 func (h *HivedAlgorithm) DeleteUnallocatedPod(pod *core.Pod) {
@@ -389,7 +389,7 @@ func (h *HivedAlgorithm) initAPIClusterStatus() {
 	}
 	for vc, vcs := range h.vcSchedulers {
 		h.apiClusterStatus.VirtualClusters[vc] = []*api.VirtualCellStatus{}
-		for _, ccl := range vcs.getNonReservedFreeCellList() {
+		for _, ccl := range vcs.getNonPinnedFreeCellList() {
 			for _, cl := range ccl {
 				for _, c := range cl {
 					h.apiClusterStatus.VirtualClusters[vc] = append(
@@ -397,7 +397,7 @@ func (h *HivedAlgorithm) initAPIClusterStatus() {
 				}
 			}
 		}
-		for _, ccl := range vcs.getReservedCellList() {
+		for _, ccl := range vcs.getPinnedCellList() {
 			for _, c := range ccl[CellLevel(len(ccl))] {
 				h.apiClusterStatus.VirtualClusters[vc] = append(
 					h.apiClusterStatus.VirtualClusters[vc], c.(*VirtualCell).GetAPIStatus())
@@ -406,18 +406,18 @@ func (h *HivedAlgorithm) initAPIClusterStatus() {
 	}
 }
 
-// initReservations creates static bindings for the reserved cells, and removes the
-// reserved physical cells from the free cell list.
-func (h *HivedAlgorithm) initReservations(reservedCells map[api.VirtualClusterName]map[api.ReservationId]*PhysicalCell) {
-	klog.Info("Init reservations")
-	for vcn, vcReservation := range reservedCells {
-		for rid, physical := range vcReservation {
-			h.vcFreeCellNum[vcn][physical.GetChain()][physical.GetLevel()]--
-			h.allVCFreeCellNum[physical.GetChain()][physical.GetLevel()]--
-			h.removeCellFromFreeList(physical)
-			virtualList := h.vcSchedulers[vcn].getReservedCellList()[rid]
-			virtual := virtualList[CellLevel(len(virtualList))][0].(*VirtualCell)
-			bindCell(physical, virtual)
+// initPinnedCells creates static bindings for the pinned cells, and removes the
+// pinned physical cells from the free cell list.
+func (h *HivedAlgorithm) initPinnedCells(pinnedCells map[api.VirtualClusterName]map[api.PinnedCellId]*PhysicalCell) {
+	klog.Info("Init pinned cells")
+	for vcn, vcPinnedCells := range pinnedCells {
+		for pid, pinnedPhysical := range vcPinnedCells {
+			h.vcFreeCellNum[vcn][pinnedPhysical.GetChain()][pinnedPhysical.GetLevel()]--
+			h.allVCFreeCellNum[pinnedPhysical.GetChain()][pinnedPhysical.GetLevel()]--
+			h.removeCellFromFreeList(pinnedPhysical)
+			virtualList := h.vcSchedulers[vcn].getPinnedCellList()[pid]
+			pinnedVirtual := virtualList[CellLevel(len(virtualList))][0].(*VirtualCell)
+			bindCell(pinnedPhysical, pinnedVirtual)
 		}
 	}
 }
@@ -580,7 +580,7 @@ func (h *HivedAlgorithm) updateVCDoomedBadCells(c CellChain, l CellLevel) {
 		if prevDoomedBadNum > h.vcDoomedBadCellNum[vcName][c][l] {
 			numToReduce := prevDoomedBadNum - h.vcDoomedBadCellNum[vcName][c][l]
 			n := int32(0)
-			for _, vc := range h.vcSchedulers[vcName].getNonReservedFreeCellList()[c][l] {
+			for _, vc := range h.vcSchedulers[vcName].getNonPinnedFreeCellList()[c][l] {
 				virtualCell := vc.(*VirtualCell)
 				if virtualCell.GetPhysicalCell() == nil && virtualCell.GetAPIStatus().CellHealthiness == api.CellBad {
 					setVirtualCellHealthiness(virtualCell, api.CellHealthy)
@@ -593,7 +593,7 @@ func (h *HivedAlgorithm) updateVCDoomedBadCells(c CellChain, l CellLevel) {
 		} else if prevDoomedBadNum < h.vcDoomedBadCellNum[vcName][c][l] {
 			numToIncrease := h.vcDoomedBadCellNum[vcName][c][l] - prevDoomedBadNum
 			n := int32(0)
-			for _, vc := range h.vcSchedulers[vcName].getNonReservedFreeCellList()[c][l] {
+			for _, vc := range h.vcSchedulers[vcName].getNonPinnedFreeCellList()[c][l] {
 				virtualCell := vc.(*VirtualCell)
 				if virtualCell.GetPhysicalCell() == nil && virtualCell.GetAPIStatus().CellHealthiness != api.CellBad {
 					setVirtualCellHealthiness(virtualCell, api.CellBad)
@@ -729,7 +729,7 @@ func (h *HivedAlgorithm) scheduleNewAffinityGroup(
 	priority := CellPriority(s.Priority)
 	sr := schedulingRequest{
 		vc:                   s.VirtualCluster,
-		reservationId:        s.ReservationId,
+		pinnedCellId:         s.PinnedCellId,
 		priority:             priority,
 		affinityGroupName:    s.AffinityGroup.Name,
 		affinityGroupPodNums: map[int32]int32{},
@@ -739,11 +739,11 @@ func (h *HivedAlgorithm) scheduleNewAffinityGroup(
 		sr.affinityGroupPodNums[m.GpuNumber] += m.PodNumber
 	}
 	h.validateSchedulingRequest(sr, pod)
-	if sr.reservationId != "" {
-		klog.Infof("Using reservation %v", s.ReservationId)
+	if sr.pinnedCellId != "" {
+		klog.Infof("Using pinned cell %v", s.PinnedCellId)
 		physicalPlacement, virtualPlacement, nodesNotInSuggested = h.processSchedulingRequest(sr, suggestedNodes)
 	} else if s.GpuType != "" {
-		if _, ok := h.chains[s.GpuType]; !ok {
+		if _, ok := h.cellChains[s.GpuType]; !ok {
 			panic(internal.NewBadRequestError(fmt.Sprintf(
 				"[%v]: Pod requesting GPU type %v which the whole cluster does not have",
 				internal.Key(pod), s.GpuType)))
@@ -771,9 +771,9 @@ func (h *HivedAlgorithm) scheduleAffinityGroupForGpuType(
 	nodesNotInSuggested common.Set) {
 
 	vcHasType := false
-	for _, chain := range h.chains[gpuType] {
+	for _, chain := range h.cellChains[gpuType] {
 		if sr.priority < minGuaranteedPriority ||
-			h.vcSchedulers[sr.vc].getNonReservedFreeCellList()[chain] != nil {
+			h.vcSchedulers[sr.vc].getNonPinnedFreeCellList()[chain] != nil {
 			vcHasType = true
 			klog.Infof("Searching chain %v", chain)
 			sr.chain = chain
@@ -805,7 +805,7 @@ func (h *HivedAlgorithm) scheduleAffinityGroupForAnyGpuType(
 	virtualPlacement groupVirtualPlacement,
 	nodesNotInSuggested common.Set) {
 
-	for gpuType := range h.chains {
+	for gpuType := range h.cellChains {
 		klog.Infof("Searching GPU type %v", gpuType)
 		physicalPlacement, virtualPlacement, typeNodesNotInSuggested :=
 			h.scheduleAffinityGroupForGpuType(sr, gpuType, pod, suggestedNodes, false)
@@ -819,16 +819,16 @@ func (h *HivedAlgorithm) scheduleAffinityGroupForAnyGpuType(
 	return nil, nil, nodesNotInSuggested
 }
 
-// validateSchedulingRequest checks the existence of VC and reservation ID, and the legality of priority.
+// validateSchedulingRequest checks the existence of VC and pinned cell, and the legality of priority.
 func (h *HivedAlgorithm) validateSchedulingRequest(sr schedulingRequest, pod *core.Pod) {
 	var message string
 	if h.vcSchedulers[sr.vc] == nil {
 		message = fmt.Sprintf("VC %v does not exists!", sr.vc)
-	} else if sr.reservationId != "" {
-		if h.vcSchedulers[sr.vc].getReservedCellList()[sr.reservationId] == nil {
-			message = fmt.Sprintf("VC %v does not have reservation %v", sr.vc, sr.reservationId)
+	} else if sr.pinnedCellId != "" {
+		if h.vcSchedulers[sr.vc].getPinnedCellList()[sr.pinnedCellId] == nil {
+			message = fmt.Sprintf("VC %v does not have pinned cell %v", sr.vc, sr.pinnedCellId)
 		} else if sr.priority == opportunisticPriority {
-			message = fmt.Sprintf("opportunistic pod not supported to use reservation %v", sr.reservationId)
+			message = fmt.Sprintf("opportunistic pod not supported to use pinned cell %v", sr.pinnedCellId)
 		}
 	}
 	if message != "" {
@@ -845,8 +845,8 @@ func (h *HivedAlgorithm) processSchedulingRequest(
 	nodesNotInSuggested common.Set) {
 
 	str := fmt.Sprintf("chain %v", sr.chain)
-	if sr.reservationId != "" {
-		str = fmt.Sprintf("reservation %v", sr.reservationId)
+	if sr.pinnedCellId != "" {
+		str = fmt.Sprintf("pinned cell %v", sr.pinnedCellId)
 	}
 	klog.Infof("Processing scheduling request: %v, GPU numbers %v, priority %v",
 		str, common.ToJson(sr.affinityGroupPodNums), sr.priority)
@@ -986,7 +986,7 @@ func (h *HivedAlgorithm) createAllocatedAffinityGroup(s *api.PodSchedulingSpec, 
 
 // deleteAllocatedAffinityGroup deletes a new affinity group and release the resources (that are not
 // allocated to a preempting group).
-func (h HivedAlgorithm) deleteAllocatedAffinityGroup(g *AlgoAffinityGroup, pod *core.Pod) {
+func (h *HivedAlgorithm) deleteAllocatedAffinityGroup(g *AlgoAffinityGroup, pod *core.Pod) {
 	klog.Infof("[%v]: All pods complete, deleting allocated affinity group: %v",
 		internal.Key(pod), g.name)
 	for _, podPlacements := range g.physicalGpuPlacement {
@@ -997,14 +997,14 @@ func (h HivedAlgorithm) deleteAllocatedAffinityGroup(g *AlgoAffinityGroup, pod *
 				}
 				pGpu := gpu.(*PhysicalCell)
 				pGpu.DeleteUsingGroup(g)
-				// state of pGpu can be either Used or Acquiring
+				// state of pGpu can be either Used or Reserving
 				if pGpu.GetState() == cellUsed {
 					h.releaseGpu(pGpu, g.vc)
 					setCellState(pGpu, cellFree)
-				} else { // cellAcquiring
-					// When pGpu is in cellAcquiring state, we shouldn't call h.releaseGpu
-					// because it must have been allocated to the acquiring group before
-					setCellState(pGpu, cellAcquired)
+				} else { // cellReserving
+					// When pGpu is in Reserving state, we shouldn't call h.releaseGpu
+					// because it must have been allocated to the reserving group before
+					setCellState(pGpu, cellReserved)
 				}
 			}
 		}
@@ -1039,13 +1039,13 @@ func (h *HivedAlgorithm) createPreemptingAffinityGroup(
 					usingGroup.state = groupBeingPreempted
 				}
 				h.allocateGpu(pGpu, vGpu, CellPriority(s.Priority), newGroup.vc)
-				pGpu.AddAcquiringGroup(newGroup)
-				// state of pGpu can be either Used or Free (if it was Acquiring or Acquired,
+				pGpu.AddReservingOrReservedGroup(newGroup)
+				// state of pGpu can be either Used or Free (if it was Reserving or Reserved,
 				// we must have canceled the ongoing preemption before, in h.Schedule)
 				if pGpu.GetState() == cellUsed {
-					setCellState(pGpu, cellAcquiring)
+					setCellState(pGpu, cellReserving)
 				} else { // cellFree
-					setCellState(pGpu, cellAcquired)
+					setCellState(pGpu, cellReserved)
 				}
 			}
 		}
@@ -1063,9 +1063,9 @@ func (h *HivedAlgorithm) deletePreemptingAffinityGroup(g *AlgoAffinityGroup, pod
 			for _, gpu := range g.physicalGpuPlacement[gpuNum][podIndex] {
 				pGpu := gpu.(*PhysicalCell)
 				h.releaseGpu(pGpu, g.vc)
-				pGpu.DeleteAcquiringGroup(pGpu.GetAcquiringGroup())
-				// state of pGpu can be either Acquiring or Acquired
-				if pGpu.GetState() == cellAcquiring {
+				pGpu.DeleteReservingOrReservedGroup(pGpu.GetReservingOrReservedGroup())
+				// state of pGpu can be either Reserving or Reserved
+				if pGpu.GetState() == cellReserving {
 					setCellState(pGpu, cellUsed)
 					// return the cell to the group being preempted
 					beingPreemptedGroup := pGpu.GetUsingGroup()
@@ -1077,7 +1077,7 @@ func (h *HivedAlgorithm) deletePreemptingAffinityGroup(g *AlgoAffinityGroup, pod
 					}
 					h.allocateGpu(
 						pGpu, beingPreemptedVGpu, CellPriority(beingPreemptedGroup.priority), beingPreemptedGroup.vc)
-				} else { // cellAcquired
+				} else { // cellReserved
 					setCellState(pGpu, cellFree)
 				}
 			}
@@ -1094,7 +1094,7 @@ func (h *HivedAlgorithm) allocatePreemptingAffinityGroup(g *AlgoAffinityGroup, p
 		for podIndex := range g.physicalGpuPlacement[gpuNum] {
 			for _, gpu := range g.physicalGpuPlacement[gpuNum][podIndex] {
 				pGpu := gpu.(*PhysicalCell)
-				pGpu.DeleteAcquiringGroup(g)
+				pGpu.DeleteReservingOrReservedGroup(g)
 				pGpu.AddUsingGroup(g)
 				setCellState(pGpu, cellUsed)
 			}
@@ -1173,11 +1173,11 @@ func (h *HivedAlgorithm) findAllocatedGpu(
 				} else if vcs := h.vcSchedulers[s.VirtualCluster]; vcs == nil {
 					message = fmt.Sprintf("VC %v not found", s.VirtualCluster)
 				} else {
-					vccl := vcs.getNonReservedFreeCellList()[pGpu.GetChain()]
+					vccl := vcs.getNonPinnedFreeCellList()[pGpu.GetChain()]
 					str := string(pGpu.GetChain())
-					if s.ReservationId != "" {
-						vccl = vcs.getReservedCellList()[s.ReservationId]
-						str = string(s.ReservationId)
+					if s.PinnedCellId != "" {
+						vccl = vcs.getPinnedCellList()[s.PinnedCellId]
+						str = string(s.PinnedCellId)
 					}
 					if vccl == nil {
 						message = fmt.Sprintf("VC %v has no cell for %v", s.VirtualCluster, str)
