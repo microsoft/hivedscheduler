@@ -234,7 +234,7 @@ func (c *PhysicalCell) AddReservingOrReservedGroup(g *AlgoAffinityGroup) {
 			"reserving or reserved affinity group %v to cell %v", c.reservingOrReservedGroup.name, g.name, c.address)
 	}
 	c.reservingOrReservedGroup = g
-	klog.Infof("Cell %v is now being reserved by affinity group %v", c.address, g.name)
+	klog.Infof("Cell %v is now reserved (or being reserved) by affinity group %v", c.address, g.name)
 }
 
 func (c *PhysicalCell) DeleteReservingOrReservedGroup(g *AlgoAffinityGroup) {

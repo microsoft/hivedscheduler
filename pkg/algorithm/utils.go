@@ -406,7 +406,7 @@ func inFreeCellList(c *PhysicalCell) bool {
 }
 
 // setCellState sets state for a cell and its parent recursively. A parent cell will be in Used state
-// if any of its children is in Used state. For the other states (Free, BeingReserved, Reserved),
+// if any of its children is in Used state. For the other states (Free, Reserving, Reserved),
 // a parent will be in the state if all of this children are in the state.
 // setCellState always starts from the lowest level, i.e., GPU-level cells.
 func setCellState(c *PhysicalCell, s CellState) {

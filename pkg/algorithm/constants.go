@@ -61,9 +61,9 @@ const (
 	// All cells in the group must be in Used state.
 	groupAllocated AffinityGroupState = "Allocated"
 	// The affinity group is preempting other groups to get free resource.
-	// Cells in the group must be in either BeingReserved or Reserved states.
+	// Cells in the group must be in either Reserving or Reserved states.
 	groupPreempting AffinityGroupState = "Preempting"
 	// The affinity group is being preempted by some other groups.
-	// Cells in the group must be in either Used or BeingReserved states.
+	// Cells in the group must be in either Used or Reserving states.
 	groupBeingPreempted AffinityGroupState = "BeingPreempted"
 )

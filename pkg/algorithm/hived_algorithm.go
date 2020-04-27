@@ -997,12 +997,12 @@ func (h *HivedAlgorithm) deleteAllocatedAffinityGroup(g *AlgoAffinityGroup, pod 
 				}
 				pGpu := gpu.(*PhysicalCell)
 				pGpu.DeleteUsingGroup(g)
-				// state of pGpu can be either Used or BeingReserved
+				// state of pGpu can be either Used or Reserving
 				if pGpu.GetState() == cellUsed {
 					h.releaseGpu(pGpu, g.vc)
 					setCellState(pGpu, cellFree)
 				} else { // cellReserving
-					// When pGpu is in BeingReserved state, we shouldn't call h.releaseGpu
+					// When pGpu is in Reserving state, we shouldn't call h.releaseGpu
 					// because it must have been allocated to the reserving group before
 					setCellState(pGpu, cellReserved)
 				}
@@ -1040,7 +1040,7 @@ func (h *HivedAlgorithm) createPreemptingAffinityGroup(
 				}
 				h.allocateGpu(pGpu, vGpu, CellPriority(s.Priority), newGroup.vc)
 				pGpu.AddReservingOrReservedGroup(newGroup)
-				// state of pGpu can be either Used or Free (if it was BeingReserved or Reserved,
+				// state of pGpu can be either Used or Free (if it was Reserving or Reserved,
 				// we must have canceled the ongoing preemption before, in h.Schedule)
 				if pGpu.GetState() == cellUsed {
 					setCellState(pGpu, cellReserving)
@@ -1064,7 +1064,7 @@ func (h *HivedAlgorithm) deletePreemptingAffinityGroup(g *AlgoAffinityGroup, pod
 				pGpu := gpu.(*PhysicalCell)
 				h.releaseGpu(pGpu, g.vc)
 				pGpu.DeleteReservingOrReservedGroup(pGpu.GetReservingOrReservedGroup())
-				// state of pGpu can be either BeingReserved or Reserved
+				// state of pGpu can be either Reserving or Reserved
 				if pGpu.GetState() == cellReserving {
 					setCellState(pGpu, cellUsed)
 					// return the cell to the group being preempted
