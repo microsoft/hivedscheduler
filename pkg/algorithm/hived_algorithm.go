@@ -1001,7 +1001,7 @@ func (h *HivedAlgorithm) deleteAllocatedAffinityGroup(g *AlgoAffinityGroup, pod 
 				if pGpu.GetState() == cellUsed {
 					h.releaseGpu(pGpu, g.vc)
 					setCellState(pGpu, cellFree)
-				} else { // cellBeingReserved
+				} else { // cellReserving
 					// When pGpu is in BeingReserved state, we shouldn't call h.releaseGpu
 					// because it must have been allocated to the reserving group before
 					setCellState(pGpu, cellReserved)
@@ -1039,11 +1039,11 @@ func (h *HivedAlgorithm) createPreemptingAffinityGroup(
 					usingGroup.state = groupBeingPreempted
 				}
 				h.allocateGpu(pGpu, vGpu, CellPriority(s.Priority), newGroup.vc)
-				pGpu.AddReservingGroup(newGroup)
+				pGpu.AddReservingOrReservedGroup(newGroup)
 				// state of pGpu can be either Used or Free (if it was BeingReserved or Reserved,
 				// we must have canceled the ongoing preemption before, in h.Schedule)
 				if pGpu.GetState() == cellUsed {
-					setCellState(pGpu, cellBeingReserved)
+					setCellState(pGpu, cellReserving)
 				} else { // cellFree
 					setCellState(pGpu, cellReserved)
 				}
@@ -1063,9 +1063,9 @@ func (h *HivedAlgorithm) deletePreemptingAffinityGroup(g *AlgoAffinityGroup, pod
 			for _, gpu := range g.physicalGpuPlacement[gpuNum][podIndex] {
 				pGpu := gpu.(*PhysicalCell)
 				h.releaseGpu(pGpu, g.vc)
-				pGpu.DeleteReservingGroup(pGpu.GetReservingGroup())
+				pGpu.DeleteReservingOrReservedGroup(pGpu.GetReservingOrReservedGroup())
 				// state of pGpu can be either BeingReserved or Reserved
-				if pGpu.GetState() == cellBeingReserved {
+				if pGpu.GetState() == cellReserving {
 					setCellState(pGpu, cellUsed)
 					// return the cell to the group being preempted
 					beingPreemptedGroup := pGpu.GetUsingGroup()
@@ -1094,7 +1094,7 @@ func (h *HivedAlgorithm) allocatePreemptingAffinityGroup(g *AlgoAffinityGroup, p
 		for podIndex := range g.physicalGpuPlacement[gpuNum] {
 			for _, gpu := range g.physicalGpuPlacement[gpuNum][podIndex] {
 				pGpu := gpu.(*PhysicalCell)
-				pGpu.DeleteReservingGroup(g)
+				pGpu.DeleteReservingOrReservedGroup(g)
 				pGpu.AddUsingGroup(g)
 				setCellState(pGpu, cellUsed)
 			}

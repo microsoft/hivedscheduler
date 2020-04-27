@@ -121,14 +121,14 @@ func (c *GenericCell) IncreaseUsedGpuNumAtPriority(p CellPriority, delta int32) 
 // PhysicalCell defines a cell in the physical cluster.
 type PhysicalCell struct {
 	GenericCell
-	nodes               []string           // node names inside the cell
-	gpuIndices          []int32            // [-1] for cells at levels higher than node
-	usingGroup          *AlgoAffinityGroup // affinity group using this cell (i.e., has running pod on the cell)
-	reservingGroup      *AlgoAffinityGroup // affinity group that is reserving, or has reserved the cell (e.g., waiting for preemption)
-	virtualCell         *VirtualCell       // points to the bound virtual cell
-	preBoundVirtualCell *VirtualCell       // points to the temporarily bound virtual cell (before the binding is confirmed)
-	split               bool               // true when the cell has been split
-	pinned              bool               // true when this is a pinned cell
+	nodes                    []string           // node names inside the cell
+	gpuIndices               []int32            // [-1] for cells at levels higher than node
+	usingGroup               *AlgoAffinityGroup // affinity group using this cell (i.e., has running pod on the cell)
+	reservingOrReservedGroup *AlgoAffinityGroup // affinity group that is reserving, or has reserved the cell (e.g., waiting for preemption)
+	virtualCell              *VirtualCell       // points to the bound virtual cell
+	preBoundVirtualCell      *VirtualCell       // points to the temporarily bound virtual cell (before the binding is confirmed)
+	split                    bool               // true when the cell has been split
+	pinned                   bool               // true when this is a pinned cell
 	// This status only contains the statuses that need to be exposed to external,
 	// and should not be used for internal status management
 	apiStatus *api.PhysicalCellStatus
@@ -228,25 +228,26 @@ func (c *PhysicalCell) GetUsingGroup() *AlgoAffinityGroup {
 	return c.usingGroup
 }
 
-func (c *PhysicalCell) AddReservingGroup(g *AlgoAffinityGroup) {
-	if c.reservingGroup != nil {
-		klog.Errorf("Found another reserving affinity group %v when adding "+
-			"reserving affinity group %v to cell %v", c.reservingGroup.name, g.name, c.address)
+func (c *PhysicalCell) AddReservingOrReservedGroup(g *AlgoAffinityGroup) {
+	if c.reservingOrReservedGroup != nil {
+		klog.Errorf("Found another reserving or reserved affinity group %v when adding "+
+			"reserving or reserved affinity group %v to cell %v", c.reservingOrReservedGroup.name, g.name, c.address)
 	}
-	c.reservingGroup = g
+	c.reservingOrReservedGroup = g
 	klog.Infof("Cell %v is now being reserved by affinity group %v", c.address, g.name)
 }
 
-func (c *PhysicalCell) DeleteReservingGroup(g *AlgoAffinityGroup) {
-	if c.reservingGroup == nil || c.reservingGroup.name != g.name {
-		klog.Errorf("Reserving affinity group %v not found when deleting it from cell %v", g.name, c.address)
+func (c *PhysicalCell) DeleteReservingOrReservedGroup(g *AlgoAffinityGroup) {
+	if c.reservingOrReservedGroup == nil || c.reservingOrReservedGroup.name != g.name {
+		klog.Errorf("Reserving or reserved affinity group %v not found when deleting it from cell %v",
+			g.name, c.address)
 	}
-	c.reservingGroup = nil
+	c.reservingOrReservedGroup = nil
 	klog.Infof("Cell %v is no longer reserved by affinity group %v", c.address, g.name)
 }
 
-func (c *PhysicalCell) GetReservingGroup() *AlgoAffinityGroup {
-	return c.reservingGroup
+func (c *PhysicalCell) GetReservingOrReservedGroup() *AlgoAffinityGroup {
+	return c.reservingOrReservedGroup
 }
 
 func (c *PhysicalCell) GetVirtualCell() *VirtualCell {

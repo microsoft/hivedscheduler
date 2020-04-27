@@ -47,9 +47,9 @@ const (
 	// A Used cell's priority is that of the group using the cell.
 	cellUsed CellState = "Used"
 	// An affinity group is using this cell, and another group is reserving it.
-	// A BeingReserved cell's priority is that of the group reserving it. This means the scheduling algorithm
+	// A Reserving cell's priority is that of the group reserving it. This means the scheduling algorithm
 	// will respect the reserving group, i.e., a group with a non-higher priority cannot get this cell.
-	cellBeingReserved CellState = "BeingReserved"
+	cellReserving CellState = "Reserving"
 	// No affinity group is using this cell, and a group has reserved it.
 	// A Reserved cell's priority is that of the group that reserved it. This means the scheduling algorithm
 	// will respect the group that reserved the cell, i.e., a group with a non-higher priority cannot get this cell.
