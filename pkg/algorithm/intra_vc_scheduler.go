@@ -38,7 +38,7 @@ type intraVCScheduler interface {
 	getPinnedCellList() map[api.PinnedCellId]ChainCellList
 
 	// Schedule an affinity group inside a VC. We use topologyAwareScheduler by default.
-	schedule(schedulingRequest) groupVirtualPlacement
+	schedule(sr schedulingRequest, suggestedNodes common.Set) groupVirtualPlacement
 }
 
 type defaultIntraVCScheduler struct {
@@ -62,10 +62,10 @@ func newDefaultIntraVCScheduler(
 	snr := map[CellChain]*topologyAwareScheduler{}
 	sr := map[api.PinnedCellId]*topologyAwareScheduler{}
 	for chain, ccl := range nonPinnedFullList {
-		snr[chain] = NewTopologyAwareScheduler(ccl, gpuNums[chain], true, false)
+		snr[chain] = NewTopologyAwareScheduler(ccl, gpuNums[chain], true, true)
 	}
 	for pid, ccl := range pinnedList {
-		sr[pid] = NewTopologyAwareScheduler(ccl, gpuNums[ccl[CellLevel(1)][0].GetChain()], true, false)
+		sr[pid] = NewTopologyAwareScheduler(ccl, gpuNums[ccl[CellLevel(1)][0].GetChain()], true, true)
 	}
 	return &defaultIntraVCScheduler{
 		nonPinnedFullCellList:   nonPinnedFullList,
@@ -88,7 +88,9 @@ func (s *defaultIntraVCScheduler) getPinnedCellList() map[api.PinnedCellId]Chain
 	return s.pinnedCellList
 }
 
-func (s *defaultIntraVCScheduler) schedule(sr schedulingRequest) (placement groupVirtualPlacement) {
+func (s *defaultIntraVCScheduler) schedule(
+	sr schedulingRequest,
+	suggestedNodes common.Set) (placement groupVirtualPlacement) {
 	scheduler := s.nonPinnedCellSchedulers[sr.chain]
 	str := fmt.Sprintf("chain %v", sr.chain)
 	if sr.pinnedCellId != "" {
@@ -98,7 +100,7 @@ func (s *defaultIntraVCScheduler) schedule(sr schedulingRequest) (placement grou
 	klog.Infof("Processing scheduling request in VC %v: %v, GPU numbers %v, priority %v",
 		sr.vc, str, common.ToJson(sr.affinityGroupPodNums), sr.priority)
 	if scheduler != nil {
-		placement = scheduler.Schedule(sr.affinityGroupPodNums, sr.priority, common.NewSet())
+		placement = scheduler.Schedule(sr.affinityGroupPodNums, sr.priority, suggestedNodes)
 	}
 	if placement == nil {
 		klog.Infof("Cannot find placement in VC %v", sr.vc)
