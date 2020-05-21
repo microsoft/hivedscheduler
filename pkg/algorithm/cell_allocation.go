@@ -24,7 +24,6 @@ package algorithm
 
 import (
 	"fmt"
-	"github.com/microsoft/hivedscheduler/pkg/api"
 	"github.com/microsoft/hivedscheduler/pkg/common"
 	"k8s.io/klog"
 	"math"
@@ -154,10 +153,10 @@ func mapPhysicalCellToVirtual(
 	if c.GetVirtualCell() != nil {
 		return c.GetVirtualCell(), ""
 	} else if c.GetLevel() == preassignedLevel {
-		if preassignedVirtual := getLowestPriorityCell(vccl[preassignedLevel], p); preassignedVirtual == nil {
+		if preassignedVirtual := getLowestPriorityVirtualCell(vccl[preassignedLevel], p); preassignedVirtual == nil {
 			return nil, fmt.Sprintf("insufficient free cell in the VC at the preassigned level (%v)", preassignedLevel)
 		} else {
-			return preassignedVirtual.(*VirtualCell), ""
+			return preassignedVirtual, ""
 		}
 	} else if c.GetParent() == nil {
 		return nil, fmt.Sprintf(
@@ -168,45 +167,45 @@ func mapPhysicalCellToVirtual(
 		if parentVirtual == nil {
 			return nil, message
 		} else {
-			return getLowestPriorityCell(parentVirtual.GetChildren(), p).(*VirtualCell), ""
+			return getLowestPriorityVirtualCell(parentVirtual.GetChildren(), p), ""
 		}
 	}
 }
 
-// getLowestPriorityCell returns a cell with the lowest priority among the cells
-// whose priorities are lower than the given priority (p).
-func getLowestPriorityCell(cl CellList, p CellPriority) Cell {
+// getLowestPriorityVirtualCell returns a virtual cell with the lowest priority
+// among those whose priorities are lower than the given priority (p).
+func getLowestPriorityVirtualCell(cl CellList, p CellPriority) (lowestPriorityCell *VirtualCell) {
 	lowestPriority := maxGuaranteedPriority
-	var lowestPriorityCell Cell
 	for _, c := range cl {
-		pp := c.GetPriority()
-		if pp == freePriority {
-			return c
-		} else if pp < p && pp < lowestPriority {
-			lowestPriority = pp
-			lowestPriorityCell = c
+		vc := c.(*VirtualCell)
+		priority := vc.GetPriority()
+		if priority == freePriority {
+			return vc
+		} else if priority < p && priority < lowestPriority {
+			lowestPriority = priority
+			lowestPriorityCell = vc
 		}
 	}
 	return lowestPriorityCell
 }
 
+// getUnboundVirtualCell returns a virtual cell that is not bound to a physical cell.
+func getUnboundVirtualCell(cl CellList) *VirtualCell {
+	for _, c := range cl {
+		if vc := c.(*VirtualCell); vc.GetPhysicalCell() == nil {
+			return vc
+		}
+	}
+	return nil
+}
+
 // bindCell binds a virtual cell to a physical cell and its parent recursively.
+// bindCell always starts from the lowest level, i.e., GPU-level cells.
 func bindCell(pc *PhysicalCell, vc *VirtualCell) {
 	for vc.GetPhysicalCell() == nil {
 		pc.SetVirtualCell(vc)
 		vc.SetPhysicalCell(pc)
 		klog.Infof("Virtual cell %v is bound to physical cell %v", vc.GetAddress(), pc.GetAddress())
-		if pc.GetAPIStatus().CellHealthiness == api.CellBad &&
-			(vc.GetParent() == nil ||
-				pc.GetParent().(*PhysicalCell).GetAPIStatus().CellHealthiness == api.CellHealthy) {
-			// If a physical cell is marked as Bad, that means all of its children are bad. In this case, we should also
-			// mark all of the virtual cell's children as bad. We need to do it explicitly because some of the virtual
-			// cell's children might be not bound to a physical cell, so it won't be marked as bad by cell binding.
-			// Because cell binding is done in a bottom-up manner, if we set the virtual cell's healthiness whenever
-			// the physical cell is bad, it would waste computation. So we set the virtual cell only when it is the root
-			// or the parent is no longer bad.
-			setVirtualCellHealthiness(vc, api.CellBad)
-		}
 		if vc.GetParent() == nil {
 			break
 		}
@@ -216,6 +215,7 @@ func bindCell(pc *PhysicalCell, vc *VirtualCell) {
 }
 
 // unbindCell unbinds a virtual cell with a physical cell and its parent recursively.
+// unbindCell always starts from the lowest level, i.e., GPU-level cells.
 func unbindCell(c *PhysicalCell) {
 	boundVirtual := c.GetVirtualCell()
 	for !boundVirtual.GetPhysicalCell().IsPinned() {
@@ -239,15 +239,6 @@ func unbindCell(c *PhysicalCell) {
 			}
 			boundVirtual = boundVirtual.GetParent().(*VirtualCell)
 		}
-	}
-	if parent := boundVirtual.GetParent(); parent != nil {
-		if parent.(*VirtualCell).GetAPIStatus().CellHealthiness == api.CellBad {
-			// If the unbound virtual cell's parent is still marked as Bad, which means all children should be bad,
-			// we will mark the unbound virtual cell and its children as bad
-			setVirtualCellHealthiness(boundVirtual, api.CellBad)
-		}
-	} else {
-		setVirtualCellHealthiness(boundVirtual, api.CellHealthy)
 	}
 }
 

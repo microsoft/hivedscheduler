@@ -488,8 +488,8 @@ var expectedBindInfos = map[string]result{
 	"pod21": {node: "0.0.4.1", gpuIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
 	"pod22": {node: "0.0.4.2", gpuIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
 	"pod23": {node: "0.0.4.3", gpuIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
-	"pod24": {node: "0.0.0.0", gpuIsolation: []int32{0, 1}},
-	"pod25": {node: "0.0.0.1", gpuIsolation: []int32{0, 1}},
+	"pod24": {node: "0.0.0.1", gpuIsolation: []int32{0, 1}},
+	"pod25": {node: "0.0.0.0", gpuIsolation: []int32{0, 1}},
 	"pod28": {node: "0.0.3.0", gpuIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
 	"pod34": {node: "0.0.3.0", gpuIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
 	"pod36": {node: "0.0.1.0", gpuIsolation: []int32{0}},
@@ -803,6 +803,7 @@ func testReconfiguration(t *testing.T, configFilePath string) {
 	for _, chains := range h.cellChains {
 		sortChains(chains)
 	}
+	setHealthyNodes(h)
 	for _, pod := range allocatedPods {
 		h.AddAllocatedPod(pod)
 	}

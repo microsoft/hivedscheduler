@@ -460,35 +460,3 @@ func deleteOpporVirtualCell(s api.VirtualClusterStatus, addr api.CellAddress) ap
 	s[novc-1] = nil
 	return s[:novc-1]
 }
-
-// setVirtualCellHealthiness sets the healthiness of a virtual cell and recursively for all of its children.
-// Normally we don't need to set a virtual cell's healthiness explicitly because that will be done
-// when binding it to a physical cell (then they share the same healthiness). We call this function when
-// the healthiness cannot be set through cell binding, i.e., in the following cases:
-// 1. Set a free cell to doomed bad (or set a doomed back cell back to healthy) due to insufficient healthy free cells,
-// before the cell is bound to real physical cell.
-// 2. When a virtual cell is already bound, and its physical cell is set to bad,
-// that means all of the physical cell's children are already bad.
-// We should then explicitly set all of the virtual cell's children to bad (some of the children may be not bound,
-// if we do not set their healthiness, they may still appear to be healthy, but in fact they are doomed to
-// be bound to a bad physical cell).
-func setVirtualCellHealthiness(c *VirtualCell, h api.CellHealthiness) {
-	c.GetAPIStatus().CellHealthiness = h
-	for _, child := range c.GetChildren() {
-		setVirtualCellHealthiness(child.(*VirtualCell), h)
-	}
-}
-
-// resetVirtualCellHealthiness lets the healthiness of all children of a virtual cell respect the real cell binding,
-// i.e., it is healthy if it has no binding, otherwise it has the same healthiness as its physical cell.
-// This is to cancel the effect of "doomed bad" done by setVirtualCellHealthiness.
-func resetVirtualCellHealthiness(c *VirtualCell) {
-	if pc := c.GetPhysicalCell(); pc != nil {
-		c.GetAPIStatus().CellHealthiness = pc.GetAPIStatus().CellHealthiness
-	} else {
-		c.GetAPIStatus().CellHealthiness = api.CellHealthy
-	}
-	for _, child := range c.GetChildren() {
-		resetVirtualCellHealthiness(child.(*VirtualCell))
-	}
-}

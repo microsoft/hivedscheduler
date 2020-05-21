@@ -374,6 +374,10 @@ func (c *VirtualCell) SetPriority(p CellPriority) {
 	}
 }
 
+func (c *VirtualCell) GetVirtualCluster() api.VirtualClusterName {
+	return c.vc
+}
+
 func (c *VirtualCell) SetPinnedCellId(pid api.PinnedCellId) {
 	c.pid = pid
 }

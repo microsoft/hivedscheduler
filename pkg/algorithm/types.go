@@ -63,6 +63,15 @@ func (cl CellList) String() string {
 	return strings.Join(names, ", ")
 }
 
+func (cl CellList) contains(c Cell) bool {
+	for _, cc := range cl {
+		if CellEqual(cc, c) {
+			return true
+		}
+	}
+	return false
+}
+
 func (cl CellList) remove(c Cell) CellList {
 	index := -1
 	for i, cc := range cl {
@@ -98,6 +107,10 @@ func (ccl ChainCellList) String() string {
 		str += fmt.Sprintf("level %v: %v\n", i, ccl[CellLevel(i)])
 	}
 	return str
+}
+
+func (ccl ChainCellList) contains(c Cell, l CellLevel) bool {
+	return ccl[l].contains(c)
 }
 
 func (ccl ChainCellList) remove(c Cell, l CellLevel) {

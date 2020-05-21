@@ -55,15 +55,19 @@ type HivedAlgorithm struct {
 	vcFreeCellNum map[api.VirtualClusterName]map[CellChain]map[CellLevel]int32
 	// total number of preassigned free cells in all the VCs of each cell type
 	allVCFreeCellNum map[CellChain]map[CellLevel]int32
-	// number of cells left in the physical cluster of each cell type
-	// (i.e., the cell is either in the free list or could be obtained by splitting such a free cell.)
+	// Number of cells left in the physical cluster of each cell type
+	// (i.e., the cell is either in the free list or could be obtained by splitting such a free cell).
+	// For example, we have a level-2 cell in the free list (which can be split into 2 level-1 cells).
+	// Then the left cell numbers will be level-2: 1, level-1: 2.
 	totalLeftCellNum map[CellChain]map[CellLevel]int32
-
-	// number of bad free cells in the physical cluster of each cell type
-	badFreeCellNum map[CellChain]map[CellLevel]int32
-	// number of free cells in each VC that are doomed to be bad (i.e., when the healthy
+	// bad free cells in the physical cluster of each cell type
+	badFreeCells map[CellChain]ChainCellList
+	// free cells in each VC that are doomed to be bad (i.e., when the healthy
 	// free cells in the physical cluster is fewer that the VC's free cells)
-	vcDoomedBadCellNum map[api.VirtualClusterName]map[CellChain]map[CellLevel]int32
+	vcDoomedBadCells map[api.VirtualClusterName]map[CellChain]ChainCellList
+	// number of doomed bad cells of each cell type
+	doomedBadCellNum map[CellChain]map[CellLevel]int32
+
 	// bad nodes in the physical cluster
 	badNodes common.Set
 	// map each GPU type to all chains that contain this type
@@ -89,8 +93,9 @@ func NewHivedAlgorithm(sConfig *api.Config) *HivedAlgorithm {
 		vcFreeCellNum:           vcFreeCellNum,
 		allVCFreeCellNum:        map[CellChain]map[CellLevel]int32{},
 		totalLeftCellNum:        map[CellChain]map[CellLevel]int32{},
-		badFreeCellNum:          map[CellChain]map[CellLevel]int32{},
-		vcDoomedBadCellNum:      map[api.VirtualClusterName]map[CellChain]map[CellLevel]int32{},
+		badFreeCells:            map[CellChain]ChainCellList{},
+		vcDoomedBadCells:        map[api.VirtualClusterName]map[CellChain]ChainCellList{},
+		doomedBadCellNum:        map[CellChain]map[CellLevel]int32{},
 		badNodes:                common.NewSet(),
 		cellChains:              chains,
 		cellTypes:               cellTypes,
@@ -334,14 +339,14 @@ func (h *HivedAlgorithm) GetVirtualClusterStatus(vcn api.VirtualClusterName) api
 }
 
 // initCellNums initiates the data structures for tracking cell usages and healthiness,
-// i.e., h.allVCFreeCellNum, h.totalLeftCellNum, h.badFreeCellNum, and h.vcDoomedBadCellNum.
+// i.e., h.allVCFreeCellNum, h.totalLeftCellNum, h.badFreeCells, h.vcDoomedBadCells, and h.doomedBadCellNum.
 // This method also validates the initial cell assignment to the VCs to make sure that
 // all the assigned cells can be fit into the configured physical cells.
 func (h *HivedAlgorithm) initCellNums() {
 	for vc, vcFreeCellNum := range h.vcFreeCellNum {
-		h.vcDoomedBadCellNum[vc] = map[CellChain]map[CellLevel]int32{}
+		h.vcDoomedBadCells[vc] = map[CellChain]ChainCellList{}
 		for chain, chainFreeCellNum := range vcFreeCellNum {
-			h.vcDoomedBadCellNum[vc][chain] = map[CellLevel]int32{}
+			h.vcDoomedBadCells[vc][chain] = ChainCellList{}
 			if h.allVCFreeCellNum[chain] == nil {
 				h.allVCFreeCellNum[chain] = map[CellLevel]int32{}
 			}
@@ -358,9 +363,9 @@ func (h *HivedAlgorithm) initCellNums() {
 			top := CellLevel(len(ccl))
 			available := int32(len(ccl[top]))
 			h.totalLeftCellNum[chain] = map[CellLevel]int32{}
-			h.badFreeCellNum[chain] = map[CellLevel]int32{}
+			h.badFreeCells[chain] = ChainCellList{}
+			h.doomedBadCellNum[chain] = map[CellLevel]int32{}
 			h.totalLeftCellNum[chain][top] = available
-			h.badFreeCellNum[chain][top] = 0
 			for l := top; l >= lowestLevel; l-- {
 				left := available - chainFreeCellNum[l]
 				if left < 0 {
@@ -373,7 +378,6 @@ func (h *HivedAlgorithm) initCellNums() {
 					childNum := int32(len(ccl[l][0].GetChildren()))
 					available = left * childNum
 					h.totalLeftCellNum[chain][l-1] = h.totalLeftCellNum[chain][l] * childNum
-					h.badFreeCellNum[chain][l-1] = 0
 				}
 			}
 		}
@@ -412,9 +416,7 @@ func (h *HivedAlgorithm) initPinnedCells(pinnedCells map[api.VirtualClusterName]
 	klog.Info("Init pinned cells")
 	for vcn, vcPinnedCells := range pinnedCells {
 		for pid, pinnedPhysical := range vcPinnedCells {
-			h.vcFreeCellNum[vcn][pinnedPhysical.GetChain()][pinnedPhysical.GetLevel()]--
-			h.allVCFreeCellNum[pinnedPhysical.GetChain()][pinnedPhysical.GetLevel()]--
-			h.removeCellFromFreeList(pinnedPhysical)
+			h.allocatePreassignedCell(pinnedPhysical, vcn)
 			virtualList := h.vcSchedulers[vcn].getPinnedCellList()[pid]
 			pinnedVirtual := virtualList[CellLevel(len(virtualList))][0].(*VirtualCell)
 			bindCell(pinnedPhysical, pinnedVirtual)
@@ -472,137 +474,156 @@ func (h *HivedAlgorithm) setHealthyNode(nodeName string) {
 }
 
 // setBadCell marks a physical cell (and also the virtual cell it is bound to) as bad,
-// and recursively for its parent, guaranteeing that a cell is bad if all of its children are bad.
+// and recursively for its parent, guaranteeing that a cell is bad if any of its children is bad.
 // setBadCell always starts from the lowest level, i.e., GPU-level cells.
 func (h *HivedAlgorithm) setBadCell(c *PhysicalCell) {
+	if c.GetAPIStatus().CellHealthiness == api.CellBad {
+		return
+	}
 	c.SetHealthiness(api.CellBad)
+	if c.GetParent() != nil {
+		h.setBadCell(c.GetParent().(*PhysicalCell))
+	}
 	if inFreeCellList(c) {
-		h.incrementBadFreeCell(c.GetChain(), c.GetLevel(), 1)
-	}
-	terminate := false
-	if parent := c.GetParent(); parent != nil {
-		for _, buddy := range parent.GetChildren() {
-			if buddy.(*PhysicalCell).GetAPIStatus().CellHealthiness != api.CellBad {
-				terminate = true
-				break
-			}
-		}
-		if !terminate {
-			h.setBadCell(parent.(*PhysicalCell))
-		}
-	} else {
-		terminate = true
-	}
-	if terminate && c.GetVirtualCell() != nil {
-		// we set virtual cell to bad only when we terminate the recursion
-		// (if we set it for every recursive call it will waste computation)
-		setVirtualCellHealthiness(c.GetVirtualCell(), api.CellBad)
+		h.addBadFreeCell(c)
+	} else if c.GetVirtualCell() == nil && !c.IsSplit() {
+		// if c's ancestor has been bound to a virtual cell, we should also bind c
+		// so that the VC scheduler can see this cell failure
+		vc := getUnboundVirtualCell(c.GetParent().(*PhysicalCell).GetVirtualCell().GetChildren())
+		c.SetVirtualCell(vc)
+		vc.SetPhysicalCell(c)
+		klog.Infof("Virtual cell %v is bound to physical cell %v", vc.GetAddress(), c.GetAddress())
 	}
 }
 
 // setHealthyCell marks a physical cell (and also the virtual cell it is bound to) as healthy,
-// and recursively for its parent, guaranteeing that a cell is healthy if any of its children is healthy.
+// and recursively for its parent, guaranteeing that a cell is healthy if all of its children are healthy.
 // setHealthy always starts from the lowest level, i.e., GPU-level cells.
 func (h *HivedAlgorithm) setHealthyCell(c *PhysicalCell) {
+	if c.GetAPIStatus().CellHealthiness == api.CellHealthy {
+		return
+	}
 	c.SetHealthiness(api.CellHealthy)
 	if inFreeCellList(c) {
-		h.decrementBadFreeCell(c.GetChain(), c.GetLevel(), 1)
-	}
-	if parent := c.GetParent(); parent != nil {
-		if pp := parent.(*PhysicalCell); pp.GetAPIStatus().CellHealthiness == api.CellBad {
-			h.setHealthyCell(pp)
-			return
+		h.removeBadFreeCell(c)
+	} else if vc := c.GetVirtualCell(); vc != nil {
+		if !c.IsPinned() && c.GetPriority() < minGuaranteedPriority {
+			// The cell is not in real use, the binding was created only because the cell was bad.
+			// We should unbind this cell as it is healthy now.
+			c.SetVirtualCell(nil)
+			vc.SetPhysicalCell(nil)
+			klog.Infof("Virtual cell %v is unbound from physical cell %v",
+				vc.GetAddress(), c.GetAddress())
+			if vc.GetParent() == nil {
+				// this is a preassigned cell, it must be a doomed bad cell
+				// (otherwise it must have been released before)
+				h.vcDoomedBadCells[vc.GetVirtualCluster()][c.GetChain()].remove(c, c.GetLevel())
+				h.doomedBadCellNum[c.GetChain()][c.GetLevel()]--
+				h.releasePreassignedCell(c, vc.GetVirtualCluster())
+			}
 		}
 	}
-	if vc := c.GetVirtualCell(); vc != nil {
-		// When a cell is set back to healthy, we cannot guarantee all of its children are bad.
-		// So we should reset the healthiness of the children of its virtual cell to respect the real cell binding,
-		//i.e., the children who are not bound to physical cells should be set to healthy.
-		// This is done only when we terminate the recursion (if we set it for every recursive call
-		// it will waste computation).
-		resetVirtualCellHealthiness(vc)
+	if c.GetParent() == nil {
+		return
+	} else {
+		for _, buddy := range c.GetParent().GetChildren() {
+			if buddy.(*PhysicalCell).GetAPIStatus().CellHealthiness != api.CellHealthy {
+				return
+			}
+		}
 	}
+	h.setHealthyCell(c.GetParent().(*PhysicalCell))
 }
 
-// incrementBadFreeCell increments the number of bad free cells, and checks if the healthy cells
-// in the physical cluster can satisfy the free cells in all the VCs.
-func (h *HivedAlgorithm) incrementBadFreeCell(c CellChain, l CellLevel, n int32) {
-	h.badFreeCellNum[c][l] += n
-	if h.allVCFreeCellNum[c][l] > h.totalLeftCellNum[c][l]-h.badFreeCellNum[c][l] {
-		klog.Warningf("Cell type %v (chain %v level %v) now has fewer healthy cells (healthy %v, bad %v) "+
+// addBadFreeCell adds a physical cell to the bad free cells, and checks if
+// the healthy cells in the physical cluster can satisfy the free cells in the VCs.
+func (h *HivedAlgorithm) addBadFreeCell(c *PhysicalCell) {
+	chain := c.GetChain()
+	level := c.GetLevel()
+	h.badFreeCells[chain][level] = append(h.badFreeCells[chain][level], c)
+	// compare the free cells in the VCs and the healthy free cells in the physical cluster
+	if h.allVCFreeCellNum[chain][level] >
+		h.totalLeftCellNum[chain][level]-int32(len(h.badFreeCells[chain][level])) {
+		// in the log we also count the cells marked as doomed bad in the free cells
+		// (they have been excluded from allVCFreeCellNum)
+		klog.Warningf("Cell type %v (chain %v level %v) now has fewer healthy cells (%v) "+
 			"than the total free cells of all the VCs (%v). Certain VCs' cells may be doomed to be bad.",
-			h.cellTypes[c][l], c, l, h.totalLeftCellNum[c][l]-h.badFreeCellNum[c][l],
-			h.badFreeCellNum[c][l], h.allVCFreeCellNum[c][l])
-		h.updateVCDoomedBadCells(c, l)
+			h.cellTypes[chain][level], chain, level,
+			h.totalLeftCellNum[chain][level]-int32(len(h.badFreeCells[chain][level])),
+			h.allVCFreeCellNum[chain][level]+h.doomedBadCellNum[chain][level])
+		h.tryBindDoomedBadCell(chain, level)
 	}
 }
 
-// decrementBadFreeCell decrements the number of bad free cells, and checks if the healthy cells
-// in the physical cluster can satisfy the free cells in all the VCs.
-func (h *HivedAlgorithm) decrementBadFreeCell(c CellChain, l CellLevel, n int32) {
-	h.badFreeCellNum[c][l] -= n
-	if h.allVCFreeCellNum[c][l] >= h.totalLeftCellNum[c][l]-h.badFreeCellNum[c][l] {
-		if h.allVCFreeCellNum[c][l] == h.totalLeftCellNum[c][l]-h.badFreeCellNum[c][l] {
-			klog.Infof("Cell type %v (chain %v level %v) now has sufficient healthy cells (healthy %v, bad %v) "+
-				"for allocating the total free cells of all the VCs (%v).",
-				h.cellTypes[c][l], c, l, h.totalLeftCellNum[c][l]-h.badFreeCellNum[c][l],
-				h.badFreeCellNum[c][l], h.allVCFreeCellNum[c][l])
-		}
-		h.updateVCDoomedBadCells(c, l)
+// removeBadFreeCell removes a physical cell from the bad free cells, and checks if
+// the healthy cells in the physical cluster can satisfy the free cells in the VCs.
+func (h *HivedAlgorithm) removeBadFreeCell(c *PhysicalCell) {
+	chain := c.GetChain()
+	level := c.GetLevel()
+	h.badFreeCells[chain].remove(c, level)
+	// when checking if all doomed bad cells can be released, we should add the number of
+	// the doomed bad cells to the L.H.S. of the comparison below (otherwise,
+	// h.allVCFreeCellNum[chain][level] <= R.H.S. always holds after we bind the doomed bad cells)
+	if h.allVCFreeCellNum[chain][level]+h.doomedBadCellNum[chain][level] <=
+		h.totalLeftCellNum[chain][level]-int32(len(h.badFreeCells[chain][level])) {
+		klog.Infof("Cell type %v (chain %v level %v) now has sufficient healthy cells (%v) for "+
+			"allocating the total free cells of all the VCs (%v). No VC cell will be doomed to be bad.",
+			h.cellTypes[chain][level], chain, level,
+			h.totalLeftCellNum[chain][level]-int32(len(h.badFreeCells[chain][level])),
+			h.allVCFreeCellNum[chain][level]+h.doomedBadCellNum[chain][level])
 	}
+	h.tryUnbindDoomedBadCell(chain, level)
 }
 
-// updateVCDoomedBadCells checks if the healthy cells in the physical cluster can satisfy the free cells
+// tryBindDoomedBadCell checks if the healthy cells in the physical cluster can satisfy the free cells
 // in each VC. If not, we will mark some of the virtual cells in the VC as bad (i.e., doomed to be bad).
-func (h *HivedAlgorithm) updateVCDoomedBadCells(c CellChain, l CellLevel) {
-	for vcName, vcFreeCellNum := range h.vcFreeCellNum {
-		if _, ok := vcFreeCellNum[c][l]; !ok {
+func (h *HivedAlgorithm) tryBindDoomedBadCell(c CellChain, l CellLevel) {
+	for vcName, vcFreeNum := range h.vcFreeCellNum {
+		if _, ok := vcFreeNum[c]; !ok {
 			continue
 		}
-		prevDoomedBadNum := h.vcDoomedBadCellNum[vcName][c][l]
-		h.vcDoomedBadCellNum[vcName][c][l] = vcFreeCellNum[c][l] - h.totalLeftCellNum[c][l] + h.badFreeCellNum[c][l]
-		if h.vcDoomedBadCellNum[vcName][c][l] <= 0 {
-			h.vcDoomedBadCellNum[vcName][c][l] = 0
-			if prevDoomedBadNum > 0 {
-				klog.Infof("Cell type %v (chain %v level %v) now has sufficient healthy cells (healthy %v, bad %v) "+
-					"for allocating the free cells of the VC %v (%v).",
-					h.cellTypes[c][l], c, l,
-					h.totalLeftCellNum[c][l]-h.badFreeCellNum[c][l], h.badFreeCellNum[c][l],
-					vcName, vcFreeCellNum[c][l])
-			}
-		} else {
-			klog.Warningf("Cell type %v (chain %v level %v) now has fewer healthy cells (healthy %v, bad %v) "+
-				"than the free cells of the VC %v (%v). Certain cells in the VC are doomed to be bad.",
+		for vcFreeNum[c][l] >
+			h.totalLeftCellNum[c][l]-int32(len(h.badFreeCells[c][l])) {
+			pc := h.badFreeCells[c][l][0].(*PhysicalCell)
+			vc := getUnboundVirtualCell(h.vcSchedulers[vcName].getNonPinnedFreeCellList()[c][l])
+			pc.SetVirtualCell(vc)
+			vc.SetPhysicalCell(pc)
+			klog.Infof("Virtual cell %v is bound to physical cell %v", vc.GetAddress(), pc.GetAddress())
+			klog.Warningf("Cell type %v (chain %v level %v) now has fewer healthy cells (%v) "+
+				"than the free cells of the VC %v (%v). "+
+				"Cell %v is doomed to be bad and bound to %v.",
 				h.cellTypes[c][l], c, l,
-				h.totalLeftCellNum[c][l]-h.badFreeCellNum[c][l], h.badFreeCellNum[c][l],
-				vcName, vcFreeCellNum[c][l])
+				h.totalLeftCellNum[c][l]-int32(len(h.badFreeCells[c][l])),
+				vcName, vcFreeNum[c][l]+int32(len(h.vcDoomedBadCells[vcName][c][l])),
+				vc.GetAddress(), pc.GetAddress())
+			h.vcDoomedBadCells[vcName][c][l] = append(h.vcDoomedBadCells[vcName][c][l], pc)
+			h.doomedBadCellNum[c][l]++
+			h.allocatePreassignedCell(pc, vcName)
 		}
-		if prevDoomedBadNum > h.vcDoomedBadCellNum[vcName][c][l] {
-			numToReduce := prevDoomedBadNum - h.vcDoomedBadCellNum[vcName][c][l]
-			n := int32(0)
-			for _, vc := range h.vcSchedulers[vcName].getNonPinnedFreeCellList()[c][l] {
-				virtualCell := vc.(*VirtualCell)
-				if virtualCell.GetPhysicalCell() == nil && virtualCell.GetAPIStatus().CellHealthiness == api.CellBad {
-					setVirtualCellHealthiness(virtualCell, api.CellHealthy)
-					n++
-					if n >= numToReduce {
-						break
-					}
-				}
-			}
-		} else if prevDoomedBadNum < h.vcDoomedBadCellNum[vcName][c][l] {
-			numToIncrease := h.vcDoomedBadCellNum[vcName][c][l] - prevDoomedBadNum
-			n := int32(0)
-			for _, vc := range h.vcSchedulers[vcName].getNonPinnedFreeCellList()[c][l] {
-				virtualCell := vc.(*VirtualCell)
-				if virtualCell.GetPhysicalCell() == nil && virtualCell.GetAPIStatus().CellHealthiness != api.CellBad {
-					setVirtualCellHealthiness(virtualCell, api.CellBad)
-					n++
-					if n >= numToIncrease {
-						break
-					}
-				}
-			}
+	}
+}
+
+// tryUnbindDoomedBadCell checks if some VCs' doomed bad cells can now be satisfied by healthy cells.
+// If so, we will release these cells.
+func (h *HivedAlgorithm) tryUnbindDoomedBadCell(c CellChain, l CellLevel) {
+	for vcName, vcFreeNum := range h.vcFreeCellNum {
+		if _, ok := vcFreeNum[c]; !ok {
+			continue
+		}
+		for len(h.vcDoomedBadCells[vcName][c][l]) != 0 &&
+			vcFreeNum[c][l] < h.totalLeftCellNum[c][l]-int32(len(h.badFreeCells[c][l])) {
+			pc := h.vcDoomedBadCells[vcName][c][l][0].(*PhysicalCell)
+			klog.Infof("Cell type %v (chain %v level %v) now has more healthy free cells (%v) "+
+				"than the free cells of the VC %v (%v excluding the doomed bad cells). "+
+				"Cell %v is no longer doomed to be bad and is unbound from %v.",
+				h.cellTypes[c][l], c, l,
+				h.totalLeftCellNum[c][l]-int32(len(h.badFreeCells[c][l])),
+				vcName, vcFreeNum[c][l], pc.GetVirtualCell().GetAddress(), pc.GetAddress())
+			pc.GetVirtualCell().SetPhysicalCell(nil)
+			pc.SetVirtualCell(nil)
+			h.vcDoomedBadCells[vcName][c].remove(pc, l)
+			h.doomedBadCellNum[c][l]--
+			h.releasePreassignedCell(pc, vcName)
 		}
 	}
 }
@@ -954,7 +975,8 @@ func (h *HivedAlgorithm) createAllocatedAffinityGroup(s *api.PodSchedulingSpec, 
 						newGroup.virtualGpuPlacement = nil
 					} else if vGpu != nil {
 						newGroup.virtualGpuPlacement[gpuNumber][podIndex][gpuIndex] = vGpu
-						if vGpu.GetPhysicalCell() != nil {
+						if vGpu.GetPhysicalCell() != nil &&
+							vGpu.GetPhysicalCell().GetUsingGroup() != nil {
 							groupToPreempt := vGpu.GetPhysicalCell().GetUsingGroup()
 							h.lazyPreemptAffinityGroup(groupToPreempt, newGroup.name)
 						}
@@ -966,12 +988,12 @@ func (h *HivedAlgorithm) createAllocatedAffinityGroup(s *api.PodSchedulingSpec, 
 					// Such case won't happen by design as buddy alloc guarantees safety; but this could
 					// happen due to inconsistency of VC assignments for reasons like reconfiguration.
 					// In this case, we will lazy preempt this affinity group.
-					success, message := h.allocateGpu(pGpu, vGpu, CellPriority(s.Priority), newGroup.vc)
+					safetyOk, reason := h.allocateGpu(pGpu, vGpu, CellPriority(s.Priority), newGroup.vc)
 					pGpu.AddUsingGroup(newGroup)
 					setCellState(pGpu, cellUsed)
-					if !success {
+					if !safetyOk {
 						shouldLazyPreempt = true
-						klog.Warningf("[%v]: %v", internal.Key(pod), message)
+						klog.Warningf("[%v]: %v", internal.Key(pod), reason)
 					}
 				}
 			}
@@ -1200,37 +1222,28 @@ func (h *HivedAlgorithm) findAllocatedGpu(
 	}
 }
 
-// allocateGpu creates the cell bindings, removes the physical cell from the free list
-// (if necessary), and sets the priority.
+// allocateGpu creates the cell bindings, allocates the preassigned cell (if necessary),
+// and sets the priority.
 func (h *HivedAlgorithm) allocateGpu(
 	pGpu *PhysicalCell,
 	vGpu *VirtualCell,
 	p CellPriority,
-	vcn api.VirtualClusterName) (success bool, message string) {
+	vcn api.VirtualClusterName) (safetyOk bool, reason string) {
 
-	success = true
+	safetyOk = true
 	if vGpu != nil {
 		setCellPriority(vGpu, p)
 		updateUsedGpuNumAtPriority(vGpu, p, true)
 		setCellPriority(pGpu, p)
 		updateUsedGpuNumAtPriority(pGpu, p, true)
 		pac := vGpu.GetPreAssignedCell()
-		c := pac.GetChain()
-		l := pac.GetLevel()
 		preassignedNewlyBound := pac.GetPhysicalCell() == nil
-		if preassignedNewlyBound && pac.GetAPIStatus().CellHealthiness == api.CellBad {
-			// This means the preassigned cell was previously counted as a doomed bad cell.
-			// We will first set it back to healthy (its real healthiness will be decided by the physical cell),
-			// and later pick another virtual cell and mark it as bad (in h.removeCellFromFreeList).
-			setVirtualCellHealthiness(pac, api.CellHealthy)
-			h.vcDoomedBadCellNum[vcn][c][l]--
+		if pGpu.GetVirtualCell() == nil {
+			// the binding could have been created before (when the cell is bad)
+			bindCell(pGpu, vGpu)
 		}
-		bindCell(pGpu, vGpu)
 		if preassignedNewlyBound {
-			h.vcFreeCellNum[vcn][c][l]--
-			h.allVCFreeCellNum[c][l]--
-			// remove the allocated cell from the free list (possibly splitting cells)
-			success, message = h.removeCellFromFreeList(vGpu.GetPreAssignedCell().GetPhysicalCell())
+			safetyOk, reason = h.allocatePreassignedCell(pac.GetPhysicalCell(), vcn)
 		}
 	} else {
 		setCellPriority(pGpu, opportunisticPriority)
@@ -1239,23 +1252,29 @@ func (h *HivedAlgorithm) allocateGpu(
 		h.apiClusterStatus.VirtualClusters[vcn] = append(
 			h.apiClusterStatus.VirtualClusters[vcn], generateOpporVirtualCell(pGpu.GetAPIStatus()))
 	}
-	return success, message
+	return safetyOk, reason
 }
 
-// releaseGpu destroys the cell bindings, adds the physical cell back to the free list
-// (if necessary), and resets the priority.
+// releaseGpu destroys the cell bindings, release the preassigned cell (if necessary),
+// and resets the priority.
 func (h *HivedAlgorithm) releaseGpu(pGpu *PhysicalCell, vcn api.VirtualClusterName) {
 	if vGpu := pGpu.GetVirtualCell(); vGpu != nil {
-		preassignedPhysical := vGpu.GetPreAssignedCell().GetPhysicalCell()
-		unbindCell(pGpu)
-		if vGpu.GetPreAssignedCell().GetPhysicalCell() == nil {
-			h.vcFreeCellNum[vcn][vGpu.GetChain()][vGpu.GetPreAssignedCell().GetLevel()]++
-			h.allVCFreeCellNum[vGpu.GetChain()][vGpu.GetPreAssignedCell().GetLevel()]++
-			// add the released cell back to the free list (possibly merging cells)
-			h.addCellToFreeList(preassignedPhysical)
-		}
 		updateUsedGpuNumAtPriority(vGpu, vGpu.GetPriority(), false)
 		setCellPriority(vGpu, freePriority)
+		preassignedPhysical := vGpu.GetPreAssignedCell().GetPhysicalCell()
+		if pGpu.GetAPIStatus().CellHealthiness == api.CellHealthy {
+			// we won't unbind the cell if it is bad
+			unbindCell(pGpu)
+		}
+		// To check if we should release the preassigned cell, we cannot simply check if the
+		// virtual cell is already unbound. It's possible that the cell is bad, then the binding
+		// won't be destroyed automatically. If the condition below is true, it means that
+		// the preassigned cell is not in real use and we can hence release it
+		if !preassignedPhysical.IsPinned() && vGpu.GetPreAssignedCell().GetPriority() < minGuaranteedPriority &&
+			!h.vcDoomedBadCells[vcn][preassignedPhysical.GetChain()].contains(
+				preassignedPhysical, preassignedPhysical.GetLevel()) {
+			h.releasePreassignedCell(preassignedPhysical, vcn)
+		}
 	} else {
 		pGpu.GetAPIStatus().VC = ""
 		h.apiClusterStatus.VirtualClusters[vcn] = deleteOpporVirtualCell(
@@ -1265,30 +1284,127 @@ func (h *HivedAlgorithm) releaseGpu(pGpu *PhysicalCell, vcn api.VirtualClusterNa
 	setCellPriority(pGpu, freePriority)
 }
 
-// removeCellFromFreeList removes a cell from the free cell list and splits its parent recursively if needed.
-func (h *HivedAlgorithm) removeCellFromFreeList(c *PhysicalCell) (success bool, message string) {
+// allocatePreassignedCell allocates a physical cell to a preassigned virtual cell, removes the physical cell
+// from the free cell list, and track the cell usages for safety and doomed bad cell check.
+func (h *HivedAlgorithm) allocatePreassignedCell(
+	c *PhysicalCell,
+	vcn api.VirtualClusterName) (safetyOk bool, reason string) {
+
+	safetyOk = true
 	chain := c.GetChain()
-	success = true
-	// reduce the left cell numbers for the lower levels and do safety check
-	numToRemove := int32(len(h.fullCellList[chain][c.GetLevel()][0].GetChildren()))
-	isBad := c.GetAPIStatus().CellHealthiness == api.CellBad
-	for l := c.GetLevel() - 1; l >= lowestLevel; l-- {
-		h.totalLeftCellNum[chain][l] -= numToRemove
+	level := c.GetLevel()
+	h.vcFreeCellNum[vcn][chain][level]--
+	h.allVCFreeCellNum[chain][level]--
+	h.totalLeftCellNum[chain][level]--
+	splitLevelUpTo := h.removeCellFromFreeList(c)
+
+	parent := c.GetParent()
+	for l := level + 1; l <= splitLevelUpTo; l++ {
+		h.totalLeftCellNum[chain][l]--
 		if h.totalLeftCellNum[chain][l] < h.allVCFreeCellNum[chain][l] {
-			success = false
-			message = fmt.Sprintf("Adding pod would lead to broken safety: cell type %v, %v left, %v free cells in all VCs",
+			safetyOk = false
+			reason = fmt.Sprintf("Adding pod would lead to broken safety: "+
+				"cell type %v, %v left, %v free cells in all VCs",
 				h.cellTypes[chain][l], h.totalLeftCellNum[chain][l], h.allVCFreeCellNum[chain][l])
 		}
-		if isBad {
-			// if the used cell is bad, we should exclude it from the bad free cells (the same below)
-			h.decrementBadFreeCell(chain, l, numToRemove)
+		if parent.(*PhysicalCell).GetAPIStatus().CellHealthiness == api.CellBad {
+			h.badFreeCells[chain].remove(parent, l)
 		} else {
-			// if the used cell is healthy, we should check if some VCs' cells are doomed bad
-			// due to the reduced healthy free cells (the same below)
-			h.updateVCDoomedBadCells(chain, l)
+			h.tryBindDoomedBadCell(chain, l)
 		}
-		numToRemove *= int32(len(h.fullCellList[chain][l][0].GetChildren()))
+		parent = parent.GetParent()
 	}
+	if c.GetAPIStatus().CellHealthiness == api.CellBad {
+		h.allocateBadCell(c)
+	} else {
+		h.tryBindDoomedBadCell(chain, level)
+	}
+	numToReduce := int32(len(c.GetChildren()))
+	for l := level - 1; l >= lowestLevel; l-- {
+		h.totalLeftCellNum[chain][l] -= numToReduce
+		if h.totalLeftCellNum[chain][l] < h.allVCFreeCellNum[chain][l] {
+			safetyOk = false
+			reason = fmt.Sprintf("Adding pod would lead to broken safety: "+
+				"cell type %v, %v left, %v free cells in all VCs",
+				h.cellTypes[chain][l], h.totalLeftCellNum[chain][l], h.allVCFreeCellNum[chain][l])
+		}
+		h.tryBindDoomedBadCell(chain, l)
+		numToReduce *= int32(len(h.fullCellList[chain][l][0].GetChildren()))
+	}
+	return safetyOk, reason
+}
+
+// allocateBadCell allocates a bad free physical cell, and then binds each of its bad children
+// to a virtual cell recursively (so that the VC scheduler can see the bad cell).
+func (h *HivedAlgorithm) allocateBadCell(c *PhysicalCell) {
+	if h.badFreeCells[c.GetChain()].contains(c, c.GetLevel()) {
+		h.badFreeCells[c.GetChain()].remove(c, c.GetLevel())
+	}
+	if c.GetVirtualCell() == nil {
+		// parent of c must have been bound to a virtual cell
+		vc := getUnboundVirtualCell(c.GetParent().(*PhysicalCell).GetVirtualCell().GetChildren())
+		c.SetVirtualCell(vc)
+		vc.SetPhysicalCell(c)
+		klog.Infof("Virtual cell %v is bound to physical cell %v", vc.GetAddress(), c.GetAddress())
+	}
+	for _, child := range c.GetChildren() {
+		if pc := child.(*PhysicalCell); pc.GetAPIStatus().CellHealthiness == api.CellBad {
+			h.allocateBadCell(pc)
+		}
+	}
+}
+
+// releasePreassignedCell releases a physical cell allocated to a preassigned virtual cell, adds the physical cell
+// back to the free cell list, and track the cell usages for safety and doomed bad cell check.
+func (h *HivedAlgorithm) releasePreassignedCell(c *PhysicalCell, vcn api.VirtualClusterName) {
+	chain := c.GetChain()
+	level := c.GetLevel()
+	h.vcFreeCellNum[vcn][chain][level]++
+	h.allVCFreeCellNum[chain][level]++
+	h.totalLeftCellNum[chain][level]++
+	mergeLevelUpTo := h.addCellToFreeList(c)
+
+	parent := c.GetParent()
+	for l := level + 1; l <= mergeLevelUpTo; l++ {
+		h.totalLeftCellNum[chain][l]++
+		if parent.(*PhysicalCell).GetAPIStatus().CellHealthiness == api.CellBad {
+			h.badFreeCells[chain][l] = append(h.badFreeCells[chain][l], parent)
+		} else {
+			h.tryUnbindDoomedBadCell(chain, l)
+		}
+		parent = parent.GetParent()
+	}
+	if c.GetAPIStatus().CellHealthiness == api.CellBad {
+		h.releaseBadCell(c)
+	} else {
+		h.tryUnbindDoomedBadCell(chain, level)
+	}
+	numToAdd := int32(len(c.GetChildren()))
+	for l := level - 1; l >= lowestLevel; l-- {
+		h.totalLeftCellNum[chain][l] += numToAdd
+		h.tryUnbindDoomedBadCell(chain, l)
+		numToAdd *= int32(len(h.fullCellList[chain][l][0].GetChildren()))
+	}
+}
+
+// releaseBadCell releases a bad free physical cell, and then unbinds its bad children recursively.
+func (h *HivedAlgorithm) releaseBadCell(c *PhysicalCell) {
+	h.badFreeCells[c.GetChain()][c.GetLevel()] = append(h.badFreeCells[c.GetChain()][c.GetLevel()], c)
+	if vc := c.GetVirtualCell(); vc != nil {
+		c.SetVirtualCell(nil)
+		vc.SetPhysicalCell(nil)
+		klog.Infof("Virtual cell %v is unbound from physical cell %v", vc.GetAddress(), c.GetAddress())
+	}
+	for _, child := range c.GetChildren() {
+		if pc := child.(*PhysicalCell); pc.GetAPIStatus().CellHealthiness == api.CellBad {
+			h.releaseBadCell(pc)
+		}
+	}
+}
+
+// removeCellFromFreeList removes a cell from the free cell list and splits its parent recursively if needed.
+func (h *HivedAlgorithm) removeCellFromFreeList(c *PhysicalCell) (splitLevelUpTo CellLevel) {
+	chain := c.GetChain()
 	for terminate := false; ; {
 		l := c.GetLevel()
 		parent := c.GetParent()
@@ -1305,51 +1421,25 @@ func (h *HivedAlgorithm) removeCellFromFreeList(c *PhysicalCell) (success bool, 
 		}
 		h.freeCellList[chain].remove(c, l)
 		klog.Infof("Cell %v (type %v) removed from free cell list", c.GetAddress(), h.cellTypes[chain][l])
-		h.totalLeftCellNum[chain][l]--
-		if h.totalLeftCellNum[chain][l] < h.allVCFreeCellNum[chain][l] {
-			success = false
-			message = fmt.Sprintf("Adding pod would lead to broken safety: cell type %v, %v left, %v free cells in all VCs",
-				h.cellTypes[chain][l], h.totalLeftCellNum[chain][l], h.allVCFreeCellNum[chain][l])
-		}
-		if c.GetAPIStatus().CellHealthiness == api.CellBad {
-			h.decrementBadFreeCell(chain, l, 1)
-		} else {
-			h.updateVCDoomedBadCells(chain, l)
-		}
 		if terminate {
-			break
+			return l
 		} else {
 			c = parent.(*PhysicalCell)
 		}
 	}
-	return success, message
 }
 
 // addCellToFreeList adds a cell to the free cell list and merges its buddies recursively if needed.
-func (h *HivedAlgorithm) addCellToFreeList(c *PhysicalCell) {
+func (h *HivedAlgorithm) addCellToFreeList(c *PhysicalCell) (mergeLevelUpTo CellLevel) {
 	chain := c.GetChain()
-	// increase the left cell numbers for the lower levels
-	numToAdd := int32(len(h.fullCellList[chain][c.GetLevel()][0].GetChildren()))
-	isBad := c.GetAPIStatus().CellHealthiness == api.CellBad
-	for l := c.GetLevel() - 1; l >= lowestLevel; l-- {
-		h.totalLeftCellNum[chain][l] += numToAdd
-		if isBad {
-			// if the freed cell is bad, we should add it to the bad free cells (the same below)
-			h.incrementBadFreeCell(chain, l, numToAdd)
-		} else {
-			// if the freed cell is healthy, we should check if some VCs's doomed bad cells should be reduced
-			// due to the increased healthy free cells (the same below)
-			h.updateVCDoomedBadCells(chain, l)
-		}
-		numToAdd *= int32(len(h.fullCellList[chain][l][0].GetChildren()))
-	}
 	for terminate := false; ; {
 		l := c.GetLevel()
 		parent := c.GetParent()
 		if parent != nil {
 			allBuddyFree := true
 			for _, buddy := range parent.GetChildren() {
-				if buddy.(*PhysicalCell).GetVirtualCell() != nil {
+				//if buddy.(*PhysicalCell).GetVirtualCell() != nil {
+				if !CellEqual(buddy, c) && !h.freeCellList[chain].contains(buddy, l) {
 					allBuddyFree = false
 					break
 				}
@@ -1369,15 +1459,9 @@ func (h *HivedAlgorithm) addCellToFreeList(c *PhysicalCell) {
 		} else {
 			terminate = true
 		}
-		h.totalLeftCellNum[chain][l]++
-		if c.GetAPIStatus().CellHealthiness == api.CellBad {
-			h.incrementBadFreeCell(chain, l, 1)
-		} else {
-			h.updateVCDoomedBadCells(chain, l)
-		}
 		if terminate {
 			h.freeCellList[chain][l] = append(h.freeCellList[chain][l], c)
-			break
+			return l
 		} else {
 			c = parent.(*PhysicalCell)
 		}
