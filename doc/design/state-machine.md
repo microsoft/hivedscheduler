@@ -102,13 +102,13 @@ __Reserved__: the cell is allocated to an AG, but there is no AG running on this
 
 __Reserving__: the cell is allocated to an AG, but another AG is still running on the cell (e.g., the first AG is Preempting the running AG).
 
-Note that the reservation of cells (Reserved and Reserving states) is not necessarily designed for reserving resources for the Preempting AGs. In the future we may introduce other reservation features leveraging this mechanism.
+Note that the reservation of cells (Reserved and Reserving states) is not necessarily designed for preemptions (i.e., reserving resources for the Preempting AGs). In the future it is possible that we extend this mechanism to support other reservation mechanisms.
 
 Common cell life cycles:
 
 Free -> Used -> Free (no preemption involved)
 
-Free -> Used -> Reserving -> Reserved -> Used -> Free (preemption involved )
+Free -> Used -> Reserving -> Reserved -> Used -> Free (preemption involved)
 
 ### Events
 
