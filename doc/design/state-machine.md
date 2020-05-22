@@ -1,3 +1,5 @@
+# HiveD State Machines
+
 This document presents the state machines of HiveD, and explains the life cycles of jobs and resources in HiveD.
 We will describe the state machines of our scheduling unit, Affinity Group, and that of our resource unit, Cell, respectively.
 
