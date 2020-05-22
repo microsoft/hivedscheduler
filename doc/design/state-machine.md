@@ -42,19 +42,19 @@ Note that only Pending, Allocated, and Deleted are persistent, thus they are the
 
 __e<sub>0</sub>__:
 
-Condition: all cells allocated to the AG are in Free or Pre-allocated state (we assume the cell allocation algorithm has ensured that this AG’s priority is higher than that every Pre-allocated cell, i.e., that of the Preempting AG).
+Condition: all cells allocated to the AG are in Free or Reserved state (we assume the cell allocation algorithm has ensured that this AG’s priority is higher than that every Reserved cell, i.e., that of the Preempting AG).
 
-Operation: set the cells to Used; set the Preempting AG on the Pre-allocated cells to Pending.
+Operation: set the cells to Used; set the Preempting AG on the Reserved cells to Pending.
 
 __e<sub>1</sub>__:
 
-Condition: there is at least one cell allocated to the AG in Used or Preempting state (we assume the cell allocation algorithm has ensured that this AG’s priority is higher than that of every Used and Preempting cell).
+Condition: there is at least one cell allocated to the AG in Used or Reserving state (we assume the cell allocation algorithm has ensured that this AG’s priority is higher than that of every Used and Reserving cell).
 
-Operation: set all the Used cells to Preempting state (e<sub>2</sub> in cell state machine); overwrite the Pre-allocated (e<sub>6</sub> in cell state machine) and Preempting cells (e<sub>3</sub> in cell state machine); set the Free cell to Pre-allocated (e<sub>5</sub> in cell state machine).
+Operation: set all the Used cells to Reserving state (e<sub>2</sub> in cell state machine); overwrite the Reserved (e<sub>6</sub> in cell state machine) and Reserving cells (e<sub>3</sub> in cell state machine); set the Free cell to Reserved (e<sub>5</sub> in cell state machine).
 
 __e<sub>2</sub>__:
 
-Condition: all the cells allocated to the AG are Pre-allocated.
+Condition: all the cells allocated to the AG are Reserved.
 
 Operation: set all the cells to Used (e<sub>8</sub> in cell state machine).
 
@@ -72,13 +72,13 @@ Operation: none.
 
 __e<sub>5</sub>__:
 
-Condition: a Preempting or Pre-allocated cell in this AG is being overwritten (e<sub>3</sub> or e<sub>6</sub> in cell state machine).
+Condition: a Reserving or Reserved cell in this AG is being overwritten (e<sub>3</sub> or e<sub>6</sub> in cell state machine).
 
-Operation: set all the other Preempting cells to Used (e<sub>4</sub> in cell state machine), Pre-allocated cells to Free (e<sub>7</sub> in cell state machine).
+Operation: set all the other Reserving cells to Used (e<sub>4</sub> in cell state machine), Reserved cells to Free (e<sub>7</sub> in cell state machine).
 
 __e<sub>6</sub>__:
 
-Condition: a cell from Used to Preempting (e<sub>2</sub> in cell state machine)
+Condition: a cell from Used to Reserving (e<sub>2</sub> in cell state machine)
 
 Operation: none.
 
@@ -86,7 +86,7 @@ __e<sub>7</sub>__:
 
 Condition: AG deleted.
 
-Operation: set the Reserved cells to Free (e<sub>7</sub> in cell state machine), set the Preempting cells to Used (e<sub>4</sub> in cell state machine).
+Operation: set the Reserved cells to Free (e<sub>7</sub> in cell state machine), set the Reserving cells to Used (e<sub>4</sub> in cell state machine).
 
 ## Cell State Machine
 
