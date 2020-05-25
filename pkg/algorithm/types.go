@@ -253,3 +253,84 @@ func (p groupVirtualPlacement) preassignedCellToLeafCells() map[api.CellAddress]
 	}
 	return preassignedCellToLeafCells
 }
+
+func (p groupVirtualPlacement) toPhysicalPlacement(
+	bindings map[api.CellAddress]*PhysicalCell,
+	gpuNums []int32) groupPhysicalPlacement {
+
+	physicalPlacement := groupPhysicalPlacement{}
+	for _, podGpuNum := range gpuNums {
+		podPlacements := p[podGpuNum]
+		physicalPlacement[podGpuNum] = make([]CellList, len(podPlacements))
+		for i, pod := range podPlacements {
+			physicalPlacement[podGpuNum][i] = make(CellList, len(pod))
+			for j, gpu := range pod {
+				pGpu := bindings[gpu.GetAddress()]
+				physicalPlacement[podGpuNum][i][j] = pGpu
+			}
+		}
+	}
+	return physicalPlacement
+}
+
+func (p groupVirtualPlacement) toBindingPaths(
+	gpuNums []int32,
+	bindings map[api.CellAddress]*PhysicalCell) (
+	preassignedCells []*cellBindingPathNode,
+	nonPreassignedCells [][]*cellBindingPathNode) {
+
+	allBindingPathNodes := map[api.CellAddress]*cellBindingPathNode{}
+	for _, podGpuNum := range gpuNums {
+		podPlacements := p[podGpuNum]
+		for _, pod := range podPlacements {
+			for _, gpu := range pod {
+				if pGpu := gpu.(*VirtualCell).GetPhysicalCell(); pGpu != nil {
+					bindings[gpu.GetAddress()] = pGpu
+					continue
+				}
+				var bindingPath []*VirtualCell
+				for c := gpu; c != nil; c = c.GetParent() {
+					vc := c.(*VirtualCell)
+					if vc.GetPhysicalCell() != nil || allBindingPathNodes[vc.GetAddress()] != nil {
+						break
+					}
+					bindingPath = append(bindingPath, vc)
+				}
+				pathRoot := bindingPath[len(bindingPath)-1]
+				n := &cellBindingPathNode{cell: pathRoot}
+				allBindingPathNodes[pathRoot.GetAddress()] = n
+				if parent := pathRoot.GetParent(); parent == nil {
+					preassignedCells = append(preassignedCells, n)
+				} else if parent.(*VirtualCell).GetPhysicalCell() != nil {
+					buddyExist := false
+					for i := range nonPreassignedCells {
+						if CellEqual(parent, nonPreassignedCells[i][0].cell.GetParent()) {
+							buddyExist = true
+							nonPreassignedCells[i] = append(nonPreassignedCells[i], n)
+							break
+						}
+					}
+					if !buddyExist {
+						nonPreassignedCells = append(nonPreassignedCells, []*cellBindingPathNode{n})
+					}
+				} else {
+					parentNode := allBindingPathNodes[pathRoot.GetParent().GetAddress()]
+					parentNode.childrenToBind = append(parentNode.childrenToBind, n)
+				}
+				for i := len(bindingPath) - 2; i >= 0; i-- {
+					c := bindingPath[i]
+					n := &cellBindingPathNode{cell: c}
+					parentNode := allBindingPathNodes[c.GetParent().GetAddress()]
+					parentNode.childrenToBind = append(parentNode.childrenToBind, n)
+					allBindingPathNodes[c.GetAddress()] = n
+				}
+			}
+		}
+	}
+	return preassignedCells, nonPreassignedCells
+}
+
+type cellBindingPathNode struct {
+	cell           *VirtualCell
+	childrenToBind []*cellBindingPathNode
+}

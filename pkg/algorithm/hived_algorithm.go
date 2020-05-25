@@ -903,38 +903,40 @@ func (h *HivedAlgorithm) scheduleGuaranteedAffinityGroup(
 		return nil, nil
 	}
 	// map the vc placement to the physical cluster
-	return h.mapVirtualPlacementToPhysical(virtualPlacement, sr, suggestedNodes), virtualPlacement
-}
-
-// mapVirtualPlacementToPhysical maps a VC placement to the physical cluster,
-// by mapping each virtual GPU cell to a physical GPU cell.
-func (h *HivedAlgorithm) mapVirtualPlacementToPhysical(
-	virtualPlacement groupVirtualPlacement,
-	sr schedulingRequest,
-	suggestedNodes common.Set) groupPhysicalPlacement {
-
+	bindings := map[api.CellAddress]*PhysicalCell{}
 	gpuNums := common.Int32MapKeys(sr.affinityGroupPodNums)
 	common.SortInt32(gpuNums)
-	physicalPlacement := groupPhysicalPlacement{}
+	h.tryLazyPreempt(virtualPlacement, gpuNums, sr.affinityGroupName)
+	preassignedCells, nonPreassignedCells := virtualPlacement.toBindingPaths(gpuNums, bindings)
+	if ok := mapVirtualPlacementToPhysical(
+		preassignedCells,
+		nonPreassignedCells,
+		h.freeCellList[sr.chain].shallowCopy(),
+		suggestedNodes,
+		bindings); ok {
+		return virtualPlacement.toPhysicalPlacement(bindings, gpuNums), virtualPlacement
+	}
+	return nil, nil
+}
+
+// tryLazyPreempt tries to lazy preempt the affinity groups found on a placement.
+func (h *HivedAlgorithm) tryLazyPreempt(
+	p groupVirtualPlacement,
+	gpuNums []int32,
+	groupName string) {
+
 	for _, podGpuNum := range gpuNums {
-		podPlacements := virtualPlacement[podGpuNum]
-		physicalPlacement[podGpuNum] = make([]CellList, len(podPlacements))
-		for i, podGpus := range podPlacements {
-			physicalPlacement[podGpuNum][i] = make(CellList, len(podGpus))
-			for j, gpu := range podGpus {
-				vGpu := gpu.(*VirtualCell)
-				if pGpu := vGpu.GetPhysicalCell(); pGpu != nil && pGpu.GetState() == cellUsed {
-					if groupToPreempt := vGpu.GetPhysicalCell().GetUsingGroup(); groupToPreempt.lazyPreemptionEnable {
-						h.lazyPreemptAffinityGroup(groupToPreempt, sr.affinityGroupName)
+		podPlacements := p[podGpuNum]
+		for _, pod := range podPlacements {
+			for _, gpu := range pod {
+				if pGpu := gpu.(*VirtualCell).GetPhysicalCell(); pGpu != nil {
+					if pGpu.GetState() == cellUsed && pGpu.GetUsingGroup().lazyPreemptionEnable {
+						h.lazyPreemptAffinityGroup(pGpu.GetUsingGroup(), groupName)
 					}
 				}
-				physicalPlacement[podGpuNum][i][j] = mapVirtualCellToPhysical(vGpu, h.freeCellList[sr.chain], suggestedNodes)
 			}
 		}
 	}
-	// the cell bindings are temporary, and should be cleared after the scheduling is done
-	clearPreBindings(virtualPlacement)
-	return physicalPlacement
 }
 
 // scheduleOpportunisticAffinityGroup calls the opportunistic pod scheduler to schedule an affinity group.
@@ -1438,7 +1440,6 @@ func (h *HivedAlgorithm) addCellToFreeList(c *PhysicalCell) (mergeLevelUpTo Cell
 		if parent != nil {
 			allBuddyFree := true
 			for _, buddy := range parent.GetChildren() {
-				//if buddy.(*PhysicalCell).GetVirtualCell() != nil {
 				if !CellEqual(buddy, c) && !h.freeCellList[chain].contains(buddy, l) {
 					allBuddyFree = false
 					break
