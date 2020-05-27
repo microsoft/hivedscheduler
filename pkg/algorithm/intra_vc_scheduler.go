@@ -38,7 +38,7 @@ type intraVCScheduler interface {
 	getPinnedCellList() map[api.PinnedCellId]ChainCellList
 
 	// Schedule an affinity group inside a VC. We use topologyAwareScheduler by default.
-	schedule(sr schedulingRequest, suggestedNodes common.Set) groupVirtualPlacement
+	schedule(sr schedulingRequest, suggestedNodes common.Set) (groupVirtualPlacement, string)
 }
 
 type defaultIntraVCScheduler struct {
@@ -90,7 +90,10 @@ func (s *defaultIntraVCScheduler) getPinnedCellList() map[api.PinnedCellId]Chain
 
 func (s *defaultIntraVCScheduler) schedule(
 	sr schedulingRequest,
-	suggestedNodes common.Set) (placement groupVirtualPlacement) {
+	suggestedNodes common.Set) (
+	placement groupVirtualPlacement,
+	failedReason string) {
+
 	scheduler := s.nonPinnedCellSchedulers[sr.chain]
 	str := fmt.Sprintf("chain %v", sr.chain)
 	if sr.pinnedCellId != "" {
@@ -100,13 +103,11 @@ func (s *defaultIntraVCScheduler) schedule(
 	klog.Infof("Processing scheduling request in VC %v: %v, GPU numbers %v, priority %v",
 		sr.vc, str, common.ToJson(sr.affinityGroupPodNums), sr.priority)
 	if scheduler != nil {
-		placement = scheduler.Schedule(sr.affinityGroupPodNums, sr.priority, suggestedNodes)
+		placement, failedReason = scheduler.Schedule(sr.affinityGroupPodNums, sr.priority, suggestedNodes)
 	}
 	if placement == nil {
-		klog.Infof("Cannot find placement in VC %v", sr.vc)
-	} else {
-		klog.Infof("Found placement in VC %v: %v",
-			sr.vc, placement)
+		return nil, fmt.Sprintf("%v when scheduling in VC %v", failedReason, sr.vc)
 	}
-	return placement
+	klog.Infof("Found placement in VC %v: %v", sr.vc, placement)
+	return placement, ""
 }

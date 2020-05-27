@@ -48,6 +48,10 @@ func generatePodScheduleResult(
 	pod *core.Pod) internal.PodScheduleResult {
 
 	klog.V(4).Infof("[%v]: Got K8s suggested nodes: %v", internal.Key(pod), suggestedNodes)
+	if waitReason != "" {
+		klog.Infof("[%v]: need to wait because %v", internal.Key(pod), waitReason)
+		return internal.PodScheduleResult{PodWaitInfo: &internal.PodWaitInfo{Reason: waitReason}}
+	}
 	klog.Infof("[%v]: Physical placement: %v", internal.Key(pod), groupPhysicalPlacement)
 	if groupVirtualPlacement != nil {
 		klog.Infof("[%v]: Virtual placement: %v", internal.Key(pod), groupVirtualPlacement)
@@ -56,10 +60,6 @@ func generatePodScheduleResult(
 		return internal.PodScheduleResult{
 			PodPreemptInfo: generatePodPreemptInfo(preemptionVictims, pod),
 		}
-	}
-	if waitReason != "" {
-		klog.Infof("[%v]: need to wait because %v", internal.Key(pod), waitReason)
-		return internal.PodScheduleResult{PodWaitInfo: &internal.PodWaitInfo{Reason: waitReason}}
 	}
 	// we find the selected node after the preemption is done, otherwise the preemption victims
 	// may cause the selected node to be excluded from the suggested nodes
@@ -169,12 +169,14 @@ func generateAffinityGroupBindInfo(
 	return affinityGroupBindInfo, selectedNode, selectedGpuIndices, chain
 }
 
-// collectNodesNotSuggested collects all the nodes that are not within the suggested nodes
+// collectBadOrNonSuggestedNodes collects all the nodes that are not within the suggested nodes
 // in the physical placement of an affinity group.
-func collectNodesNotSuggested(
-	placement groupPhysicalPlacement, suggestedNodes common.Set) (nodesNotInSuggested common.Set) {
+func collectBadOrNonSuggestedNodes(
+	placement groupPhysicalPlacement,
+	suggestedNodes common.Set) (
+	badOrNonSuggestedNodes common.Set) {
 
-	nodesNotInSuggested = common.NewSet()
+	badOrNonSuggestedNodes = common.NewSet()
 	for gpuNum := range placement {
 		for podIndex := range placement[gpuNum] {
 			for _, gpu := range placement[gpuNum][podIndex] {
@@ -182,13 +184,14 @@ func collectNodesNotSuggested(
 					continue
 				}
 				nodes, _ := gpu.(*PhysicalCell).GetPhysicalPlacement()
-				if !suggestedNodes.Contains(nodes[0]) {
-					nodesNotInSuggested.Add(nodes[0])
+				if gpu.(*PhysicalCell).GetAPIStatus().CellHealthiness == api.CellBad ||
+					!suggestedNodes.Contains(nodes[0]) {
+					badOrNonSuggestedNodes.Add(nodes[0])
 				}
 			}
 		}
 	}
-	return nodesNotInSuggested
+	return badOrNonSuggestedNodes
 }
 
 // collectPreemptionVictims collects preemption victims of an affinity group.
@@ -275,26 +278,6 @@ func retrieveVirtualCell(
 		}
 	}
 	return nil
-}
-
-// clearPreBindings clears the temporary bindings created during scheduling.
-func clearPreBindings(virtualPlacement groupVirtualPlacement) {
-	for _, podPlacements := range virtualPlacement {
-		for _, podGpus := range podPlacements {
-			for _, gpu := range podGpus {
-				for gpu != nil {
-					vGpu := gpu.(*VirtualCell)
-					if pGpu := vGpu.GetPreBoundPhysicalCell(); pGpu != nil {
-						pGpu.SetPreBoundVirtualCell(nil)
-						vGpu.SetPreBoundPhysicalCell(nil)
-						gpu = gpu.GetParent()
-					} else {
-						break
-					}
-				}
-			}
-		}
-	}
 }
 
 // getAllocatedPodIndex assigns a new index for a new pod in an affinity group.

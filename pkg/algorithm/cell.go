@@ -270,14 +270,6 @@ func (c *PhysicalCell) SetVirtualCell(cell *VirtualCell) {
 	}
 }
 
-func (c *PhysicalCell) GetPreBoundVirtualCell() *VirtualCell {
-	return c.preBoundVirtualCell
-}
-
-func (c *PhysicalCell) SetPreBoundVirtualCell(cell *VirtualCell) {
-	c.preBoundVirtualCell = cell
-}
-
 func (c *PhysicalCell) IsSplit() bool {
 	return c.split
 }
@@ -409,14 +401,6 @@ func (c *VirtualCell) SetPhysicalCell(cell *PhysicalCell) {
 		c.apiStatus.PhysicalCell = pcs
 		c.apiStatus.CellHealthiness = pcs.CellHealthiness
 	}
-}
-
-func (c *VirtualCell) GetPreBoundPhysicalCell() *PhysicalCell {
-	return c.preBoundPhysicalCell
-}
-
-func (c *VirtualCell) SetPreBoundPhysicalCell(cell *PhysicalCell) {
-	c.preBoundPhysicalCell = cell
 }
 
 func (c *VirtualCell) GetAPIStatus() *api.VirtualCellStatus {

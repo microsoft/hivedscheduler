@@ -118,14 +118,17 @@ func getUsablePhysicalCells(
 
 	for i := range candidates {
 		c := candidates[i].(*PhysicalCell)
-		// skip the cell if it is already bound, or it is a bad lowest-level cell
-		if c.GetVirtualCell() != nil ||
-			c.GetLevel() == lowestLevel && c.GetAPIStatus().CellHealthiness == api.CellBad {
+		// skip the cell if it is already bound
+		if c.GetVirtualCell() != nil {
 			continue
 		}
-		// skip the cell if all of its nodes are not within suggested nodes (if some of them are within,
-		// we can possibly find usable cells when searching in the next level)
+		// skip the cell if it is a bad node
 		nodes, _ := c.GetPhysicalPlacement()
+		if len(nodes) == 1 && c.GetAPIStatus().CellHealthiness == api.CellBad {
+			continue
+		}
+		// skip the cell if all of its nodes are not within suggested nodes (if only some of them are,
+		// we can possibly find usable cells when searching in the next level)
 		allNonSuggested := true
 		for _, n := range nodes {
 			if suggestedNodes.Contains(n) {
