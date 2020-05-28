@@ -11,7 +11,7 @@ Note that the AG state machine has interactions with the cell state machine (ela
 Therefore, the state machines of multiple AGs are effectively bridged by the state machines of their overlapping cells.
 
 <p style="text-align: center;">
-  <img src="AG-state-machine.png" title="AG" alt="AG" width="70%"/>
+  <img src="img/AG-state-machine.png" title="AG" alt="AG" width="70%"/>
 </p>
 
 ### States
@@ -133,7 +133,7 @@ Operation: none.
 Cell is the resource unit in HiveD. The figure below shows the state machine of cell. Note that here cells are _lowest-level physical cells_, e.g., single-GPU cell in typical configs (we record states only in these cells).
 
 <p style="text-align: center;">
-  <img src="cell-state-machine.png" title="cell" alt="cell" width="70%"/>
+  <img src="img/cell-state-machine.png" title="cell" alt="cell" width="70%"/>
 </p>
 
 ### States
