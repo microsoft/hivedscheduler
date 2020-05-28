@@ -10,8 +10,8 @@ An affinity group (AG) is a set of gang-scheduled pods. It is the basic scheduli
 Note that the AG state machine has interactions with the cell state machine (elaborated later). In our design, AGs influence each other only via their overlapping cells: for example, an event sent to an AG may trigger an event sent to a cell, and that cell may further trigger another event sent to another AG which is currently associated with the cell.
 Therefore, the state machines of multiple AGs are effectively bridged by the state machines of their overlapping cells.
 
-<p style="text-align: left;">
-  <img src="AG-state-machine.png" title="AG" alt="AG" width="100%"/>
+<p style="text-align: center;">
+  <img src="AG-state-machine.png" title="AG" alt="AG" width="70%"/>
 </p>
 
 ### States
@@ -132,8 +132,8 @@ Operation: none.
 
 Cell is the resource unit in HiveD. The figure below shows the state machine of cell. Note that here cells are _lowest-level physical cells_, e.g., single-GPU cell in typical configs (we record states only in these cells).
 
-<p style="text-align: left;">
-  <img src="cell-state-machine.png" title="cell" alt="cell" width="100%"/>
+<p style="text-align: center;">
+  <img src="cell-state-machine.png" title="cell" alt="cell" width="70%"/>
 </p>
 
 ### States
