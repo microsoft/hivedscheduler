@@ -57,7 +57,7 @@ const (
 
 	// internal affinity group states
 
-	// The affinity group has been allocated cells and is allowed to run.
+	// The affinity group has been allocated cells.
 	// All cells in the group must be in Used state.
 	groupAllocated AffinityGroupState = "Allocated"
 	// The affinity group is preempting other groups to get free resource.
