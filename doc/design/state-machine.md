@@ -7,28 +7,36 @@ We will describe the state machines of our scheduling unit, Affinity Group, and 
 
 An affinity group (AG) is a set of gang-scheduled pods. It is the basic scheduling unit in HiveD. The figure below shows the state machine of an affinity group.
 
-Note that the AG state machine has interactions with the cell state machine (elaborated later). In our design, AGs influence each other only via cell: an event of an AG may trigger an event for one of its cells, and the influenced cell may trigger another event for another AG related to the same cell.
+Note that the AG state machine has interactions with the cell state machine (elaborated later). In our design, AGs influence each other only via their overlapping cells: for example, an event sent to an AG may trigger an event sent to a cell, and that cell may further trigger another event sent to another AG which is currently associated with the cell.
 Therefore, the state machines of multiple AGs are effectively bridged by the state machines of their overlapping cells.
 
-![AG](AG-state-machine.png)
+<p style="text-align: left;">
+  <img src="AG-state-machine.png" title="AG" alt="AG" width="100%"/>
+</p>
 
 ### States
 
-__Pending__: the AG is waiting to be scheduled.
+__`Pending`__: the AG is waiting to be scheduled.
 
-__Preempting__: the AG is allocated resources but is waiting for the completion of preemptions of other AGs (only after that can it start to run).
+__`Preempting`__: the AG has reserved cells but is waiting for the completion of preemptions of other AGs.
 
-__Allocated__: the AG is allocated resources and is running normally.
+__`Allocated`__: the AG is allocated cells.
 
-__Being preempted__: the AG is being preempted by other AGs (the preemption is still ongoing).
+__`Being preempted`__: the AG is being preempted by other AGs (the preemption is still ongoing).
 
-__Deleted__: the AG is fully deleted.
+__`Deleted`__: the AG is fully deleted and all of its cells are released.
 
-Common AG life cycles:
+Note that only ``Pending``, `Allocated`, and `Deleted` are persistent, thus they are the recovery points of HiveD. While other AG states (`Preempting`, `Being preempted`) are volatile, so they will transition to others after scheduler crash and restart (i.e., e<sub>c</sub> in the state machine).
 
-Pending -> Allocated -> Deleted (no preemption involved)
+Also note that `Allocated` state includes updating pod annotation, pod binding, and pod running. We assume once pod annotation has been updated, the pod binding and pod running are handled by K8s. We hence only describe the cell allocation state in the state machine, and do not care about the pods' real running state.
 
-Pending -> Preempting -> Allocated -> Being preempted -> Deleted (preemption involved)
+### Common AG life cycles
+
+__No preemption involved__:
+`Pending` -> `Allocated` -> `Deleted`
+
+__Preemption involved__:
+`Pending` -> `Preempting` -> `Allocated` -> `Being preempted` -> `Deleted`
 
 ### Events
 
@@ -38,148 +46,198 @@ Condition: scheduler crashes and restarts.
 
 Operation: none.
 
-Note that only Pending, Allocated, and Deleted are persistent, thus they are the recovery points of HiveD. While other AG states (Preempting, Being preempted) are volatile, so they will transition to others after e<sub>c</sub>. Also note that Allocated state includes updating pod annotation, pod binding, and pod running. We assume once pod annotation has been updated, the pod binding and pod running are handled by K8s. 
-
 __e<sub>0</sub>__:
 
-Condition: all cells allocated to the AG are in Free or Reserved state (we assume the cell allocation algorithm has ensured that this AG’s priority is higher than that every Reserved cell, i.e., that of the Preempting AG).
+Condition: all cells that the cell allocation algorithm decides to allocate to the AG are in `Free` or `Reserved` states (we assume the cell allocation algorithm has ensured that for every `Reserved` cell this AG's priority is higher than that of the AG currently associated with the cell, e.g., a `Preempting` AG).
 
-Operation: set the cells to Used; set the Preempting AG on the Reserved cells to Pending.
+Operation:
+
+`Free` cells -> `Used` (by this AG);
+
+AGs currently associated with the `Reserved` cells -> `Pending`.
 
 __e<sub>1</sub>__:
 
-Condition: there is at least one cell allocated to the AG in Used or Reserving state (we assume the cell allocation algorithm has ensured that this AG’s priority is higher than that of every Used and Reserving cell).
+Condition: there is at least one cell among those the algorithm decides to allocate to this AG in `Used` or `Reserving` states (we assume the cell allocation algorithm has ensured that for every `Used` or `Reserving` cell this AG's priority is higher than that of the AG currently associated with the cell).
 
-Operation: set all the Used cells to Reserving state (e<sub>2</sub> in cell state machine); overwrite the Reserved (e<sub>6</sub> in cell state machine) and Reserving cells (e<sub>3</sub> in cell state machine); set the Free cell to Reserved (e<sub>5</sub> in cell state machine).
+Operation:
+
+For all cells currently associated with other AGs:
+
+`Used` (by other AGs) -> `Reserving` (by this AG) (e<sub>2</sub> in cell state machine);
+
+`Reserving`/`Reserved` (by others AGs) -> `Reserving`/`Reserved` (by this AG) (e<sub>3</sub>/e<sub>6</sub> in cell state machine); 
+
+For free cells:
+
+`Free` -> `Reserved` (by this AG) (e<sub>5</sub> in cell state machine).
 
 __e<sub>2</sub>__:
 
-Condition: all the cells allocated to the AG are Reserved.
+Condition: all the cells that the cell allocation algorithm decided to allocate to this AG are `Reserved`.
 
-Operation: set all the cells to Used (e<sub>8</sub> in cell state machine).
+Operation: for all cells of this AG:
+
+`Reserved` (by this AG) -> `Used` (by this AG) (e<sub>8</sub> in cell state machine).
 
 __e<sub>3</sub>__:
 
-Condition: all pods deleted.
+Condition: all pods of this AG are deleted.
 
-Operation: set all the cells allocated to the AG in Free state (e<sub>1</sub> in cell state machine).
+Operation: for all cells of this AG:
+
+`Used` (by this AG) -> `Free` (e<sub>1</sub> in cell state machine).
 
 __e<sub>4</sub>__:
 
-Condition: all pods deleted.
+Condition: all pods of this AG are deleted.
 
-Operation: none.
+Operation: 
+all cells `Used` (by this AG) -> `Free` (e<sub>1</sub> in cell state machine).
 
 __e<sub>5</sub>__:
 
-Condition: a Reserving or Reserved cell in this AG is being overwritten (e<sub>3</sub> or e<sub>6</sub> in cell state machine).
+Condition: a `Reserving` or `Reserved` cell in this AG is being overwritten by another AG (e<sub>3</sub> or e<sub>6</sub> in cell state machine).
 
-Operation: set all the other Reserving cells to Used (e<sub>4</sub> in cell state machine), Reserved cells to Free (e<sub>7</sub> in cell state machine).
+Operation:
+
+All the other `Reserving` cells (by this AG) -> `Used` (by the `Being preempted` AG currently associated with the cell) (e<sub>4</sub> in cell state machine);
+
+All the other `Reserved` cells (by this AG) -> `Free` (e<sub>7</sub> in cell state machine).
+
 
 __e<sub>6</sub>__:
 
-Condition: a cell from Used to Reserving (e<sub>2</sub> in cell state machine)
+Condition: a cell allocated to this AG from `Used` (by this AG) to `Reserving` (by another AG) (e<sub>2</sub> in cell state machine)
 
 Operation: none.
 
 __e<sub>7</sub>__:
 
-Condition: AG deleted.
+Condition: all pods of this AG are deleted.
 
-Operation: set the Reserved cells to Free (e<sub>7</sub> in cell state machine), set the Reserving cells to Used (e<sub>4</sub> in cell state machine).
+Operation: 
 
-## Cell State Machine
+All the `Reserving` cells (by this AG) -> `Used` (by the `Being preempted` AG currently associated with the cell) (e<sub>4</sub> in cell state machine).
 
-Cell is the resource unit in HiveD. The figure below shows the state machine of cell. Note that here cells are _lowest-level physical cells_ (we record states only in these cells).
-
-![AG](cell-state-machine.png)
-
-### States
-
-__Free__: the cell is not allocated to any AG.
-
-__Used__: the cell is allocated to an AG, and the AG is running on this cell.
-
-__Reserved__: the cell is allocated to an AG, but there is no AG running on this cell (e.g., the AG is Preempting).
-
-__Reserving__: the cell is allocated to an AG, but another AG is still running on the cell (e.g., the first AG is Preempting the running AG).
-
-Note that the reservation of cells (Reserved and Reserving states) is not necessarily designed for preemptions (i.e., reserving resources for the Preempting AGs). In the future it is possible that we extend this mechanism to support other reservation mechanisms.
-
-Common cell life cycles:
-
-Free -> Used -> Free (no preemption involved)
-
-Free -> Used -> Reserving -> Reserved -> Used -> Free (preemption involved)
-
-### Events
-
-Note: “cell view” in the below operations represents the in-memory data structures for scheduling, e.g., free cell list, cell bindings, cell priorities. Allocating / releasing a cell in the cell view will modify the free cell list (and split / merge the cell), create / destroy cell bindings, and set / reset the cell priority. These changes are immediately visible to the subsequent scheduling cycles.
-
-__e<sub>c</sub>__:
-
-Condition: scheduler crashes and restarts.
-
-Operation: none.
-
-Note that all states are volatile; the Free and Used states are derived from the AG state machine.
-
-__e<sub>0</sub>__:
-
-Condition: triggered by AG from Pending to Allocated (e<sub>0</sub> in AG state machine).
-
-Operation: allocate the cell to the AG in the cell view.
-
-__e<sub>1</sub>__:
-
-Condition: the Allocated AG is deleted (e<sub>3</sub> in AG state machine).
-
-Operation: release the cell in the cell view.
-
-__e<sub>2</sub>__:
-
-Condition: triggered by AG from Pending to Preempting (e<sub>1</sub> in AG state machine).
-
-Operation: set the Allocated AG on this cell to Being preempted state (e<sub>6</sub> in AG state machine); release the cell from the cell view, and then allocate it to the preemptor AG in the cell view.
-
-__e<sub>3</sub>__:
-
-Condition: triggered by AG from Pending to Preempting (e<sub>1</sub> in AG state machine).
-
-Operation: set the original preemptor AG to Pending state (e<sub>5</sub> in AG state machine); release the cell from the cell view, and then allocate it to the new preemptor.
-
-__e<sub>4</sub>__:
-
-Condition: triggered by AG from Preempting to Pending (e<sub>5</sub> in AG state machine) or from Preempting to Deleted (e7 in AG state machine).
-
-Operation: release the cell from the cell view, and then allocate it to the running AG (i.e., the preemption victim).
-
-__e<sub>5</sub>__:
-
-Condition: triggered by AG from Pending to Preempting (e<sub>1</sub> in AG state machine).
-
-Operation: allocate the cell to the preemptor in the cell view.
-
-__e<sub>6</sub>__:
-
-Condition: triggered by AG from Pending to Preempting (e<sub>1</sub> in AG state machine).
-
-Operation: release the cell from the cell view, and then allocate it to the new preemptor, and set the original preemptor AG from Preempting to Pending (e<sub>5</sub> in AG state machine).
-
-__e<sub>7</sub>__:
-
-Condition: triggered by AG from Preempting to Pending (e<sub>5</sub> in AG state machine) or from Preempting to Completed (e<sub>7</sub> in AG state machine).
-
-Operation: release the cell from the cell view.
+All the `Reserved` cells (by this AG) -> `Free` (e<sub>7</sub> in cell state machine);
 
 __e<sub>8</sub>__:
 
-Condition: triggered by AG from Preempting to Allocated (e<sub>2</sub> in AG state machine).
+Condition: all pods of this AG are deleted.
+
+Operation: none.
+
+## Cell State Machine
+
+Cell is the resource unit in HiveD. The figure below shows the state machine of cell. Note that here cells are _lowest-level physical cells_, e.g., single-GPU cell in typical configs (we record states only in these cells).
+
+<p style="text-align: left;">
+  <img src="cell-state-machine.png" title="cell" alt="cell" width="100%"/>
+</p>
+
+### States
+
+__`Free`__: no AG is associated with this cell.
+
+__`Used`__: only an `Allocated` or `Being preempted` AG is associated with the cell.
+
+__`Reserved`__: only a `Preempting` AG is associated with the cell.
+
+__`Reserving`__: a `Preempting` and a `Being preempted` AG are associated with the cell.
+
+Note that all states are volatile; the `Free` and `Used` states are derived from the AG state machine.
+
+Also note that the reservation of cells (`Reserved` and `Reserving` states) is not necessarily designed for preemptions (i.e., reserving resources for the `Preempting` AGs), despite the definitions involving preemptions above. In the future it is possible that we extend this mechanism to support other features that need reservation, such as reservation during waiting to achieve strict FIFO and fairness for larger AGs.
+
+### Common cell life cycles
+
+__No preemption involved__:
+`Free` -> `Used` -> `Free`
+
+__Preemption involved__:
+`Free` -> `Used` -> `Reserving` -> `Reserved` -> `Used` -> `Free`
+
+### Events
+
+Note:
+"Allocate/Reserve/Release a cell" in the below descriptions means modifying the in-memory data structures for scheduling, e.g., free cell list, cell bindings, cell priorities. Allocating/reserving or releasing a cell in the cell view will modify the free cell list, and split or merge the cell, create or destroy cell bindings, and set or reset the cell priority.
+These changes are immediately visible to the cell allocation algorithm when subsequent AGs.
+
+__e<sub>c</sub>__:
+
+Condition: scheduler crashes and restarts.
+
+Operation: none.
+
+__e<sub>0</sub>__:
+
+Condition: triggered by AG from `Pending` to `Allocated` (e<sub>0</sub> in AG state machine).
+
+Operation: allocate the cell to the AG.
+
+__e<sub>1</sub>__:
+
+Condition: the `Allocated` AG on this is deleted (e<sub>3</sub> in AG state machine).
+
+Operation: release the cell.
+
+__e<sub>2</sub>__:
+
+Condition: triggered by another AG from `Pending` to `Preempting` (i.e., that AG is preempting the `Allocated` AG currently associated with this cell) (e<sub>1</sub> in AG state machine).
+
+Operation: 
+
+The `Allocated` AG on this cell -> `Being preempted` (e<sub>6</sub> in AG state machine);
+
+Release the cell, and then reserve it to the `Preempting` AG.
+
+__e<sub>3</sub>__:
+
+Condition: triggered by another AG from `Pending` to `Preempting` (i.e., that AG cancels the preemption of the `Preempting` AG currently associated with this cell, and continues to preempt the `Being preempted` AG associated with this cell) (e<sub>1</sub> in AG state machine).
+
+Operation:
+
+The original `Preempting` AG on this cell -> `Pending` (e<sub>5</sub> in AG state machine);
+
+Release the cell, and then allocate it to the new `Preempting` AG.
+
+__e<sub>4</sub>__:
+
+Condition: triggered by the `Preempting` AG currently associated with this cell to `Pending` (e<sub>5</sub> in AG state machine) or to `Deleted` (e<sub>7</sub> in AG state machine).
+
+Operation: release the cell, and then allocate it to the `Being preempted` AG on this cell (i.e., the preemption victim).
+
+__e<sub>5</sub>__:
+
+Condition: triggered by AG from `Pending` to `Preempting` (e<sub>1</sub> in AG state machine).
+
+Operation: allocate the cell to the `Preempting` AG.
+
+__e<sub>6</sub>__:
+
+Condition: triggered by another AG from `Pending` to `Preempting` (i.e., that AG cancels the preemption of the `Preempting` AG currently associated with this cell) (e<sub>1</sub> in AG state machine).
+
+Operation:
+
+The original `Preempting` AG on this cell -> `Pending` (e<sub>5</sub> in AG state machine).
+
+Release the cell, and then reserve it to the new `Preempting` AG.
+
+__e<sub>7</sub>__:
+
+Condition: triggered by the `Preempting` AG currently associated with this cell to `Pending` (e<sub>5</sub> in AG state machine) or to `Deleted` (e<sub>7</sub> in AG state machine).
+
+Operation: release the cell.
+
+__e<sub>8</sub>__:
+
+Condition: triggered by the `Preempting` AG currently associated with this cell to `Allocated` (e<sub>2</sub> in AG state machine).
 
 Operation: none.
 
 __e<sub>9</sub>__:
 
-Condition: the running pod is preempted.
+Condition: the pod on this cell of the `Being preempted` AG on the cell is deleted.
 
 Operation: none.

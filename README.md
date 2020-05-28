@@ -52,6 +52,7 @@ HiveD supports multiple job **priorities**. Higher-priority jobs can **[preempt]
 ## Doc
 1. [User Manual](doc/user-manual.md)
 2. [Feature Demo](example/feature/README.md)
+3. [Design](doc/design)
 
 ## Official Image
 * [DockerHub](https://hub.docker.com/u/hivedscheduler)
