@@ -594,7 +594,7 @@ func printConfig(t *testing.T, h *HivedAlgorithm) {
 			t.Logf("%v", ccl)
 		}
 		t.Logf("Pinned cells")
-		for pid, ccl := range vcs.getPinnedCellList() {
+		for pid, ccl := range vcs.getPinnedCells() {
 			t.Logf(string(pid))
 			t.Logf("%v", ccl)
 		}
@@ -831,21 +831,21 @@ func testBadNodes(t *testing.T, configFilePath string) {
 	psr := h.Schedule(pod, []string{"0.0.2.0"}, internal.PreemptingPhase)
 	h.AddAllocatedPod(internal.NewBindingPod(pod, psr.PodBindInfo))
 	h.setBadNode("0.0.2.1")
-	for _, c := range h.vcSchedulers["VC1"].getNonPinnedFreeCellList()["3-DGX2-V100-NODE"][5] {
+	for _, c := range h.vcSchedulers["VC1"].getNonPinnedPreassignedCells()["3-DGX2-V100-NODE"][5] {
 		if c.(*VirtualCell).GetAPIStatus().CellHealthiness == api.CellBad {
 			t.Errorf(
 				"All free cells in VC1 chain 3-DGX2-V100-NODE should be healthy, but %v is bad", c.GetAddress())
 		}
 	}
 	h.setBadNode("0.0.2.2")
-	for _, c := range h.vcSchedulers["VC1"].getNonPinnedFreeCellList()["3-DGX2-V100-NODE"][5] {
+	for _, c := range h.vcSchedulers["VC1"].getNonPinnedPreassignedCells()["3-DGX2-V100-NODE"][5] {
 		if c.GetPriority() == freePriority && c.(*VirtualCell).GetAPIStatus().CellHealthiness == api.CellHealthy {
 			t.Errorf(
 				"All free cells in VC1 chain 3-DGX2-V100-NODE should be bad, but %v is healthy", c.GetAddress())
 		}
 	}
 	h.setHealthyNode("0.0.2.2")
-	for _, c := range h.vcSchedulers["VC1"].getNonPinnedFreeCellList()["3-DGX2-V100-NODE"][5] {
+	for _, c := range h.vcSchedulers["VC1"].getNonPinnedPreassignedCells()["3-DGX2-V100-NODE"][5] {
 		if c.(*VirtualCell).GetAPIStatus().CellHealthiness == api.CellBad {
 			t.Errorf(
 				"All free cells in VC1 chain 3-DGX2-V100-NODE should be healthy, but %v is bad", c.GetAddress())

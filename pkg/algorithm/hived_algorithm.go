@@ -393,7 +393,7 @@ func (h *HivedAlgorithm) initAPIClusterStatus() {
 	}
 	for vc, vcs := range h.vcSchedulers {
 		h.apiClusterStatus.VirtualClusters[vc] = []*api.VirtualCellStatus{}
-		for _, ccl := range vcs.getNonPinnedFreeCellList() {
+		for _, ccl := range vcs.getNonPinnedPreassignedCells() {
 			for _, cl := range ccl {
 				for _, c := range cl {
 					h.apiClusterStatus.VirtualClusters[vc] = append(
@@ -401,7 +401,7 @@ func (h *HivedAlgorithm) initAPIClusterStatus() {
 				}
 			}
 		}
-		for _, ccl := range vcs.getPinnedCellList() {
+		for _, ccl := range vcs.getPinnedCells() {
 			for _, c := range ccl[CellLevel(len(ccl))] {
 				h.apiClusterStatus.VirtualClusters[vc] = append(
 					h.apiClusterStatus.VirtualClusters[vc], c.(*VirtualCell).GetAPIStatus())
@@ -417,7 +417,7 @@ func (h *HivedAlgorithm) initPinnedCells(pinnedCells map[api.VirtualClusterName]
 	for vcn, vcPinnedCells := range pinnedCells {
 		for pid, pinnedPhysical := range vcPinnedCells {
 			h.allocatePreassignedCell(pinnedPhysical, vcn)
-			virtualList := h.vcSchedulers[vcn].getPinnedCellList()[pid]
+			virtualList := h.vcSchedulers[vcn].getPinnedCells()[pid]
 			pinnedVirtual := virtualList[CellLevel(len(virtualList))][0].(*VirtualCell)
 			bindCell(pinnedPhysical, pinnedVirtual)
 		}
@@ -585,7 +585,7 @@ func (h *HivedAlgorithm) tryBindDoomedBadCell(c CellChain, l CellLevel) {
 		for vcFreeNum[c][l] >
 			h.totalLeftCellNum[c][l]-int32(len(h.badFreeCells[c][l])) {
 			pc := h.badFreeCells[c][l][0].(*PhysicalCell)
-			vc := getUnboundVirtualCell(h.vcSchedulers[vcName].getNonPinnedFreeCellList()[c][l])
+			vc := getUnboundVirtualCell(h.vcSchedulers[vcName].getNonPinnedPreassignedCells()[c][l])
 			pc.SetVirtualCell(vc)
 			vc.SetPhysicalCell(pc)
 			klog.Infof("Virtual cell %v is bound to physical cell %v", vc.GetAddress(), pc.GetAddress())
@@ -784,7 +784,7 @@ func (h *HivedAlgorithm) scheduleAffinityGroupForGpuType(
 	vcHasType := false
 	for _, chain := range h.cellChains[gpuType] {
 		if sr.priority < minGuaranteedPriority ||
-			h.vcSchedulers[sr.vc].getNonPinnedFreeCellList()[chain] != nil {
+			h.vcSchedulers[sr.vc].getNonPinnedPreassignedCells()[chain] != nil {
 			vcHasType = true
 			klog.Infof("Searching chain %v", chain)
 			sr.chain = chain
@@ -830,7 +830,7 @@ func (h *HivedAlgorithm) validateSchedulingRequest(sr schedulingRequest, pod *co
 	if h.vcSchedulers[sr.vc] == nil {
 		message = fmt.Sprintf("VC %v does not exists!", sr.vc)
 	} else if sr.pinnedCellId != "" {
-		if h.vcSchedulers[sr.vc].getPinnedCellList()[sr.pinnedCellId] == nil {
+		if h.vcSchedulers[sr.vc].getPinnedCells()[sr.pinnedCellId] == nil {
 			message = fmt.Sprintf("VC %v does not have pinned cell %v", sr.vc, sr.pinnedCellId)
 		} else if sr.priority == opportunisticPriority {
 			message = fmt.Sprintf("opportunistic pod not supported to use pinned cell %v", sr.pinnedCellId)
@@ -1185,10 +1185,10 @@ func (h *HivedAlgorithm) findAllocatedGpu(
 				} else if vcs := h.vcSchedulers[s.VirtualCluster]; vcs == nil {
 					message = fmt.Sprintf("VC %v not found", s.VirtualCluster)
 				} else {
-					vccl := vcs.getNonPinnedFreeCellList()[pGpu.GetChain()]
+					vccl := vcs.getNonPinnedPreassignedCells()[pGpu.GetChain()]
 					str := string(pGpu.GetChain())
 					if s.PinnedCellId != "" {
-						vccl = vcs.getPinnedCellList()[s.PinnedCellId]
+						vccl = vcs.getPinnedCells()[s.PinnedCellId]
 						str = string(s.PinnedCellId)
 					}
 					if vccl == nil {

@@ -34,17 +34,17 @@ import (
 // It should be able to return a set of GPU placements in the VC for a scheduling request.
 type intraVCScheduler interface {
 	getNonPinnedFullCellList() map[CellChain]ChainCellList
-	getNonPinnedFreeCellList() map[CellChain]ChainCellList
-	getPinnedCellList() map[api.PinnedCellId]ChainCellList
+	getNonPinnedPreassignedCells() map[CellChain]ChainCellList
+	getPinnedCells() map[api.PinnedCellId]ChainCellList
 
 	// Schedule an affinity group inside a VC. We use topologyAwareScheduler by default.
 	schedule(sr schedulingRequest, suggestedNodes common.Set) (groupVirtualPlacement, string)
 }
 
 type defaultIntraVCScheduler struct {
-	nonPinnedFullCellList map[CellChain]ChainCellList
-	nonPinnedFreeCellList map[CellChain]ChainCellList
-	pinnedCellList        map[api.PinnedCellId]ChainCellList
+	nonPinnedFullCellList     map[CellChain]ChainCellList
+	nonPinnedPreassignedCells map[CellChain]ChainCellList
+	pinnedCells               map[api.PinnedCellId]ChainCellList
 	// Currently we create a topologyAwareScheduler for each cluster view (each chain, each pinned cell).
 	// We plan to support multiple cluster views in one scheduler, and to support schedule pods
 	// across different cluster views.
@@ -68,11 +68,11 @@ func newDefaultIntraVCScheduler(
 		sr[pid] = NewTopologyAwareScheduler(ccl, gpuNums[ccl[CellLevel(1)][0].GetChain()], true, true)
 	}
 	return &defaultIntraVCScheduler{
-		nonPinnedFullCellList:   nonPinnedFullList,
-		nonPinnedFreeCellList:   nonPinnedFreeList,
-		pinnedCellList:          pinnedList,
-		nonPinnedCellSchedulers: snr,
-		pinnedCellSchedulers:    sr,
+		nonPinnedFullCellList:     nonPinnedFullList,
+		nonPinnedPreassignedCells: nonPinnedFreeList,
+		pinnedCells:               pinnedList,
+		nonPinnedCellSchedulers:   snr,
+		pinnedCellSchedulers:      sr,
 	}
 }
 
@@ -80,12 +80,12 @@ func (s *defaultIntraVCScheduler) getNonPinnedFullCellList() map[CellChain]Chain
 	return s.nonPinnedFullCellList
 }
 
-func (s *defaultIntraVCScheduler) getNonPinnedFreeCellList() map[CellChain]ChainCellList {
-	return s.nonPinnedFreeCellList
+func (s *defaultIntraVCScheduler) getNonPinnedPreassignedCells() map[CellChain]ChainCellList {
+	return s.nonPinnedPreassignedCells
 }
 
-func (s *defaultIntraVCScheduler) getPinnedCellList() map[api.PinnedCellId]ChainCellList {
-	return s.pinnedCellList
+func (s *defaultIntraVCScheduler) getPinnedCells() map[api.PinnedCellId]ChainCellList {
+	return s.pinnedCells
 }
 
 func (s *defaultIntraVCScheduler) schedule(
