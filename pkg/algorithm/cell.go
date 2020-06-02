@@ -123,7 +123,7 @@ type PhysicalCell struct {
 	GenericCell
 	nodes                    []string           // node names inside the cell
 	gpuIndices               []int32            // [-1] for cells at levels higher than node
-	usingGroup               *AlgoAffinityGroup // affinity group using this cell (i.e., has running pod on the cell)
+	usingGroup               *AlgoAffinityGroup // affinity group using this cell
 	reservingOrReservedGroup *AlgoAffinityGroup // affinity group that is reserving, or has reserved the cell (e.g., waiting for preemption)
 	virtualCell              *VirtualCell       // points to the bound virtual cell
 	preBoundVirtualCell      *VirtualCell       // points to the temporarily bound virtual cell (before the binding is confirmed)

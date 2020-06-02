@@ -22,13 +22,13 @@ __`Preempting`__: the AG has reserved cells but is waiting for the completion of
 
 __`Allocated`__: the AG is allocated cells.
 
-__`Being preempted`__: the AG is being preempted by other AGs (the preemption is still ongoing).
+__`Being preempted`__: the AG is being preempted by other AGs via their overlapping cells (the preemption is still ongoing).
 
 __`Deleted`__: the AG is fully deleted and all of its cells are released.
 
 Note that only ``Pending``, `Allocated`, and `Deleted` are persistent, thus they are the recovery points of HiveD. While the other AG states (`Preempting`, `Being preempted`) are volatile, so they will transition to others after scheduler crash and restart (i.e., e<sub>c</sub> in the state machine).
 
-Also note that `Allocated` state includes updating pod annotation, pod binding, and pod running. We assume once pod annotation has been updated, the pod binding and pod running are handled by K8s. We hence only describe the cell allocation state in the state machine, and do not care about the pods' real running state.
+Also note that `Allocated` state includes updating pod annotation (pod binding) and pod running. We assume once pod annotation has been updated (pod bound to a node), the pod running is handled by K8s. We hence only describe the cell allocation state in the state machine, and do not care about the pods' real running state.
 
 ### Common AG life cycles
 
@@ -164,7 +164,7 @@ __Preemption involved__:
 
 Note:
 "Allocate/Reserve/Release a cell" in the below descriptions means modifying the in-memory data structures for scheduling, e.g., free cell list, cell bindings, cell priorities. Allocating/reserving or releasing a cell in the cell view will modify the free cell list, and split or merge the cell, create or destroy cell bindings, and set or reset the cell priority.
-These changes are immediately visible to the cell allocation algorithm when subsequent AGs.
+These changes are immediately visible to the cell allocation algorithm when scheduling subsequent AGs.
 
 __e<sub>c</sub>__:
 
@@ -244,6 +244,6 @@ For (ii): none.
 
 __e<sub>9</sub>__:
 
-Condition: the pod on this cell of the `Being preempted` AG on the cell is deleted.
+Condition: the pod on this cell is deleted.
 
 Operation: none.
