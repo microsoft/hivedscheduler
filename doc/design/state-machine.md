@@ -20,7 +20,7 @@ __`Pending`__: the AG is waiting to be scheduled.
 
 __`Preempting`__: the AG has reserved cells but is waiting for the completion of preemptions of other AGs.
 
-__`Allocated`__: the AG is allocated cells.
+__`Allocated`__: the AG is fully allocated cells.
 
 __`Being preempted`__: the AG is being preempted by other AGs via their overlapping cells (the preemption is still ongoing).
 
@@ -68,7 +68,7 @@ For all cells currently associated with other AGs:
 
 `Used` (by other AGs) -> `Reserving` (by this AG) (e<sub>2</sub> in cell state machine);
 
-`Reserving`/`Reserved` (by others AGs) -> `Reserving`/`Reserved` (by this AG) (e<sub>3</sub>/e<sub>6</sub> in cell state machine); 
+`Reserving`/`Reserved` (by other AGs) -> `Reserving`/`Reserved` (by this AG) (e<sub>3</sub>/e<sub>6</sub> in cell state machine); 
 
 For free cells:
 
