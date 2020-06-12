@@ -173,7 +173,8 @@ func generateAffinityGroupBindInfo(
 // in the physical placement of an affinity group.
 func collectBadOrNonSuggestedNodes(
 	placement groupPhysicalPlacement,
-	suggestedNodes common.Set) (
+	suggestedNodes common.Set,
+	avoidSuggestedNodes bool) (
 	badOrNonSuggestedNodes common.Set) {
 
 	badOrNonSuggestedNodes = common.NewSet()
@@ -184,8 +185,8 @@ func collectBadOrNonSuggestedNodes(
 					continue
 				}
 				nodes, _ := gpu.(*PhysicalCell).GetPhysicalPlacement()
-				if gpu.(*PhysicalCell).GetAPIStatus().CellHealthiness == api.CellBad ||
-					!suggestedNodes.Contains(nodes[0]) {
+				if !gpu.(*PhysicalCell).IsHealthy() ||
+					(avoidSuggestedNodes && !suggestedNodes.Contains(nodes[0])) {
 					badOrNonSuggestedNodes.Add(nodes[0])
 				}
 			}

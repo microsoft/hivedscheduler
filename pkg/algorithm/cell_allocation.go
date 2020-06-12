@@ -35,19 +35,25 @@ import (
 // Note that this is a backtracking version of the buddy alloc algorithm (slightly more complex
 // than the simple recursive version present in the paper). Ideally we do not need to backtrack
 // because buddy alloc has safety guarantee (the simple algorithm already works).
-// But it's possible that the cell allocated by buddy alloc is temporarily unavailable
-// (e.g., it's bad or not within K8s suggested nodes), then we need to backtracking search
+// But it's possible that the cell allocated by the non-backtrack buddy alloc is temporarily unavailable
+// (e.g., it's bad or not within K8s suggested nodes), then we need to do backtracking search
 // on the free cell list so as to find an available cell.
 func buddyAlloc(
-	cell *cellBindingPathNode,
+	cell *cellBindingPathVertex,
 	freeList ChainCellList,
 	currentLevel CellLevel,
 	suggestedNodes common.Set,
+	avoidNonSuggestedNodes bool,
 	bindings map[api.CellAddress]*PhysicalCell) bool {
 
 	if currentLevel == cell.cell.GetLevel() {
 		ok, pickedCells := mapVirtualCellsToPhysical(
-			[]*cellBindingPathNode{cell}, freeList[currentLevel], suggestedNodes, bindings, true)
+			[]*cellBindingPathVertex{cell},
+			freeList[currentLevel],
+			suggestedNodes,
+			avoidNonSuggestedNodes,
+			bindings,
+			true)
 		if ok {
 			for _, c := range pickedCells {
 				freeList.remove(c, currentLevel)
@@ -56,13 +62,13 @@ func buddyAlloc(
 		}
 		return false
 	}
-	freeCells := getUsablePhysicalCells(freeList[currentLevel], 1, suggestedNodes)
+	freeCells := getUsablePhysicalCells(freeList[currentLevel], 1, suggestedNodes, avoidNonSuggestedNodes)
 	if freeCells == nil {
 		return false
 	}
 	for _, c := range freeCells {
 		freeList[currentLevel-1] = append(freeList[currentLevel-1], c.GetChildren()...)
-		if buddyAlloc(cell, freeList, currentLevel-1, suggestedNodes, bindings) {
+		if buddyAlloc(cell, freeList, currentLevel-1, suggestedNodes, avoidNonSuggestedNodes, bindings) {
 			freeList.remove(c, currentLevel)
 			return true
 		} else {
@@ -87,22 +93,23 @@ func getLowestFreeCellLevel(freeList ChainCellList, l CellLevel) CellLevel {
 // For the preassigned cells, it will call buddy alloc to map them;
 // For the nonPreassigned cells, it will map them following the topology inside the corresponding preassigned cells.
 func mapVirtualPlacementToPhysical(
-	preassignedCells []*cellBindingPathNode,
-	nonPreassignedCells [][]*cellBindingPathNode,
+	preassignedCells []*cellBindingPathVertex,
+	nonPreassignedCells [][]*cellBindingPathVertex,
 	freeList ChainCellList,
 	suggestedNodes common.Set,
+	avoidNonSuggestedNodes bool,
 	bindings map[api.CellAddress]*PhysicalCell) bool {
 
 	for _, c := range preassignedCells {
-		if !buddyAlloc(
-			c, freeList, getLowestFreeCellLevel(freeList, c.cell.GetLevel()), suggestedNodes, bindings) {
+		if !buddyAlloc(c, freeList, getLowestFreeCellLevel(
+			freeList, c.cell.GetLevel()), suggestedNodes, avoidNonSuggestedNodes, bindings) {
 			return false
 		}
 	}
 	for _, cells := range nonPreassignedCells {
 		ok, _ := mapVirtualCellsToPhysical(
 			cells, cells[0].cell.GetParent().(*VirtualCell).GetPhysicalCell().GetChildren(),
-			suggestedNodes, bindings, false)
+			suggestedNodes, avoidNonSuggestedNodes, bindings, false)
 		if !ok {
 			return false
 		}
@@ -114,7 +121,8 @@ func mapVirtualPlacementToPhysical(
 func getUsablePhysicalCells(
 	candidates CellList,
 	numNeeded int32,
-	suggestedNodes common.Set) (usableCandidates CellList) {
+	suggestedNodes common.Set,
+	avoidNonSuggestedNodes bool) (usableCandidates CellList) {
 
 	for i := range candidates {
 		c := candidates[i].(*PhysicalCell)
@@ -124,20 +132,22 @@ func getUsablePhysicalCells(
 		}
 		// skip the cell if it is a bad node
 		nodes, _ := c.GetPhysicalPlacement()
-		if len(nodes) == 1 && c.GetAPIStatus().CellHealthiness == api.CellBad {
+		if len(nodes) == 1 && !c.IsHealthy() {
 			continue
 		}
-		// skip the cell if all of its nodes are not within suggested nodes (if only some of them are,
-		// we can possibly find usable cells when searching in the next level)
-		allNonSuggested := true
-		for _, n := range nodes {
-			if suggestedNodes.Contains(n) {
-				allNonSuggested = false
-				break
+		if avoidNonSuggestedNodes {
+			// skip the cell if all of its nodes are not within suggested nodes (if only some of them are,
+			// we can possibly find usable cells when searching in the next level)
+			allNonSuggested := true
+			for _, n := range nodes {
+				if suggestedNodes.Contains(n) {
+					allNonSuggested = false
+					break
+				}
 			}
-		}
-		if allNonSuggested {
-			continue
+			if allNonSuggested {
+				continue
+			}
 		}
 		usableCandidates = append(usableCandidates, c)
 	}
@@ -161,13 +171,14 @@ func getUsablePhysicalCells(
 // if the current candidate cells cannot satisfy the virtual cells (e.g., they are bad or not within
 // K8s suggested nodes), we will backtrack to the last level and try other candidates.
 func mapVirtualCellsToPhysical(
-	cells []*cellBindingPathNode,
+	cells []*cellBindingPathVertex,
 	candidates CellList,
 	suggestedNodes common.Set,
+	avoidNonSuggestedNodes bool,
 	bindings map[api.CellAddress]*PhysicalCell,
 	returnPicked bool) (ok bool, pickedCells CellList) {
 
-	candidates = getUsablePhysicalCells(candidates, int32(len(cells)), suggestedNodes)
+	candidates = getUsablePhysicalCells(candidates, int32(len(cells)), suggestedNodes, avoidNonSuggestedNodes)
 	if candidates == nil {
 		return false, nil
 	}
@@ -192,6 +203,7 @@ func mapVirtualCellsToPhysical(
 					cells[cellIndex].childrenToBind,
 					candidate.GetChildren(),
 					suggestedNodes,
+					avoidNonSuggestedNodes,
 					bindings,
 					false)
 			}

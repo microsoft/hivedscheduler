@@ -45,8 +45,8 @@ type topologyAwareScheduler struct {
 	// because guaranteed pods can avoid preempting opportunistic pods only among buddy cells (this is decided
 	// by the buddy cell allocation algorithm).
 	crossPriorityPack bool
-	// whether or not the scheduler should prefer using nodes that are healthy and suggested by K8s
-	preferHealthyAndSuggestedNodes bool
+	// whether or not the scheduler should avoid using nodes that are nodes suggested by K8s
+	avoidNonSuggestedNodes bool
 }
 
 // NewTopologyAwareScheduler initializes the scheduler by extracting node-level cells
@@ -55,13 +55,13 @@ func NewTopologyAwareScheduler(
 	ccl ChainCellList,
 	levelGpuNum map[CellLevel]int32,
 	crossPriorityPack bool,
-	preferHealthyAndSuggestedNodes bool) *topologyAwareScheduler {
+	avoidNonSuggestedNodes bool) *topologyAwareScheduler {
 
 	return &topologyAwareScheduler{
-		cv:                             newClusterView(ccl),
-		levelGpuNum:                    levelGpuNum,
-		crossPriorityPack:              crossPriorityPack,
-		preferHealthyAndSuggestedNodes: preferHealthyAndSuggestedNodes,
+		cv:                     newClusterView(ccl),
+		levelGpuNum:            levelGpuNum,
+		crossPriorityPack:      crossPriorityPack,
+		avoidNonSuggestedNodes: avoidNonSuggestedNodes,
 	}
 }
 
@@ -118,12 +118,12 @@ func (t *topologyAwareScheduler) Schedule(
 }
 
 type node struct {
-	c Cell // a node-level cell or a top-level cell that is lower than node level
-	// free GPU number at the priority of the pod to be scheduled (lower priority considered as free)
-	freeGpuNumAtPriority     int32
+	c                        Cell            // a node-level cell or a top-level cell that is lower than node level
+	freeGpuNumAtPriority     int32           // free GPU number at the priority of the pod to be scheduled (lower priority considered as free)
 	usedGpuNumSamePriority   int32           // GPU number used by the same priority as that of the pod to be scheduled
 	usedGpuNumHigherPriority int32           // GPU number used by higher priorities than that of the pod to be scheduled
-	healthyAndSuggested      bool            // if the node is healthy and within suggested nodes
+	healthy                  bool            // if the node is healthy
+	suggested                bool            // if the node is within suggested nodes
 	nodeAddress              api.CellAddress // used for logging the node address when bad or not suggested
 }
 
@@ -173,7 +173,7 @@ func newClusterView(ccl ChainCellList) clusterView {
 	for ; l >= lowestLevel; l-- {
 		for _, c := range ccl[l] {
 			if !cv.containsCell(ancestorNoHigherThanNode(c)) {
-				cv = append(cv, &node{c: c, healthyAndSuggested: true})
+				cv = append(cv, &node{c: c, healthy: true, suggested: true})
 			}
 		}
 	}
@@ -205,9 +205,13 @@ func (cv clusterView) Len() int {
 }
 
 func (cv clusterView) Less(i int, j int) bool {
-	if !cv[j].healthyAndSuggested {
+	if !cv[j].healthy {
 		return true
-	} else if !cv[i].healthyAndSuggested {
+	} else if !cv[i].healthy {
+		return false
+	} else if !cv[j].suggested {
+		return true
+	} else if !cv[i].suggested {
 		return false
 	} else if cv[i].usedGpuNumSamePriority > cv[j].usedGpuNumSamePriority {
 		return true
@@ -228,28 +232,29 @@ func (cv clusterView) Swap(i int, j int) {
 func (t *topologyAwareScheduler) updateClusterView(p CellPriority, suggestedNodes common.Set) {
 	for _, n := range t.cv {
 		n.updateUsedGpuNumForPriority(p, t.crossPriorityPack)
-		if t.preferHealthyAndSuggestedNodes {
-			n.healthyAndSuggested, n.nodeAddress = nodeHealthyAndInSuggested(n, suggestedNodes)
+		n.healthy, n.suggested, n.nodeAddress = nodeHealthyAndInSuggested(n, suggestedNodes)
+		if !t.avoidNonSuggestedNodes {
+			n.suggested = true
 		}
 	}
 }
 
-func nodeHealthyAndInSuggested(n *node, suggestedNodes common.Set) (bool, api.CellAddress) {
+func nodeHealthyAndInSuggested(n *node, suggestedNodes common.Set) (healthy bool, suggested bool, addr api.CellAddress) {
 	switch v := n.c.(type) {
 	case *PhysicalCell:
-		nodeNames, _ := n.c.(*PhysicalCell).GetPhysicalPlacement()
-		return v.GetAPIStatus().CellHealthiness == api.CellHealthy && suggestedNodes.Contains(nodeNames[0]),
+		nodeNames, _ := v.GetPhysicalPlacement()
+		return v.IsHealthy(),
+			suggestedNodes.Contains(nodeNames[0]),
 			n.c.GetAddress()
 	case *VirtualCell:
-		if pn := v.GetPhysicalCell(); pn == nil {
-			return true, ""
-		} else {
+		if pn := v.GetPhysicalCell(); pn != nil {
 			nodeNames, _ := pn.GetPhysicalPlacement()
-			return pn.GetAPIStatus().CellHealthiness == api.CellHealthy && suggestedNodes.Contains(nodeNames[0]),
+			return pn.IsHealthy(),
+				suggestedNodes.Contains(nodeNames[0]),
 				pn.GetAddress()
 		}
 	}
-	return true, ""
+	return true, true, ""
 }
 
 // findNodesForPods finds a set of nodes that can accommodate the GPU requirements of the pods.
@@ -270,9 +275,13 @@ func findNodesForPods(cv clusterView, gpuNums []int32) (pickedNodeIndices []int3
 	for nodeIndex := 0; nodeIndex < len(cv); {
 		n = cv[nodeIndex]
 		// fail when encountering a node that is either bad or not within suggested nodes
-		if !n.healthyAndSuggested {
+		if !n.healthy {
 			return nil, fmt.Sprintf(
-				"have to use at least one bad or non-suggested node %v", n.nodeAddress)
+				"have to use at least one bad node %v", n.nodeAddress)
+		}
+		if !n.suggested {
+			return nil, fmt.Sprintf(
+				"have to use at least one non-suggested node %v", n.nodeAddress)
 		}
 		if n.freeGpuNumAtPriority-pickedGpuNum >= gpuNums[podIndex] {
 			pickedNodeIndices[podIndex] = int32(nodeIndex)

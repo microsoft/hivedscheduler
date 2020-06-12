@@ -63,6 +63,7 @@ type GenericCell struct {
 	atOrHigherThanNode     bool     // true if the cell is at or higher than node level
 	priority               CellPriority
 	state                  CellState
+	healthy                bool                   // healthy if all of the cell's children are healthy (bad if any child is bad)
 	totalGpuNum            int32                  // total GPU number of a cell
 	usedGpuNumAtPriorities map[CellPriority]int32 // GPU number used by each priority
 }
@@ -101,6 +102,10 @@ func (c *GenericCell) GetPriority() CellPriority {
 
 func (c *GenericCell) GetState() CellState {
 	return c.state
+}
+
+func (c *GenericCell) IsHealthy() bool {
+	return c.healthy
 }
 
 func (c *GenericCell) GetTotalGpuNum() int32 {
@@ -153,6 +158,7 @@ func NewPhysicalCell(
 			totalGpuNum:            n,
 			usedGpuNumAtPriorities: map[CellPriority]int32{},
 			state:                  cellFree,
+			healthy:                true,
 		},
 		apiStatus: &api.PhysicalCellStatus{
 			CellStatus: api.CellStatus{
@@ -292,9 +298,11 @@ func (c *PhysicalCell) GetAPIStatus() *api.PhysicalCellStatus {
 
 func (c *PhysicalCell) SetHealthiness(h api.CellHealthiness) {
 	klog.Infof("Cell %v is set to %v", c.address, h)
-	c.GetAPIStatus().CellHealthiness = h
+	c.healthy = h == api.CellHealthy
+	c.apiStatus.CellHealthiness = h
 	if c.virtualCell != nil {
-		c.GetAPIStatus().VirtualCell.CellHealthiness = h
+		c.virtualCell.healthy = c.healthy
+		c.apiStatus.VirtualCell.CellHealthiness = h
 		c.virtualCell.GetAPIStatus().CellHealthiness = h
 		c.virtualCell.GetAPIStatus().PhysicalCell.CellHealthiness = h
 	}
@@ -334,6 +342,7 @@ func NewVirtualCell(
 			totalGpuNum:            n,
 			usedGpuNumAtPriorities: map[CellPriority]int32{},
 			state:                  cellFree,
+			healthy:                true,
 		},
 		vc:              vcn,
 		preAssignedCell: pac,
@@ -390,9 +399,11 @@ func (c *VirtualCell) SetPhysicalCell(cell *PhysicalCell) {
 	c.physicalCell = cell
 	if cell == nil {
 		c.apiStatus.PhysicalCell = nil
+		c.healthy = true
 		c.apiStatus.CellHealthiness = api.CellHealthy
 		c.apiStatus.CellState = api.CellState(cellFree)
 	} else {
+		c.healthy = cell.healthy
 		pcs := &api.PhysicalCellStatus{}
 		// shallow copy the status, clear the pointers to avoid reference
 		*pcs = *(cell.apiStatus)
