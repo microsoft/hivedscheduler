@@ -831,16 +831,20 @@ func (h *HivedAlgorithm) scheduleAffinityGroupForAnyGpuType(
 	sr schedulingRequest,
 	pod *core.Pod,
 	suggestedNodes common.Set) (
-	physicalPlacement groupPhysicalPlacement,
-	virtualPlacement groupVirtualPlacement,
-	failedReason string) {
+	groupPhysicalPlacement,
+	groupVirtualPlacement,
+	string) {
 
+	var failedReason string
 	for gpuType := range h.cellChains {
 		klog.Infof("Searching GPU type %v", gpuType)
-		physicalPlacement, virtualPlacement, failedReason =
+		typePhysicalPlacement, typeVirtualPlacement, typeFailedReason :=
 			h.scheduleAffinityGroupForGpuType(sr, gpuType, pod, suggestedNodes, false)
-		if physicalPlacement != nil {
-			return physicalPlacement, virtualPlacement, ""
+		if typePhysicalPlacement != nil {
+			return typePhysicalPlacement, typeVirtualPlacement, ""
+		}
+		if typeFailedReason != "" {
+			failedReason = typeFailedReason
 		}
 	}
 	return nil, nil, failedReason

@@ -48,7 +48,7 @@ func generatePodScheduleResult(
 	pod *core.Pod) internal.PodScheduleResult {
 
 	klog.V(4).Infof("[%v]: Got K8s suggested nodes: %v", internal.Key(pod), suggestedNodes)
-	if waitReason != "" {
+	if groupPhysicalPlacement == nil {
 		klog.Infof("[%v]: Pod needs to wait, reason: %v", internal.Key(pod), waitReason)
 		return internal.PodScheduleResult{PodWaitInfo: &internal.PodWaitInfo{Reason: waitReason}}
 	}
