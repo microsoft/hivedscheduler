@@ -274,16 +274,16 @@ func findNodesForPods(cv clusterView, gpuNums []int32) (pickedNodeIndices []int3
 	var n *node
 	for nodeIndex := 0; nodeIndex < len(cv); {
 		n = cv[nodeIndex]
-		// fail when encountering a node that is either bad or not within suggested nodes
-		if !n.healthy {
-			return nil, fmt.Sprintf(
-				"have to use at least one bad node %v", n.nodeAddress)
-		}
-		if !n.suggested {
-			return nil, fmt.Sprintf(
-				"have to use at least one non-suggested node %v", n.nodeAddress)
-		}
 		if n.freeGpuNumAtPriority-pickedGpuNum >= gpuNums[podIndex] {
+			// fail when encountering a node that is either bad or not within suggested nodes
+			if !n.healthy {
+				return nil, fmt.Sprintf(
+					"have to use at least one bad node %v", n.nodeAddress)
+			}
+			if !n.suggested {
+				return nil, fmt.Sprintf(
+					"have to use at least one non-suggested node %v", n.nodeAddress)
+			}
 			pickedNodeIndices[podIndex] = int32(nodeIndex)
 			pickedGpuNum += gpuNums[podIndex]
 			podIndex++

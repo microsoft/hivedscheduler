@@ -444,8 +444,8 @@ func deleteOpporVirtualCell(s api.VirtualClusterStatus, addr api.CellAddress) ap
 			"physical cell address: %v", addr)
 		return s
 	}
-	novc := len(s)
-	s[opporVirtualCellIdx] = s[novc-1]
-	s[novc-1] = nil
-	return s[:novc-1]
+	n := len(s)
+	s[opporVirtualCellIdx] = s[n-1]
+	s[n-1] = nil
+	return s[:n-1]
 }
