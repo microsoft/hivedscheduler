@@ -432,12 +432,17 @@ func generateOpporVirtualCell(pc *api.PhysicalCellStatus) *api.VirtualCellStatus
 
 // deleteOpporVirtualCell deletes the fake virtual cell of an opportunistic cell from the VC's API status.
 func deleteOpporVirtualCell(s api.VirtualClusterStatus, addr api.CellAddress) api.VirtualClusterStatus {
-	var opporVirtualCellIdx int32
+	opporVirtualCellIdx := -1
 	for i, ovc := range s {
 		if ovc.PhysicalCell != nil && ovc.PhysicalCell.CellAddress == addr {
-			opporVirtualCellIdx = int32(i)
+			opporVirtualCellIdx = i
 			break
 		}
+	}
+	if opporVirtualCellIdx < 0 {
+		klog.Warningf("trying to delete an oppor virtual cell that does not exist, "+
+			"physical cell address: %v", addr)
+		return s
 	}
 	novc := len(s)
 	s[opporVirtualCellIdx] = s[novc-1]

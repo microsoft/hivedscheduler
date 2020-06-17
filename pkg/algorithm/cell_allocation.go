@@ -117,7 +117,7 @@ func mapVirtualPlacementToPhysical(
 	return true
 }
 
-// getUsablePhysicalCells return the usable cells in a physical cell list for cell binding.
+// getUsablePhysicalCells returns the usable cells in a physical cell list for cell binding.
 func getUsablePhysicalCells(
 	candidates CellList,
 	numNeeded int32,
