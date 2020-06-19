@@ -242,7 +242,7 @@ func (p groupVirtualPlacement) preassignedCellToLeafCells() map[api.CellAddress]
 			for _, gpu := range podPlacement {
 				vGpu := gpu.(*VirtualCell)
 				address := vGpu.GetAddress()
-				preassignedAddress := vGpu.GetPreAssignedCell().GetAddress()
+				preassignedAddress := vGpu.GetPreassignedCell().GetAddress()
 				if _, ok := preassignedCellToLeafCells[preassignedAddress]; !ok {
 					preassignedCellToLeafCells[preassignedAddress] = []api.CellAddress{}
 				}

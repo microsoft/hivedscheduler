@@ -149,7 +149,7 @@ func generateAffinityGroupBindInfo(
 					if groupVirtualPlacement != nil {
 						vGpu := groupVirtualPlacement[podGpuNum][podIndex][gpuIndex].(*VirtualCell)
 						mbi.PodPlacements[podIndex].PreassignedCellTypes[gpuIndex] =
-							cellLevelToType[vGpu.GetChain()][vGpu.GetPreAssignedCell().GetLevel()]
+							cellLevelToType[vGpu.GetChain()][vGpu.GetPreassignedCell().GetLevel()]
 					} else {
 						mbi.PodPlacements[podIndex].PreassignedCellTypes[gpuIndex] = ""
 					}
@@ -413,9 +413,9 @@ func allChildrenSameState(c *PhysicalCell, s CellState) bool {
 	return true
 }
 
-// generateOpporVirtualCell generates a fake virtual cell in a VC's API status
+// generateOTVirtualCell generates a fake virtual cell in a VC's API status
 // for an opportunistic cell used by the VC.
-func generateOpporVirtualCell(pc *api.PhysicalCellStatus) *api.VirtualCellStatus {
+func generateOTVirtualCell(pc *api.PhysicalCellStatus) *api.VirtualCellStatus {
 	vc := &api.VirtualCellStatus{
 		CellStatus: api.CellStatus{
 			GpuType:         pc.GpuType,
@@ -430,22 +430,22 @@ func generateOpporVirtualCell(pc *api.PhysicalCellStatus) *api.VirtualCellStatus
 	return vc
 }
 
-// deleteOpporVirtualCell deletes the fake virtual cell of an opportunistic cell from the VC's API status.
-func deleteOpporVirtualCell(s api.VirtualClusterStatus, addr api.CellAddress) api.VirtualClusterStatus {
-	opporVirtualCellIdx := -1
+// deleteOTVirtualCell deletes the fake virtual cell of an opportunistic cell from the VC's API status.
+func deleteOTVirtualCell(s api.VirtualClusterStatus, addr api.CellAddress) api.VirtualClusterStatus {
+	idx := -1
 	for i, ovc := range s {
 		if ovc.PhysicalCell != nil && ovc.PhysicalCell.CellAddress == addr {
-			opporVirtualCellIdx = i
+			idx = i
 			break
 		}
 	}
-	if opporVirtualCellIdx < 0 {
-		klog.Warningf("trying to delete an oppor virtual cell that does not exist, "+
+	if idx < 0 {
+		klog.Errorf("trying to delete an opportunistic virtual cell that does not exist, "+
 			"physical cell address: %v", addr)
 		return s
 	}
 	n := len(s)
-	s[opporVirtualCellIdx] = s[n-1]
+	s[idx] = s[n-1]
 	s[n-1] = nil
 	return s[:n-1]
 }

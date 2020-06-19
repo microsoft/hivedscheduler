@@ -446,7 +446,7 @@ func (h *HivedAlgorithm) initPinnedCells(pinnedCells map[api.VirtualClusterName]
 }
 
 // initBadNodes marks all the physical nodes defined in the config as bad,
-// and wait for K8s's AddNode calls to inform the healthy nodes in them.
+// and waits for K8s's AddNode calls to inform the healthy nodes in them.
 func (h *HivedAlgorithm) initBadNodes() {
 	klog.Info("Init all nodes defined in the config to bad first, " +
 		"and wait for K8s to inform the healthy nodes (addNode)")
@@ -998,10 +998,12 @@ func (h *HivedAlgorithm) createAllocatedAffinityGroup(s *api.PodSchedulingSpec, 
 						newGroup.virtualGpuPlacement = nil
 					} else if vGpu != nil {
 						newGroup.virtualGpuPlacement[gpuNumber][podIndex][gpuIndex] = vGpu
-						if vGpu.GetPhysicalCell() != nil &&
-							vGpu.GetPhysicalCell().GetUsingGroup() != nil {
-							groupToPreempt := vGpu.GetPhysicalCell().GetUsingGroup()
-							h.lazyPreemptAffinityGroup(groupToPreempt, newGroup.name)
+						if inFreeCellList(pGpu) && vGpu.GetPreassignedCell().GetPriority() > freePriority {
+							// This means we decide to bind this cell to a virtual cell whose preassigned cell
+							// has been bound (in cases like reconfiguration and the VC's cells are fewer than before).
+							// We need to destroy the previous binding, by lazy preempting all the groups
+							// in the preassigned cell
+							h.lazyPreemptCell(vGpu.GetPreassignedCell(), newGroup.name)
 						}
 					} else {
 						shouldLazyPreempt = shouldLazyPreempt || *lazyPreempt
@@ -1177,6 +1179,16 @@ func (h *HivedAlgorithm) lazyPreemptAffinityGroup(
 	return originalVirtualPlacement
 }
 
+// lazyPreemptCell lazy preempts all the affinity groups inside a virtual cell (and its children).
+func (h *HivedAlgorithm) lazyPreemptCell(c *VirtualCell, preemptor string) {
+	if c.GetLevel() == lowestLevel && c.GetState() == cellUsed {
+		h.lazyPreemptAffinityGroup(c.GetPhysicalCell().GetUsingGroup(), preemptor)
+	}
+	for _, child := range c.GetChildren() {
+		h.lazyPreemptCell(child.(*VirtualCell), preemptor)
+	}
+}
+
 // revertLazyPreempt reverts the lazy preemption of an affinity group.
 func (h *HivedAlgorithm) revertLazyPreempt(g *AlgoAffinityGroup, virtualPlacement groupVirtualPlacement) {
 	for gpuNum := range g.physicalGpuPlacement {
@@ -1282,7 +1294,7 @@ func (h *HivedAlgorithm) allocateGpu(
 		updateUsedGpuNumAtPriority(vGpu, p, true)
 		setCellPriority(pGpu, p)
 		updateUsedGpuNumAtPriority(pGpu, p, true)
-		pac := vGpu.GetPreAssignedCell()
+		pac := vGpu.GetPreassignedCell()
 		preassignedNewlyBound := pac.GetPhysicalCell() == nil
 		if pGpu.GetVirtualCell() == nil {
 			// the binding could have been created before (when the cell is bad)
@@ -1296,7 +1308,7 @@ func (h *HivedAlgorithm) allocateGpu(
 		updateUsedGpuNumAtPriority(pGpu, opportunisticPriority, true)
 		pGpu.GetAPIStatus().VC = vcn
 		h.apiClusterStatus.VirtualClusters[vcn] = append(
-			h.apiClusterStatus.VirtualClusters[vcn], generateOpporVirtualCell(pGpu.GetAPIStatus()))
+			h.apiClusterStatus.VirtualClusters[vcn], generateOTVirtualCell(pGpu.GetAPIStatus()))
 	}
 	return safetyOk, reason
 }
@@ -1307,7 +1319,7 @@ func (h *HivedAlgorithm) releaseGpu(pGpu *PhysicalCell, vcn api.VirtualClusterNa
 	if vGpu := pGpu.GetVirtualCell(); vGpu != nil {
 		updateUsedGpuNumAtPriority(vGpu, vGpu.GetPriority(), false)
 		setCellPriority(vGpu, freePriority)
-		preassignedPhysical := vGpu.GetPreAssignedCell().GetPhysicalCell()
+		preassignedPhysical := vGpu.GetPreassignedCell().GetPhysicalCell()
 		if pGpu.IsHealthy() {
 			// we won't unbind the cell if it is bad
 			unbindCell(pGpu)
@@ -1316,14 +1328,14 @@ func (h *HivedAlgorithm) releaseGpu(pGpu *PhysicalCell, vcn api.VirtualClusterNa
 		// virtual cell is already unbound. It's possible that the cell is bad, then the binding
 		// won't be destroyed automatically (the cell is still bound only because it is bad).
 		// If the below condition is true, then	the preassigned cell is not in real use and we can hence release it.
-		if !preassignedPhysical.IsPinned() && vGpu.GetPreAssignedCell().GetPriority() < minGuaranteedPriority &&
+		if !preassignedPhysical.IsPinned() && vGpu.GetPreassignedCell().GetPriority() < minGuaranteedPriority &&
 			!h.vcDoomedBadCells[vcn][preassignedPhysical.GetChain()].contains(
 				preassignedPhysical, preassignedPhysical.GetLevel()) {
 			h.releasePreassignedCell(preassignedPhysical, vcn)
 		}
 	} else {
 		pGpu.GetAPIStatus().VC = ""
-		h.apiClusterStatus.VirtualClusters[vcn] = deleteOpporVirtualCell(
+		h.apiClusterStatus.VirtualClusters[vcn] = deleteOTVirtualCell(
 			h.apiClusterStatus.VirtualClusters[vcn], pGpu.GetAddress())
 	}
 	updateUsedGpuNumAtPriority(pGpu, pGpu.GetPriority(), false)

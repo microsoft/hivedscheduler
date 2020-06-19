@@ -268,13 +268,22 @@ func mapPhysicalCellToVirtual(
 
 // getLowestPriorityVirtualCell returns a virtual cell with the lowest priority
 // among those whose priorities are lower than the given priority (p).
+// We don't just return a free cell because in cases like reconfiguration, there might be no
+// free cell left. Then we allow to return a non-free, but lowest-priority cell and preempt it.
 func getLowestPriorityVirtualCell(cl CellList, p CellPriority) (lowestPriorityCell *VirtualCell) {
 	lowestPriority := maxGuaranteedPriority
 	for _, c := range cl {
 		vc := c.(*VirtualCell)
 		priority := vc.GetPriority()
 		if priority == freePriority {
-			return vc
+			if vc.GetPhysicalCell() == nil {
+				return vc
+			} else {
+				// Although freePriority must be the lowest priority, we should not return a free cell
+				// with binding, because such binding cannot be preempted (e.g., the binding is
+				// created for doomed bad cell)
+				continue
+			}
 		} else if priority < p && priority < lowestPriority {
 			lowestPriority = priority
 			lowestPriorityCell = vc
@@ -319,17 +328,12 @@ func unbindCell(c *PhysicalCell) {
 		boundVirtual.SetPhysicalCell(nil)
 		boundPhysical.SetVirtualCell(nil)
 		if boundVirtual.GetParent() == nil {
-			break
+			return
 		} else {
-			unbindParent := true
 			for _, cc := range boundVirtual.GetParent().GetChildren() {
 				if child := cc.(*VirtualCell); child.GetPhysicalCell() != nil {
-					unbindParent = false
-					break
+					return
 				}
-			}
-			if !unbindParent {
-				break
 			}
 			boundVirtual = boundVirtual.GetParent().(*VirtualCell)
 		}

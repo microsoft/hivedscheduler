@@ -131,7 +131,6 @@ type PhysicalCell struct {
 	usingGroup               *AlgoAffinityGroup // affinity group using this cell (i.e., has running pod on the cell)
 	reservingOrReservedGroup *AlgoAffinityGroup // affinity group that is reserving, or has reserved the cell (e.g., waiting for preemption)
 	virtualCell              *VirtualCell       // points to the bound virtual cell
-	preBoundVirtualCell      *VirtualCell       // points to the temporarily bound virtual cell (before the binding is confirmed)
 	split                    bool               // true when the cell has been split
 	pinned                   bool               // true when this is a pinned cell
 	// This status only contains the statuses that need to be exposed to external,
@@ -311,11 +310,10 @@ func (c *PhysicalCell) SetHealthiness(h api.CellHealthiness) {
 // VirtualCell defines a cell in a VC.
 type VirtualCell struct {
 	GenericCell
-	vc                   api.VirtualClusterName // name of its VC
-	pid                  api.PinnedCellId       // pinned cell ID
-	preAssignedCell      *VirtualCell           // top level cell of this cell chain
-	physicalCell         *PhysicalCell          // points to the bound physical cell
-	preBoundPhysicalCell *PhysicalCell          // points to the temporarily bound physical cell (before the binding is confirmed)
+	vc              api.VirtualClusterName // name of its VC
+	pid             api.PinnedCellId       // pinned cell ID
+	preassignedCell *VirtualCell           // top-level ancestor of this cell
+	physicalCell    *PhysicalCell          // points to the bound physical cell
 	// This status only contains the statuses that need to be exposed to external,
 	// and should not be used for internal status management
 	apiStatus *api.VirtualCellStatus
@@ -345,7 +343,7 @@ func NewVirtualCell(
 			healthy:                true,
 		},
 		vc:              vcn,
-		preAssignedCell: pac,
+		preassignedCell: pac,
 		apiStatus: &api.VirtualCellStatus{
 			CellStatus: api.CellStatus{
 				CellType:        cellType,
@@ -383,12 +381,12 @@ func (c *VirtualCell) SetPinnedCellId(pid api.PinnedCellId) {
 	c.pid = pid
 }
 
-func (c *VirtualCell) GetPreAssignedCell() *VirtualCell {
-	return c.preAssignedCell
+func (c *VirtualCell) GetPreassignedCell() *VirtualCell {
+	return c.preassignedCell
 }
 
 func (c *VirtualCell) SetPreAssignedCell(cell *VirtualCell) {
-	c.preAssignedCell = cell
+	c.preassignedCell = cell
 }
 
 func (c *VirtualCell) GetPhysicalCell() *PhysicalCell {
@@ -399,6 +397,7 @@ func (c *VirtualCell) SetPhysicalCell(cell *PhysicalCell) {
 	c.physicalCell = cell
 	if cell == nil {
 		c.apiStatus.PhysicalCell = nil
+		c.state = cellFree
 		c.healthy = true
 		c.apiStatus.CellHealthiness = api.CellHealthy
 		c.apiStatus.CellState = api.CellState(cellFree)
