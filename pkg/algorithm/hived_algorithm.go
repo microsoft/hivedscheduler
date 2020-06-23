@@ -76,18 +76,17 @@ type HivedAlgorithm struct {
 	vcDoomedBadCells map[api.VirtualClusterName]map[CellChain]ChainCellList
 	// number of doomed bad cells in all the VCs of each cell type
 	allVCDoomedBadCellNum map[CellChain]map[CellLevel]int32
-
-	// Whether we should avoid binding cells to nodes that are not within K8s suggested nodes (note that
-	// we always avoid using bad nodes; avoiding non-suggested nodes is optional can be configured).
-	//
-	// Note that we do not mark virtual cells as "doomed to be bound to non-suggested nodes"
+	// Besides bad nodes, we also avoid using nodes not suggested by K8s (configured in
+	// ignoreK8sSuggestedNodes of an affinity group).
+	// But note that we do NOT mark virtual cells as "doomed to be bound to non-suggested nodes"
 	// (like what we do for "doomed to be bound to bad cells"),
-	// because suggested nodes are not stable: they are provided by K8s for each pod to be scheduled,
-	// and may change across different pods. The consequence is that the intra-VC scheduler may choose
-	// some placements that cannot be mapped to a physical placement fully within the suggested nodes.
+	// because suggested nodes are not stable: they are provided by K8s during scheduling *each pod*,
+	// and may change across different pods. The consequence is that, even if ignoreK8sSuggestedNodes is false
+	// for an affinity group, the intra-VC scheduler may choose some placements that
+	// cannot be mapped to a physical placement fully within the suggested nodes.
 	// TODO: introduce randomization in intra-VC scheduling to avoid always choosing the same placement
 	// that cannot be mapped to suggested nodes
-	avoidNonSuggestedNodes bool
+
 	// bad nodes in the physical cluster
 	badNodes common.Set
 	// map each GPU type to all chains that contain this type
@@ -116,7 +115,6 @@ func NewHivedAlgorithm(sConfig *api.Config) *HivedAlgorithm {
 		badFreeCells:            map[CellChain]ChainCellList{},
 		vcDoomedBadCells:        map[api.VirtualClusterName]map[CellChain]ChainCellList{},
 		allVCDoomedBadCellNum:   map[CellChain]map[CellLevel]int32{},
-		avoidNonSuggestedNodes:  true,
 		badNodes:                common.NewSet(),
 		cellChains:              chains,
 		cellTypes:               cellTypes,
@@ -132,7 +130,7 @@ func NewHivedAlgorithm(sConfig *api.Config) *HivedAlgorithm {
 			nonPinnedFullVcl[vcName], nonPinnedFreeVcl[vcName], pinnedVcl[vcName], gpuNums)
 	}
 	for chain, ccl := range h.fullCellList {
-		h.opportunisticSchedulers[chain] = NewTopologyAwareScheduler(ccl, gpuNums[chain], false, true)
+		h.opportunisticSchedulers[chain] = NewTopologyAwareScheduler(ccl, gpuNums[chain], false)
 	}
 	h.initCellNums()
 	h.initAPIClusterStatus()
@@ -664,7 +662,7 @@ func (h *HivedAlgorithm) schedulePodFromExistingGroup(
 	podIndex int32) {
 
 	badOrNonSuggestedNodes := collectBadOrNonSuggestedNodes(
-		g.physicalGpuPlacement, suggestedNodes, h.avoidNonSuggestedNodes)
+		g.physicalGpuPlacement, suggestedNodes, g.ignoreK8sSuggestedNodes)
 	// state of an existing group can be either Allocated or Preempting
 	if g.state == groupAllocated {
 		klog.Infof("[%v]: Pod is from an affinity group that is already allocated: %v",
@@ -766,6 +764,8 @@ func (h *HivedAlgorithm) scheduleNewAffinityGroup(
 		priority:             priority,
 		affinityGroupName:    s.AffinityGroup.Name,
 		affinityGroupPodNums: map[int32]int32{},
+		suggestedNodes:       suggestedNodes,
+		ignoreSuggestedNodes: s.IgnoreK8sSuggestedNodes,
 	}
 	for _, m := range s.AffinityGroup.Members {
 		// we will merge group members with same GPU number
@@ -774,7 +774,7 @@ func (h *HivedAlgorithm) scheduleNewAffinityGroup(
 	h.validateSchedulingRequest(sr, pod)
 	if sr.pinnedCellId != "" {
 		klog.Infof("Using pinned cell %v", s.PinnedCellId)
-		physicalPlacement, virtualPlacement, failedReason = h.processSchedulingRequest(sr, suggestedNodes)
+		physicalPlacement, virtualPlacement, failedReason = h.handleSchedulingRequest(sr)
 	} else if s.GpuType != "" {
 		if _, ok := h.cellChains[s.GpuType]; !ok {
 			panic(internal.NewBadRequestError(fmt.Sprintf(
@@ -783,10 +783,9 @@ func (h *HivedAlgorithm) scheduleNewAffinityGroup(
 		}
 		klog.Infof("Using specified GPU type %v", s.GpuType)
 		physicalPlacement, virtualPlacement, failedReason = h.scheduleAffinityGroupForGpuType(
-			sr, s.GpuType, pod, suggestedNodes, true)
+			sr, s.GpuType, pod, true)
 	} else {
-		physicalPlacement, virtualPlacement, failedReason = h.scheduleAffinityGroupForAnyGpuType(
-			sr, pod, suggestedNodes)
+		physicalPlacement, virtualPlacement, failedReason = h.scheduleAffinityGroupForAnyGpuType(sr, pod)
 	}
 	return physicalPlacement, virtualPlacement, failedReason
 }
@@ -797,7 +796,6 @@ func (h *HivedAlgorithm) scheduleAffinityGroupForGpuType(
 	sr schedulingRequest,
 	gpuType string,
 	pod *core.Pod,
-	suggestedNodes common.Set,
 	typeSpecified bool) (
 	physicalPlacement groupPhysicalPlacement,
 	virtualPlacement groupVirtualPlacement,
@@ -811,7 +809,7 @@ func (h *HivedAlgorithm) scheduleAffinityGroupForGpuType(
 			klog.Infof("Searching chain %v", chain)
 			sr.chain = chain
 			physicalPlacement, virtualPlacement, failedReason =
-				h.processSchedulingRequest(sr, suggestedNodes)
+				h.handleSchedulingRequest(sr)
 			if physicalPlacement != nil {
 				return physicalPlacement, virtualPlacement, ""
 			}
@@ -829,8 +827,7 @@ func (h *HivedAlgorithm) scheduleAffinityGroupForGpuType(
 // (when the user does not specify a GPU type).
 func (h *HivedAlgorithm) scheduleAffinityGroupForAnyGpuType(
 	sr schedulingRequest,
-	pod *core.Pod,
-	suggestedNodes common.Set) (
+	pod *core.Pod) (
 	groupPhysicalPlacement,
 	groupVirtualPlacement,
 	string) {
@@ -839,7 +836,7 @@ func (h *HivedAlgorithm) scheduleAffinityGroupForAnyGpuType(
 	for gpuType := range h.cellChains {
 		klog.Infof("Searching GPU type %v", gpuType)
 		typePhysicalPlacement, typeVirtualPlacement, typeFailedReason :=
-			h.scheduleAffinityGroupForGpuType(sr, gpuType, pod, suggestedNodes, false)
+			h.scheduleAffinityGroupForGpuType(sr, gpuType, pod, false)
 		if typePhysicalPlacement != nil {
 			return typePhysicalPlacement, typeVirtualPlacement, ""
 		}
@@ -867,10 +864,9 @@ func (h *HivedAlgorithm) validateSchedulingRequest(sr schedulingRequest, pod *co
 	}
 }
 
-// processSchedulingRequest feeds a request to a VC scheduler or the opportunistic scheduler depending on its priority.
-func (h *HivedAlgorithm) processSchedulingRequest(
-	sr schedulingRequest,
-	suggestedNodes common.Set) (
+// handleSchedulingRequest feeds a request to a VC scheduler or the opportunistic scheduler depending on its priority.
+func (h *HivedAlgorithm) handleSchedulingRequest(
+	sr schedulingRequest) (
 	physicalPlacement groupPhysicalPlacement,
 	virtualPlacement groupVirtualPlacement,
 	failedReason string) {
@@ -882,9 +878,9 @@ func (h *HivedAlgorithm) processSchedulingRequest(
 	klog.Infof("Processing scheduling request: %v, GPU numbers %v, priority %v",
 		str, common.ToJson(sr.affinityGroupPodNums), sr.priority)
 	if sr.priority >= minGuaranteedPriority {
-		physicalPlacement, virtualPlacement, failedReason = h.scheduleGuaranteedAffinityGroup(sr, suggestedNodes)
+		physicalPlacement, virtualPlacement, failedReason = h.scheduleGuaranteedAffinityGroup(sr)
 	} else {
-		physicalPlacement, failedReason = h.scheduleOpportunisticAffinityGroup(sr, suggestedNodes)
+		physicalPlacement, failedReason = h.scheduleOpportunisticAffinityGroup(sr)
 	}
 	if physicalPlacement == nil {
 		klog.Infof("Cannot find placement in %v: %v", str, failedReason)
@@ -897,14 +893,13 @@ func (h *HivedAlgorithm) processSchedulingRequest(
 // scheduleGuaranteedAffinityGroup schedules an affinity group in its VC,
 // and then maps the placement in VC to the physical cluster.
 func (h *HivedAlgorithm) scheduleGuaranteedAffinityGroup(
-	sr schedulingRequest,
-	suggestedNodes common.Set) (
+	sr schedulingRequest) (
 	physicalPlacement groupPhysicalPlacement,
 	virtualPlacement groupVirtualPlacement,
 	failedReason string) {
 
 	// schedule in VC
-	virtualPlacement, failedReason = h.vcSchedulers[sr.vc].schedule(sr, suggestedNodes)
+	virtualPlacement, failedReason = h.vcSchedulers[sr.vc].schedule(sr)
 	if virtualPlacement == nil {
 		return nil, nil, failedReason
 	}
@@ -918,8 +913,8 @@ func (h *HivedAlgorithm) scheduleGuaranteedAffinityGroup(
 		preassignedCells,
 		nonPreassignedCells,
 		h.freeCellList[sr.chain].shallowCopy(),
-		suggestedNodes,
-		h.avoidNonSuggestedNodes,
+		sr.suggestedNodes,
+		sr.ignoreSuggestedNodes,
 		bindings); ok {
 		return virtualPlacement.toPhysicalPlacement(bindings, gpuNums), virtualPlacement, ""
 	}
@@ -956,13 +951,12 @@ func (h *HivedAlgorithm) tryLazyPreempt(
 
 // scheduleOpportunisticAffinityGroup calls the opportunistic pod scheduler to schedule an affinity group.
 func (h *HivedAlgorithm) scheduleOpportunisticAffinityGroup(
-	sr schedulingRequest,
-	suggestedNodes common.Set) (
+	sr schedulingRequest) (
 	placement groupPhysicalPlacement,
 	failedReason string) {
 
 	placement, failedReason = h.opportunisticSchedulers[sr.chain].Schedule(
-		sr.affinityGroupPodNums, opportunisticPriority, suggestedNodes)
+		sr.affinityGroupPodNums, opportunisticPriority, sr.suggestedNodes, sr.ignoreSuggestedNodes)
 	if placement == nil {
 		return nil, fmt.Sprintf("%v when scheduling in physical cluster", failedReason)
 	}
@@ -1327,7 +1321,7 @@ func (h *HivedAlgorithm) releaseGpu(pGpu *PhysicalCell, vcn api.VirtualClusterNa
 		// To check if we should release the preassigned cell, we cannot simply check if the
 		// virtual cell is already unbound. It's possible that the cell is bad, then the binding
 		// won't be destroyed automatically (the cell is still bound only because it is bad).
-		// If the below condition is true, then	the preassigned cell is not in real use and we can hence release it.
+		// If the below condition is true, then the preassigned cell is not in real use and we can hence release it.
 		if !preassignedPhysical.IsPinned() && vGpu.GetPreassignedCell().GetPriority() < minGuaranteedPriority &&
 			!h.vcDoomedBadCells[vcn][preassignedPhysical.GetChain()].contains(
 				preassignedPhysical, preassignedPhysical.GetLevel()) {

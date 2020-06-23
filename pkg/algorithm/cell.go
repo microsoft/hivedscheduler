@@ -55,15 +55,17 @@ func CellEqual(c1 Cell, c2 Cell) bool {
 }
 
 type GenericCell struct {
-	chain                  CellChain
-	level                  CellLevel
-	address                api.CellAddress
-	parent                 Cell     // pointer to its parent cell
-	children               CellList // pointer to its children cells
-	atOrHigherThanNode     bool     // true if the cell is at or higher than node level
-	priority               CellPriority
-	state                  CellState
-	healthy                bool                   // healthy if all of the cell's children are healthy (bad if any child is bad)
+	chain              CellChain
+	level              CellLevel
+	address            api.CellAddress
+	parent             Cell     // pointer to its parent cell
+	children           CellList // pointer to its children cells
+	atOrHigherThanNode bool     // true if the cell is at or higher than node level
+	priority           CellPriority
+	state              CellState
+	// A cell is healthy if all of the cell's children are healthy (bad if any child is bad).
+	// The healthy field is orthogonal to priority and state.
+	healthy                bool
 	totalGpuNum            int32                  // total GPU number of a cell
 	usedGpuNumAtPriorities map[CellPriority]int32 // GPU number used by each priority
 }

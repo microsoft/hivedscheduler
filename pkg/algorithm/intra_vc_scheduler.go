@@ -38,7 +38,7 @@ type intraVCScheduler interface {
 	getPinnedCells() map[api.PinnedCellId]ChainCellList
 
 	// Schedule an affinity group inside a VC. We use topologyAwareScheduler by default.
-	schedule(sr schedulingRequest, suggestedNodes common.Set) (groupVirtualPlacement, string)
+	schedule(schedulingRequest) (groupVirtualPlacement, string)
 }
 
 type defaultIntraVCScheduler struct {
@@ -62,10 +62,10 @@ func newDefaultIntraVCScheduler(
 	snr := map[CellChain]*topologyAwareScheduler{}
 	sr := map[api.PinnedCellId]*topologyAwareScheduler{}
 	for chain, ccl := range nonPinnedFullList {
-		snr[chain] = NewTopologyAwareScheduler(ccl, gpuNums[chain], true, true)
+		snr[chain] = NewTopologyAwareScheduler(ccl, gpuNums[chain], true)
 	}
 	for pid, ccl := range pinnedList {
-		sr[pid] = NewTopologyAwareScheduler(ccl, gpuNums[ccl[CellLevel(1)][0].GetChain()], true, true)
+		sr[pid] = NewTopologyAwareScheduler(ccl, gpuNums[ccl[CellLevel(1)][0].GetChain()], true)
 	}
 	return &defaultIntraVCScheduler{
 		nonPinnedFullCellList:     nonPinnedFullList,
@@ -89,8 +89,7 @@ func (s *defaultIntraVCScheduler) getPinnedCells() map[api.PinnedCellId]ChainCel
 }
 
 func (s *defaultIntraVCScheduler) schedule(
-	sr schedulingRequest,
-	suggestedNodes common.Set) (
+	sr schedulingRequest) (
 	placement groupVirtualPlacement,
 	failedReason string) {
 
@@ -103,7 +102,11 @@ func (s *defaultIntraVCScheduler) schedule(
 	klog.Infof("Processing scheduling request in VC %v: %v, GPU numbers %v, priority %v",
 		sr.vc, str, common.ToJson(sr.affinityGroupPodNums), sr.priority)
 	if scheduler != nil {
-		placement, failedReason = scheduler.Schedule(sr.affinityGroupPodNums, sr.priority, suggestedNodes)
+		placement, failedReason = scheduler.Schedule(
+			sr.affinityGroupPodNums,
+			sr.priority,
+			sr.suggestedNodes,
+			sr.ignoreSuggestedNodes)
 	}
 	if placement == nil {
 		return nil, fmt.Sprintf("%v when scheduling in VC %v", failedReason, sr.vc)

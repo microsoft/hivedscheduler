@@ -46,6 +46,8 @@ type schedulingRequest struct {
 	affinityGroupName    string
 	affinityGroupPodNums map[int32]int32 // gpu number -> pod number
 	priority             CellPriority
+	suggestedNodes       common.Set
+	ignoreSuggestedNodes bool
 }
 
 // CellList is a list of cells at a certain level of a chain.
@@ -131,14 +133,17 @@ type AlgoAffinityGroup struct {
 	name                 string
 	vc                   api.VirtualClusterName
 	lazyPreemptionEnable bool
-	priority             int32
-	totalPodNums         map[int32]int32       // GpuNum -> PodNum
-	allocatedPods        map[int32][]*core.Pod // GpuNum -> a list of allocated pods
-	preemptingPods       map[types.UID]*core.Pod
-	physicalGpuPlacement groupPhysicalPlacement
-	virtualGpuPlacement  groupVirtualPlacement
-	state                AffinityGroupState
-	lazyPreemptionStatus *api.LazyPreemptionStatus
+	// whether we should ignore K8s suggested nodes, i.e., avoid binding cells to non-suggested nodes
+	// (note that we always avoid using bad nodes; avoiding non-suggested nodes is optional and can be configured)
+	ignoreK8sSuggestedNodes bool
+	priority                int32
+	totalPodNums            map[int32]int32       // GpuNum -> PodNum
+	allocatedPods           map[int32][]*core.Pod // GpuNum -> a list of allocated pods
+	preemptingPods          map[types.UID]*core.Pod
+	physicalGpuPlacement    groupPhysicalPlacement
+	virtualGpuPlacement     groupVirtualPlacement
+	state                   AffinityGroupState
+	lazyPreemptionStatus    *api.LazyPreemptionStatus
 }
 
 func newAlgoAffinityGroup(

@@ -75,14 +75,15 @@ type PinnedCellSpec struct {
 }
 
 type PodSchedulingSpec struct {
-	VirtualCluster       VirtualClusterName `yaml:"virtualCluster"`
-	Priority             int32              `yaml:"priority"`
-	PinnedCellId         PinnedCellId       `yaml:"pinnedCellId"`
-	GpuType              string             `yaml:"gpuType"`
-	GpuNumber            int32              `yaml:"gpuNumber"`
-	GangReleaseEnable    bool               `yaml:"gangReleaseEnable"`
-	LazyPreemptionEnable bool               `yaml:"lazyPreemptionEnable"`
-	AffinityGroup        *AffinityGroupSpec `yaml:"affinityGroup"`
+	VirtualCluster          VirtualClusterName `yaml:"virtualCluster"`
+	Priority                int32              `yaml:"priority"`
+	PinnedCellId            PinnedCellId       `yaml:"pinnedCellId"`
+	GpuType                 string             `yaml:"gpuType"`
+	GpuNumber               int32              `yaml:"gpuNumber"`
+	GangReleaseEnable       bool               `yaml:"gangReleaseEnable"`
+	LazyPreemptionEnable    bool               `yaml:"lazyPreemptionEnable"`
+	IgnoreK8sSuggestedNodes bool               `yaml:"ignoreK8sSuggestedNodes"`
+	AffinityGroup           *AffinityGroupSpec `yaml:"affinityGroup"`
 }
 
 type AffinityGroupSpec struct {
