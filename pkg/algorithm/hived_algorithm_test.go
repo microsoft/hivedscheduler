@@ -63,7 +63,7 @@ func initNodes(h *HivedAlgorithm) {
 }
 
 var group1, group2, group3, group4, group5, group6, group7, group8, group9, group10, group11, group12, group13, group14,
-	group15, group16, group17, group18, group19, group20, group21, group22, group23, group24, group25, group26, group27, group28 = &api.AffinityGroupSpec{
+	group15, group16, group17, group18, group19, group20, group21, group22, group23, group24, group25, group26, group27, group28, group29 = &api.AffinityGroupSpec{
 	Name:    "group1",
 	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, GpuNumber: 1}},
 }, &api.AffinityGroupSpec{
@@ -147,6 +147,9 @@ var group1, group2, group3, group4, group5, group6, group7, group8, group9, grou
 }, &api.AffinityGroupSpec{
 	Name:    "group28",
 	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, GpuNumber: 16}},
+}, &api.AffinityGroupSpec{
+	Name:    "group29",
+	Members: []api.AffinityGroupMemberSpec{{PodNumber: 4, GpuNumber: 16}},
 }
 
 var pss = map[types.UID]api.PodSchedulingSpec{
@@ -470,6 +473,14 @@ var pss = map[types.UID]api.PodSchedulingSpec{
 		GpuType:              "DGX2-V100",
 		GpuNumber:            16,
 		AffinityGroup:        group28,
+	}, "pod41": { // revert lazy preemption in backtrack cell search
+		VirtualCluster:       "VC1",
+		Priority:             2,
+		LazyPreemptionEnable: true,
+		PinnedCellId:         "",
+		GpuType:              "DGX2-V100",
+		GpuNumber:            16,
+		AffinityGroup:        group29,
 	},
 }
 
@@ -741,7 +752,7 @@ func testSuggestedNodes(t *testing.T, configFilePath string) {
 	psr = h.Schedule(pod, nodes[:len(nodes)-1], internal.PreemptingPhase)
 	// group should have been deleted because the placement is not within Preempting-phase suggested nodes
 	if g := h.affinityGroups[pss[pod.UID].AffinityGroup.Name]; g != nil {
-		t.Errorf("Groups %v should have been deleted, but not", g.name)
+		t.Errorf("Group %v should have been deleted, but not", g.name)
 	}
 
 	// test backtracking search for cell binding
@@ -762,6 +773,23 @@ func testSuggestedNodes(t *testing.T, configFilePath string) {
 	pod.Annotations[api.AnnotationKeyPodSchedulingSpec] = common.ToYaml(pss[pod.UID])
 	psr = h.Schedule(pod, []string{"0.0.4.3"}, internal.PreemptingPhase)
 	compareSchedulingResult(t, pod, psr)
+	h.AddAllocatedPod(internal.NewBindingPod(pod, psr.PodBindInfo))
+	pod = allPods["pod41"]
+	pod.Annotations[api.AnnotationKeyPodSchedulingSpec] = common.ToYaml(pss[pod.UID])
+	psr = h.Schedule(pod, []string{"0.0.3.2", "0.0.3.3", "0.0.4.3"}, internal.PreemptingPhase)
+	// the pod tries to lazy preempt group27 and group28, but is reverted
+	if g := h.affinityGroups["group27"]; g == nil {
+		t.Errorf("Group %v should be allocated but does not exist",
+			pss[pod.UID].AffinityGroup.Name)
+	} else if g.state != groupAllocated {
+		t.Errorf("Group %v should be in Allocated state but not", g.name)
+	}
+	if g := h.affinityGroups["group28"]; g == nil {
+		t.Errorf("Group %v should be allocated but does not exist",
+			pss[pod.UID].AffinityGroup.Name)
+	} else if g.state != groupAllocated {
+		t.Errorf("Group %v should be in Allocated state but not", g.name)
+	}
 }
 
 func testStatefulPreemption(t *testing.T, configFilePath string) {

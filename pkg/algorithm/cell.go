@@ -159,7 +159,8 @@ func NewPhysicalCell(
 			totalGpuNum:            n,
 			usedGpuNumAtPriorities: map[CellPriority]int32{},
 			state:                  cellFree,
-			healthy:                true,
+			// cells are set to healthy initially, and will be all set to bad in HivedAlgorithm.initBadNodes
+			healthy: true,
 		},
 		apiStatus: &api.PhysicalCellStatus{
 			CellStatus: api.CellStatus{
@@ -342,7 +343,8 @@ func NewVirtualCell(
 			totalGpuNum:            n,
 			usedGpuNumAtPriorities: map[CellPriority]int32{},
 			state:                  cellFree,
-			healthy:                true,
+			// cells are set to healthy initially, and will be all set to bad in HivedAlgorithm.initBadNodes
+			healthy: true,
 		},
 		vc:              vcn,
 		preassignedCell: pac,

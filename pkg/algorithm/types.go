@@ -133,8 +133,8 @@ type AlgoAffinityGroup struct {
 	name                 string
 	vc                   api.VirtualClusterName
 	lazyPreemptionEnable bool
-	// whether we should ignore K8s suggested nodes, i.e., avoid binding cells to non-suggested nodes
-	// (note that we always avoid using bad nodes; avoiding non-suggested nodes is optional and can be configured)
+	// Whether we should ignore K8s suggested nodes. If false, we will avoid binding cells to non-suggested nodes.
+	// Note that we always avoid using bad nodes; avoiding non-suggested nodes is optional and best-effort.
 	ignoreK8sSuggestedNodes bool
 	priority                int32
 	totalPodNums            map[int32]int32       // GpuNum -> PodNum
@@ -290,8 +290,8 @@ func (p groupVirtualPlacement) toBindingPaths(
 	allBindingPathVertices := map[api.CellAddress]*cellBindingPathVertex{}
 	for _, podGpuNum := range gpuNums {
 		podPlacements := p[podGpuNum]
-		for _, pod := range podPlacements {
-			for _, gpu := range pod {
+		for _, podPlacement := range podPlacements {
+			for _, gpu := range podPlacement {
 				if pGpu := gpu.(*VirtualCell).GetPhysicalCell(); pGpu != nil {
 					bindings[gpu.GetAddress()] = pGpu
 					continue

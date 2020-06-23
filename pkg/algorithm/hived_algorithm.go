@@ -921,9 +921,13 @@ func (h *HivedAlgorithm) scheduleGuaranteedAffinityGroup(
 	for groupName, placement := range lazyPreemptedGroups {
 		h.revertLazyPreempt(h.affinityGroups[groupName], placement)
 	}
+	failedNodeType := "bad or non-suggested"
+	if sr.ignoreSuggestedNodes {
+		failedNodeType = "bad"
+	}
 	return nil, nil, fmt.Sprintf(
-		"Mapping the virtual placement would need to use at least one bad or non-suggested node "+
-			"(virtual placement : %v)", virtualPlacement)
+		"Mapping the virtual placement would need to use at least one %v node "+
+			"(virtual placement : %v)", failedNodeType, virtualPlacement)
 }
 
 // tryLazyPreempt tries to lazy preempt the affinity groups found on a placement.
