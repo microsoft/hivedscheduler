@@ -1,7 +1,7 @@
 # Microsoft OpenPAI HiveDScheduler
 
 [![Build Status](https://github.com/microsoft/hivedscheduler/workflows/build/badge.svg?branch=master&event=push)](https://github.com/microsoft/hivedscheduler/actions?query=workflow%3Abuild+branch%3Amaster+event%3Apush)
-[![Coverage Status](https://coveralls.io/repos/github/microsoft/hivedscheduler/badge.svg?branch=master)](https://coveralls.io/github/microsoft/hivedscheduler?branch=master)
+[![codecov](https://codecov.io/gh/microsoft/hivedscheduler/branch/master/graph/badge.svg)](https://codecov.io/gh/microsoft/hivedscheduler)
 [![Latest Release](https://img.shields.io/github/release/microsoft/hivedscheduler.svg)](https://github.com/microsoft/hivedscheduler/releases/latest)
 [![Docker Pulls](https://img.shields.io/docker/pulls/hivedscheduler/hivedscheduler.svg)](https://hub.docker.com/u/hivedscheduler)
 [![License](https://img.shields.io/github/license/microsoft/hivedscheduler.svg)](https://github.com/microsoft/hivedscheduler/blob/master/LICENSE)
