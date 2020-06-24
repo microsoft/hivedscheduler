@@ -584,13 +584,13 @@ func TestHivedAlgorithm(t *testing.T) {
 	}
 	setHealthyNodes(h)
 
-	//printConfig(t, h)
-	//testNormalOperations(t, h)
-	//testSuggestedNodes(t, configFilePath)
-	//testStatefulPreemption(t, configFilePath)
+	printConfig(t, h)
+	testNormalOperations(t, h)
+	testSuggestedNodes(t, configFilePath)
+	testStatefulPreemption(t, configFilePath)
 	testBadNodes(t, configFilePath)
-	//testReconfiguration(t, configFilePath)
-	//testInvalidInitialAssignment(t, sConfig)
+	testReconfiguration(t, configFilePath)
+	testInvalidInitialAssignment(t, sConfig)
 }
 
 func sortChains(chains []CellChain) {

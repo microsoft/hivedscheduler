@@ -67,8 +67,8 @@ type HivedAlgorithm struct {
 	// A preassigned cell in a VC is "doomed to be bad" when the healthy free cells in the physical cluster
 	// is fewer than the VC's free cells (thus certain free cells in the VC will be inevitably bound
 	// to bad physical cells at this moment despite the dynamic cell binding).
-	// Therefore, we should try to bind/unbind doomed bad cells whenever the number of healthy free cells
-	// (determined by totalLeftCellNum and badFreeCells) and vcFreeCellNum change.
+	// Therefore, we should try to bind/unbind doomed bad cells whenever totalLeftCellNum, badFreeCells,
+	// and vcFreeCellNum change.
 
 	// Marking doomed bad cells can help the intra-VC scheduler avoid finding placements that will
 	// be inevitably mapped to bad physical nodes. Status of doomed bad cells can also be exposed
