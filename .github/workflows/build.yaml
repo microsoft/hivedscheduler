@@ -35,7 +35,6 @@ jobs:
         working-directory: src/github.com/${{ github.repository }}
         run: go test -race -covermode=atomic -coverprofile=$GOPATH/coverage.txt ./pkg/algorithm/
       - name: Report coverage
-        working-directory: src/github.com/${{ github.repository }}
         uses: codecov/codecov-action@v1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
