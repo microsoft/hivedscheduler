@@ -1357,10 +1357,9 @@ func (h *HivedAlgorithm) allocatePreassignedCell(
 
 	// When allocating a preassigned cell, we will do doomed bad cell check
 	// (if this is already a doomed bad cell then no need for this check).
-	// The principle of this check is to compare for each level: allVCFreeCellNum and
+	// The principle of this check is to compare for each level and each VC: vcFreeCellNum and
 	// the number of healthy free physical cells (i.e., totalLeftCellNum - len(badFreeCell)).
-	// For levels higher or lower than the level of c, allVCFreeCellNum does not change.
-	// For the level of c, allVCFreeCellNum decreases by 1.
+	// vcFreeCellNum only changes for the VC and the level of the allocated cell c (decreases by 1).
 	// For all the levels, if the number of healthy free cells decreases depends on
 	// if the allocated cell is bad/healthy.
 	// We explain the checking rule in detail in the code below (similar rule also applies to cell release).
@@ -1374,7 +1373,7 @@ func (h *HivedAlgorithm) allocatePreassignedCell(
 				h.cellTypes[chain][l], h.totalLeftCellNum[chain][l], h.allVCFreeCellNum[chain][l])
 		}
 		if !parent.(*PhysicalCell).IsHealthy() {
-			// If parent is bad, both allVCFreeCellNum and number of healthy free cells do not change.
+			// If parent is bad, both vcFreeCellNum (of all VCs) and the number of healthy free cells do not change.
 			// So we only remove the cell from bad free cells, and no need to bind/unbind doomed bad cells.
 			h.badFreeCells[chain].remove(parent, l)
 		} else {
@@ -1387,11 +1386,15 @@ func (h *HivedAlgorithm) allocatePreassignedCell(
 	if !c.IsHealthy() {
 		h.allocateBadCell(c)
 		if !doomedBad {
-			// If c is bad, allVCFreeCellNum decreases by 1, but number of healthy free cells does not change.
+			// If c is bad, vcFreeCellNum of this VC decreases by 1, but number of healthy free cells does not change.
 			// So we try to unbind some doomed bad cells
 			// (if c is already a doomed bad cell, there won't be other doomed bad cell to unbind).
 			h.tryUnbindDoomedBadCell(chain, level)
 		}
+	} else {
+		// If c is healthy, vcFreeCellNum does not change for every other VC, but the number of healthy
+		// free cells decreases by 1. So we try to bind some doomed bad cells.
+		h.tryBindDoomedBadCell(chain, level)
 	}
 	numToReduce := int32(len(c.GetChildren()))
 	for l := level - 1; l >= lowestLevel; l-- {
@@ -1402,7 +1405,7 @@ func (h *HivedAlgorithm) allocatePreassignedCell(
 				"cell type %v, %v left, %v free cells in all VCs",
 				h.cellTypes[chain][l], h.totalLeftCellNum[chain][l], h.allVCFreeCellNum[chain][l])
 		}
-		// For levels lower than c, allVCFreeCellNum does not change, but number of healthy free cells
+		// For levels lower than c, vcFreeCellNum does not change for all VCs, but number of healthy free cells
 		// may decrease (unless all children are bad). So we try to bind some doomed bad cells.
 		if !doomedBad {
 			h.tryBindDoomedBadCell(chain, l)
@@ -1457,6 +1460,8 @@ func (h *HivedAlgorithm) releasePreassignedCell(c *PhysicalCell, vcn api.Virtual
 		if !doomedBad {
 			h.tryBindDoomedBadCell(chain, level)
 		}
+	} else {
+		h.tryUnbindDoomedBadCell(chain, level)
 	}
 	numToAdd := int32(len(c.GetChildren()))
 	for l := level - 1; l >= lowestLevel; l-- {
