@@ -63,9 +63,13 @@ type HivedAlgorithm struct {
 
 	// badFreeCells, vcDoomedBadCells, and allVCDoomedBadCellNum are used to track bad cells.
 	// Note that a cell is bad if ANY of its children is bad; so a cell may also contain healthy children.
+
 	// A preassigned cell in a VC is "doomed to be bad" when the healthy free cells in the physical cluster
 	// is fewer than the VC's free cells (thus certain free cells in the VC will be inevitably bound
 	// to bad physical cells at this moment despite the dynamic cell binding).
+	// Therefore, we should try to bind/unbind doomed bad cells whenever the number of healthy free cells
+	// (determined by totalLeftCellNum and badFreeCells) and vcFreeCellNum change.
+
 	// Marking doomed bad cells can help the intra-VC scheduler avoid finding placements that will
 	// be inevitably mapped to bad physical nodes. Status of doomed bad cells can also be exposed
 	// to users, so that users can know if their VCs have bad nodes currently.
