@@ -857,7 +857,8 @@ func testBadNodes(t *testing.T, configFilePath string) {
 	pod := allPods["pod1"]
 	pod.Annotations[api.AnnotationKeyPodSchedulingSpec] = common.ToYaml(pss[pod.UID])
 	psr := h.Schedule(pod, []string{"0.0.2.0"}, internal.PreemptingPhase)
-	h.AddAllocatedPod(internal.NewBindingPod(pod, psr.PodBindInfo))
+	bindingPod := internal.NewBindingPod(pod, psr.PodBindInfo)
+	h.AddAllocatedPod(bindingPod)
 	h.setBadNode("0.0.2.1")
 	for _, c := range h.vcSchedulers["VC1"].getNonPinnedPreassignedCells()["3-DGX2-V100-NODE"][5] {
 		if c.(*VirtualCell).GetAPIStatus().CellHealthiness == api.CellBad {
@@ -877,6 +878,16 @@ func testBadNodes(t *testing.T, configFilePath string) {
 		if c.(*VirtualCell).GetAPIStatus().CellHealthiness == api.CellBad {
 			t.Errorf(
 				"All free cells in VC1 chain 3-DGX2-V100-NODE should be healthy, but %v is bad", c.GetAddress())
+		}
+	}
+	h.setBadNode("0.0.2.0")
+	h.setBadNode("0.0.2.2")
+	h.DeleteAllocatedPod(bindingPod)
+	// after the pod is deleted from 0.0.2.0, the node should still be doomed bad
+	for _, c := range h.vcSchedulers["VC1"].getNonPinnedPreassignedCells()["3-DGX2-V100-NODE"][5] {
+		if c.(*VirtualCell).GetAPIStatus().CellHealthiness == api.CellHealthy {
+			t.Errorf(
+				"All free cells in VC1 chain 3-DGX2-V100-NODE should be bad, but %v is healthy", c.GetAddress())
 		}
 	}
 }
