@@ -1,13 +1,14 @@
 # Microsoft OpenPAI HiveDScheduler
 
 [![Build Status](https://github.com/microsoft/hivedscheduler/workflows/build/badge.svg?branch=master&event=push)](https://github.com/microsoft/hivedscheduler/actions?query=workflow%3Abuild+branch%3Amaster+event%3Apush)
+[![Coverage Status](https://coveralls.io/repos/github/microsoft/hivedscheduler/badge.svg?branch=master)](https://coveralls.io/github/microsoft/hivedscheduler?branch=master)
 [![Latest Release](https://img.shields.io/github/release/microsoft/hivedscheduler.svg)](https://github.com/microsoft/hivedscheduler/releases/latest)
 [![Docker Pulls](https://img.shields.io/docker/pulls/hivedscheduler/hivedscheduler.svg)](https://hub.docker.com/u/hivedscheduler)
 [![License](https://img.shields.io/github/license/microsoft/hivedscheduler.svg)](https://github.com/microsoft/hivedscheduler/blob/master/LICENSE)
 
 **HiveD is a scheduler for deep learning workloads.**
 
-As one standalone component of [Microsoft OpenPAI](https://github.com/microsoft/pai), HiveD is designed to be a [Kubernetes Scheduler **Extender**](https://github.com/kubernetes/community/blob/master/contributors/design-proposals/scheduling/scheduler_extender.md) for **Multi-Tenant** **GPU** clusters. A multi-tenant GPU cluster assumes multiple tenants (teams) share the same GPU pool in a single physical cluster (PC) and provides some resource guarantees to each tenant. HiveD models each tenant as a virtual cluster (VC), so that one tenant can use its own VC as if it is a private cluster, while it can also use other VCs' free resource at lower priority. 
+As one standalone component of [Microsoft OpenPAI](https://github.com/microsoft/pai), HiveD is designed to be a [Kubernetes Scheduler **Extender**](https://github.com/kubernetes/community/blob/master/contributors/design-proposals/scheduling/scheduler_extender.md) for **Multi-Tenant** **GPU** clusters. A multi-tenant GPU cluster assumes multiple tenants (teams) share the same GPU pool in a single physical cluster (PC) and provides some resource guarantees to each tenant. HiveD models each tenant as a virtual cluster (VC), so that one tenant can use its own VC as if it is a private cluster, while it can also use other VCs' free resource at lower priority.
 
 ## Why You Need HiveD
 

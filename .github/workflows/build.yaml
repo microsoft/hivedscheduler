@@ -9,9 +9,33 @@ on:
     - master
 
 jobs:
-  hivedscheduler:
-    name: hivedscheduler
+  test:
+    name: Test on Go-${{ matrix.go }}-${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        go: [1.12.6, 1.13.12, 1.14.4]
+        os: [ubuntu-16.04, ubuntu-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Setup go ${{ matrix.go }}
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{ matrix.go }}
+      - name: Go build
+        run: go build -o hivedscheduler ./cmd/hivedscheduler/
+      - name: Go test
+        run: go test -race -covermode atomic -coverprofile=profile.cov ./pkg/algorithm/
+      - name: Report coverage
+        env:
+          COVERALLS_TOKEN: ${{ secrets.COVERALLS_TOKEN }}
+        run: |
+          GO111MODULE=off go get github.com/mattn/goveralls
+          $(go env GOPATH)/bin/goveralls -service=github -coverprofile=profile.cov
+  docker-build:
+    name: Build Docker
     runs-on: ubuntu-16.04
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v2
     - run: build/hivedscheduler/docker-build.sh
