@@ -63,7 +63,7 @@ func initNodes(h *HivedAlgorithm) {
 }
 
 var group1, group2, group3, group4, group5, group6, group7, group8, group9, group10, group11, group12, group13, group14,
-	group15, group16, group17, group18, group19, group20, group21, group22, group23, group24, group25, group26, group27, group28, group29 = &api.AffinityGroupSpec{
+	group15, group16, group17, group18, group19, group20, group21, group22, group23, group24, group25, group26, group27, group28, group29, group30, group31 = &api.AffinityGroupSpec{
 	Name:    "group1",
 	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, GpuNumber: 1}},
 }, &api.AffinityGroupSpec{
@@ -150,6 +150,12 @@ var group1, group2, group3, group4, group5, group6, group7, group8, group9, grou
 }, &api.AffinityGroupSpec{
 	Name:    "group29",
 	Members: []api.AffinityGroupMemberSpec{{PodNumber: 4, GpuNumber: 16}},
+}, &api.AffinityGroupSpec{
+	Name:    "group30",
+	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, GpuNumber: 16}},
+}, &api.AffinityGroupSpec{
+	Name:    "group31",
+	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, GpuNumber: 16}},
 }
 
 var pss = map[types.UID]api.PodSchedulingSpec{
@@ -481,6 +487,22 @@ var pss = map[types.UID]api.PodSchedulingSpec{
 		GpuType:              "DGX2-V100",
 		GpuNumber:            16,
 		AffinityGroup:        group29,
+	}, "pod42": { // doomed bad cell test
+		VirtualCluster:       "VC1",
+		Priority:             0,
+		LazyPreemptionEnable: true,
+		PinnedCellId:         "",
+		GpuType:              "DGX2-V100",
+		GpuNumber:            16,
+		AffinityGroup:        group30,
+	}, "pod43": { // doomed bad cell test
+		VirtualCluster:       "VC2",
+		Priority:             0,
+		LazyPreemptionEnable: true,
+		PinnedCellId:         "",
+		GpuType:              "DGX2-V100",
+		GpuNumber:            16,
+		AffinityGroup:        group31,
 	},
 }
 
@@ -848,17 +870,46 @@ func testStatefulPreemption(t *testing.T, configFilePath string) {
 
 func testBadNodes(t *testing.T, configFilePath string) {
 	sConfig := api.NewConfig(api.InitRawConfig(&configFilePath))
+	(*sConfig.VirtualClusters)["VC2"].VirtualCells[2].CellType = "3-DGX2-V100-NODE.DGX2-V100-NODE"
 	h := NewHivedAlgorithm(sConfig)
 	for _, chains := range h.cellChains {
 		sortChains(chains)
 	}
 	setHealthyNodes(h)
+	allocatedPods = []*core.Pod{}
 
-	pod := allPods["pod1"]
+	pod := allPods["pod42"]
 	pod.Annotations[api.AnnotationKeyPodSchedulingSpec] = common.ToYaml(pss[pod.UID])
 	psr := h.Schedule(pod, []string{"0.0.2.0"}, internal.PreemptingPhase)
-	h.AddAllocatedPod(internal.NewBindingPod(pod, psr.PodBindInfo))
+	bindingPod := internal.NewBindingPod(pod, psr.PodBindInfo)
+	h.AddAllocatedPod(bindingPod)
+	allocatedPods = append(allocatedPods, bindingPod)
 	h.setBadNode("0.0.2.1")
+	for _, c := range h.vcSchedulers["VC1"].getNonPinnedPreassignedCells()["3-DGX2-V100-NODE"][5] {
+		if c.(*VirtualCell).GetAPIStatus().CellHealthiness == api.CellBad {
+			t.Errorf(
+				"All free cells in VC1 chain 3-DGX2-V100-NODE should be healthy, but %v is bad", c.GetAddress())
+		}
+	}
+	for _, c := range h.vcSchedulers["VC2"].getNonPinnedPreassignedCells()["3-DGX2-V100-NODE"][5] {
+		if c.(*VirtualCell).GetAPIStatus().CellHealthiness == api.CellBad {
+			t.Errorf(
+				"All free cells in VC2 chain 3-DGX2-V100-NODE should be healthy, but %v is bad", c.GetAddress())
+		}
+	}
+	pod = allPods["pod43"]
+	pod.Annotations[api.AnnotationKeyPodSchedulingSpec] = common.ToYaml(pss[pod.UID])
+	psr = h.Schedule(pod, []string{"0.0.2.2"}, internal.PreemptingPhase)
+	bindingPod = internal.NewBindingPod(pod, psr.PodBindInfo)
+	h.AddAllocatedPod(bindingPod)
+	allocatedPods = append(allocatedPods, bindingPod)
+	for _, c := range h.vcSchedulers["VC1"].getNonPinnedPreassignedCells()["3-DGX2-V100-NODE"][5] {
+		if c.GetPriority() == freePriority && c.(*VirtualCell).GetAPIStatus().CellHealthiness == api.CellHealthy {
+			t.Errorf(
+				"All free cells in VC1 chain 3-DGX2-V100-NODE should be bad, but %v is healthy", c.GetAddress())
+		}
+	}
+	h.DeleteAllocatedPod(allocatedPods[1])
 	for _, c := range h.vcSchedulers["VC1"].getNonPinnedPreassignedCells()["3-DGX2-V100-NODE"][5] {
 		if c.(*VirtualCell).GetAPIStatus().CellHealthiness == api.CellBad {
 			t.Errorf(
@@ -872,11 +923,39 @@ func testBadNodes(t *testing.T, configFilePath string) {
 				"All free cells in VC1 chain 3-DGX2-V100-NODE should be bad, but %v is healthy", c.GetAddress())
 		}
 	}
+	for _, c := range h.vcSchedulers["VC2"].getNonPinnedPreassignedCells()["3-DGX2-V100-NODE"][5] {
+		if c.GetPriority() == freePriority && c.(*VirtualCell).GetAPIStatus().CellHealthiness == api.CellHealthy {
+			t.Errorf(
+				"All free cells in VC2 chain 3-DGX2-V100-NODE should be bad, but %v is healthy", c.GetAddress())
+		}
+	}
 	h.setHealthyNode("0.0.2.2")
 	for _, c := range h.vcSchedulers["VC1"].getNonPinnedPreassignedCells()["3-DGX2-V100-NODE"][5] {
 		if c.(*VirtualCell).GetAPIStatus().CellHealthiness == api.CellBad {
 			t.Errorf(
 				"All free cells in VC1 chain 3-DGX2-V100-NODE should be healthy, but %v is bad", c.GetAddress())
+		}
+	}
+	for _, c := range h.vcSchedulers["VC2"].getNonPinnedPreassignedCells()["3-DGX2-V100-NODE"][5] {
+		if c.(*VirtualCell).GetAPIStatus().CellHealthiness == api.CellBad {
+			t.Errorf(
+				"All free cells in VC2 chain 3-DGX2-V100-NODE should be healthy, but %v is bad", c.GetAddress())
+		}
+	}
+	h.setBadNode("0.0.2.0")
+	h.setBadNode("0.0.2.2")
+	h.DeleteAllocatedPod(allocatedPods[0])
+	// after the pod is deleted from 0.0.2.0, the node should still be doomed bad
+	for _, c := range h.vcSchedulers["VC1"].getNonPinnedPreassignedCells()["3-DGX2-V100-NODE"][5] {
+		if c.(*VirtualCell).GetAPIStatus().CellHealthiness == api.CellHealthy {
+			t.Errorf(
+				"All free cells in VC1 chain 3-DGX2-V100-NODE should be bad, but %v is healthy", c.GetAddress())
+		}
+	}
+	for _, c := range h.vcSchedulers["VC2"].getNonPinnedPreassignedCells()["3-DGX2-V100-NODE"][5] {
+		if c.(*VirtualCell).GetAPIStatus().CellHealthiness == api.CellHealthy {
+			t.Errorf(
+				"All free cells in VC2 chain 3-DGX2-V100-NODE should be bad, but %v is healthy", c.GetAddress())
 		}
 	}
 }
