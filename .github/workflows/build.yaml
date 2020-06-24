@@ -14,25 +14,34 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        go: [1.12.6, 1.13.12, 1.14.4]
+        go: [1.12.6, 1.12.x]
         os: [ubuntu-16.04, ubuntu-latest]
     steps:
       - name: Checkout
         uses: actions/checkout@v2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: src/github.com/${{ github.repository }}
       - name: Setup go ${{ matrix.go }}
         uses: actions/setup-go@v2
         with:
           go-version: ${{ matrix.go }}
+      - name: Setup GOPATH
+        run: echo "::set-env name=GOPATH::${{ github.workspace }}"
       - name: Go build
+        working-directory: src/github.com/${{ github.repository }}
         run: go build -o hivedscheduler ./cmd/hivedscheduler/
       - name: Go test
-        run: go test -race -covermode atomic -coverprofile=profile.cov ./pkg/algorithm/
+        working-directory: src/github.com/${{ github.repository }}
+        run: go test -race -covermode=atomic -coverprofile=$GOPATH/profile.cov ./pkg/algorithm/
       - name: Report coverage
+        working-directory: src/github.com/${{ github.repository }}
         env:
+          GO111MODULE: off
           COVERALLS_TOKEN: ${{ secrets.COVERALLS_TOKEN }}
         run: |
-          GO111MODULE=off go get github.com/mattn/goveralls
-          $(go env GOPATH)/bin/goveralls -service=github -coverprofile=profile.cov
+          go get github.com/mattn/goveralls
+          $GOPATH/bin/goveralls -service=travis-ci -coverprofile=$GOPATH/profile.cov
   docker-build:
     name: Build Docker
     runs-on: ubuntu-16.04
