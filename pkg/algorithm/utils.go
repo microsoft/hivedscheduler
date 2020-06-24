@@ -48,6 +48,10 @@ func generatePodScheduleResult(
 	pod *core.Pod) internal.PodScheduleResult {
 
 	klog.V(4).Infof("[%v]: Got K8s suggested nodes: %v", internal.Key(pod), suggestedNodes)
+	if groupPhysicalPlacement == nil {
+		klog.Infof("[%v]: Pod needs to wait, reason: %v", internal.Key(pod), waitReason)
+		return internal.PodScheduleResult{PodWaitInfo: &internal.PodWaitInfo{Reason: waitReason}}
+	}
 	klog.Infof("[%v]: Physical placement: %v", internal.Key(pod), groupPhysicalPlacement)
 	if groupVirtualPlacement != nil {
 		klog.Infof("[%v]: Virtual placement: %v", internal.Key(pod), groupVirtualPlacement)
@@ -56,10 +60,6 @@ func generatePodScheduleResult(
 		return internal.PodScheduleResult{
 			PodPreemptInfo: generatePodPreemptInfo(preemptionVictims, pod),
 		}
-	}
-	if waitReason != "" {
-		klog.Infof("[%v]: need to wait because %v", internal.Key(pod), waitReason)
-		return internal.PodScheduleResult{PodWaitInfo: &internal.PodWaitInfo{Reason: waitReason}}
 	}
 	// we find the selected node after the preemption is done, otherwise the preemption victims
 	// may cause the selected node to be excluded from the suggested nodes
@@ -149,7 +149,7 @@ func generateAffinityGroupBindInfo(
 					if groupVirtualPlacement != nil {
 						vGpu := groupVirtualPlacement[podGpuNum][podIndex][gpuIndex].(*VirtualCell)
 						mbi.PodPlacements[podIndex].PreassignedCellTypes[gpuIndex] =
-							cellLevelToType[vGpu.GetChain()][vGpu.GetPreAssignedCell().GetLevel()]
+							cellLevelToType[vGpu.GetChain()][vGpu.GetPreassignedCell().GetLevel()]
 					} else {
 						mbi.PodPlacements[podIndex].PreassignedCellTypes[gpuIndex] = ""
 					}
@@ -169,12 +169,15 @@ func generateAffinityGroupBindInfo(
 	return affinityGroupBindInfo, selectedNode, selectedGpuIndices, chain
 }
 
-// collectNodesNotSuggested collects all the nodes that are not within the suggested nodes
+// collectBadOrNonSuggestedNodes collects all the nodes that are not within the suggested nodes
 // in the physical placement of an affinity group.
-func collectNodesNotSuggested(
-	placement groupPhysicalPlacement, suggestedNodes common.Set) (nodesNotInSuggested common.Set) {
+func collectBadOrNonSuggestedNodes(
+	placement groupPhysicalPlacement,
+	suggestedNodes common.Set,
+	ignoreSuggestedNodes bool) (
+	badOrNonSuggestedNodes common.Set) {
 
-	nodesNotInSuggested = common.NewSet()
+	badOrNonSuggestedNodes = common.NewSet()
 	for gpuNum := range placement {
 		for podIndex := range placement[gpuNum] {
 			for _, gpu := range placement[gpuNum][podIndex] {
@@ -182,13 +185,14 @@ func collectNodesNotSuggested(
 					continue
 				}
 				nodes, _ := gpu.(*PhysicalCell).GetPhysicalPlacement()
-				if !suggestedNodes.Contains(nodes[0]) {
-					nodesNotInSuggested.Add(nodes[0])
+				if !gpu.(*PhysicalCell).IsHealthy() ||
+					(!ignoreSuggestedNodes && !suggestedNodes.Contains(nodes[0])) {
+					badOrNonSuggestedNodes.Add(nodes[0])
 				}
 			}
 		}
 	}
-	return nodesNotInSuggested
+	return badOrNonSuggestedNodes
 }
 
 // collectPreemptionVictims collects preemption victims of an affinity group.
@@ -275,26 +279,6 @@ func retrieveVirtualCell(
 		}
 	}
 	return nil
-}
-
-// clearPreBindings clears the temporary bindings created during scheduling.
-func clearPreBindings(virtualPlacement groupVirtualPlacement) {
-	for _, podPlacements := range virtualPlacement {
-		for _, podGpus := range podPlacements {
-			for _, gpu := range podGpus {
-				for gpu != nil {
-					vGpu := gpu.(*VirtualCell)
-					if pGpu := vGpu.GetPreBoundPhysicalCell(); pGpu != nil {
-						pGpu.SetPreBoundVirtualCell(nil)
-						vGpu.SetPreBoundPhysicalCell(nil)
-						gpu = gpu.GetParent()
-					} else {
-						break
-					}
-				}
-			}
-		}
-	}
 }
 
 // getAllocatedPodIndex assigns a new index for a new pod in an affinity group.
@@ -429,9 +413,9 @@ func allChildrenSameState(c *PhysicalCell, s CellState) bool {
 	return true
 }
 
-// generateOpporVirtualCell generates a fake virtual cell in a VC's API status
+// generateOTVirtualCell generates a fake virtual cell in a VC's API status
 // for an opportunistic cell used by the VC.
-func generateOpporVirtualCell(pc *api.PhysicalCellStatus) *api.VirtualCellStatus {
+func generateOTVirtualCell(pc *api.PhysicalCellStatus) *api.VirtualCellStatus {
 	vc := &api.VirtualCellStatus{
 		CellStatus: api.CellStatus{
 			GpuType:         pc.GpuType,
@@ -446,49 +430,22 @@ func generateOpporVirtualCell(pc *api.PhysicalCellStatus) *api.VirtualCellStatus
 	return vc
 }
 
-// deleteOpporVirtualCell deletes the fake virtual cell of an opportunistic cell from the VC's API status.
-func deleteOpporVirtualCell(s api.VirtualClusterStatus, addr api.CellAddress) api.VirtualClusterStatus {
-	var opporVirtualCellIdx int32
+// deleteOTVirtualCell deletes the fake virtual cell of an opportunistic cell from the VC's API status.
+func deleteOTVirtualCell(s api.VirtualClusterStatus, addr api.CellAddress) api.VirtualClusterStatus {
+	idx := -1
 	for i, ovc := range s {
 		if ovc.PhysicalCell != nil && ovc.PhysicalCell.CellAddress == addr {
-			opporVirtualCellIdx = int32(i)
+			idx = i
 			break
 		}
 	}
-	novc := len(s)
-	s[opporVirtualCellIdx] = s[novc-1]
-	s[novc-1] = nil
-	return s[:novc-1]
-}
-
-// setVirtualCellHealthiness sets the healthiness of a virtual cell and recursively for all of its children.
-// Normally we don't need to set a virtual cell's healthiness explicitly because that will be done
-// when binding it to a physical cell (then they share the same healthiness). We call this function when
-// the healthiness cannot be set through cell binding, i.e., in the following cases:
-// 1. Set a free cell to doomed bad (or set a doomed back cell back to healthy) due to insufficient healthy free cells,
-// before the cell is bound to real physical cell.
-// 2. When a virtual cell is already bound, and its physical cell is set to bad,
-// that means all of the physical cell's children are already bad.
-// We should then explicitly set all of the virtual cell's children to bad (some of the children may be not bound,
-// if we do not set their healthiness, they may still appear to be healthy, but in fact they are doomed to
-// be bound to a bad physical cell).
-func setVirtualCellHealthiness(c *VirtualCell, h api.CellHealthiness) {
-	c.GetAPIStatus().CellHealthiness = h
-	for _, child := range c.GetChildren() {
-		setVirtualCellHealthiness(child.(*VirtualCell), h)
+	if idx < 0 {
+		klog.Errorf("trying to delete an opportunistic virtual cell that does not exist, "+
+			"physical cell address: %v", addr)
+		return s
 	}
-}
-
-// resetVirtualCellHealthiness lets the healthiness of all children of a virtual cell respect the real cell binding,
-// i.e., it is healthy if it has no binding, otherwise it has the same healthiness as its physical cell.
-// This is to cancel the effect of "doomed bad" done by setVirtualCellHealthiness.
-func resetVirtualCellHealthiness(c *VirtualCell) {
-	if pc := c.GetPhysicalCell(); pc != nil {
-		c.GetAPIStatus().CellHealthiness = pc.GetAPIStatus().CellHealthiness
-	} else {
-		c.GetAPIStatus().CellHealthiness = api.CellHealthy
-	}
-	for _, child := range c.GetChildren() {
-		resetVirtualCellHealthiness(child.(*VirtualCell))
-	}
+	n := len(s)
+	s[idx] = s[n-1]
+	s[n-1] = nil
+	return s[:n-1]
 }

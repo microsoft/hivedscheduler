@@ -55,14 +55,17 @@ func CellEqual(c1 Cell, c2 Cell) bool {
 }
 
 type GenericCell struct {
-	chain                  CellChain
-	level                  CellLevel
-	address                api.CellAddress
-	parent                 Cell     // pointer to its parent cell
-	children               CellList // pointer to its children cells
-	atOrHigherThanNode     bool     // true if the cell is at or higher than node level
-	priority               CellPriority
-	state                  CellState
+	chain              CellChain
+	level              CellLevel
+	address            api.CellAddress
+	parent             Cell     // pointer to its parent cell
+	children           CellList // pointer to its children cells
+	atOrHigherThanNode bool     // true if the cell is at or higher than node level
+	priority           CellPriority
+	state              CellState
+	// A cell is healthy if all of the cell's children are healthy (bad if any child is bad).
+	// The healthy field is orthogonal to priority and state.
+	healthy                bool
 	totalGpuNum            int32                  // total GPU number of a cell
 	usedGpuNumAtPriorities map[CellPriority]int32 // GPU number used by each priority
 }
@@ -103,6 +106,10 @@ func (c *GenericCell) GetState() CellState {
 	return c.state
 }
 
+func (c *GenericCell) IsHealthy() bool {
+	return c.healthy
+}
+
 func (c *GenericCell) GetTotalGpuNum() int32 {
 	return c.totalGpuNum
 }
@@ -126,7 +133,6 @@ type PhysicalCell struct {
 	usingGroup               *AlgoAffinityGroup // affinity group using this cell
 	reservingOrReservedGroup *AlgoAffinityGroup // affinity group that is reserving, or has reserved the cell (e.g., waiting for preemption)
 	virtualCell              *VirtualCell       // points to the bound virtual cell
-	preBoundVirtualCell      *VirtualCell       // points to the temporarily bound virtual cell (before the binding is confirmed)
 	split                    bool               // true when the cell has been split
 	pinned                   bool               // true when this is a pinned cell
 	// This status only contains the statuses that need to be exposed to external,
@@ -153,6 +159,8 @@ func NewPhysicalCell(
 			totalGpuNum:            n,
 			usedGpuNumAtPriorities: map[CellPriority]int32{},
 			state:                  cellFree,
+			// cells are set to healthy initially, and will be all set to bad in HivedAlgorithm.initBadNodes
+			healthy: true,
 		},
 		apiStatus: &api.PhysicalCellStatus{
 			CellStatus: api.CellStatus{
@@ -270,14 +278,6 @@ func (c *PhysicalCell) SetVirtualCell(cell *VirtualCell) {
 	}
 }
 
-func (c *PhysicalCell) GetPreBoundVirtualCell() *VirtualCell {
-	return c.preBoundVirtualCell
-}
-
-func (c *PhysicalCell) SetPreBoundVirtualCell(cell *VirtualCell) {
-	c.preBoundVirtualCell = cell
-}
-
 func (c *PhysicalCell) IsSplit() bool {
 	return c.split
 }
@@ -300,9 +300,11 @@ func (c *PhysicalCell) GetAPIStatus() *api.PhysicalCellStatus {
 
 func (c *PhysicalCell) SetHealthiness(h api.CellHealthiness) {
 	klog.Infof("Cell %v is set to %v", c.address, h)
-	c.GetAPIStatus().CellHealthiness = h
+	c.healthy = h == api.CellHealthy
+	c.apiStatus.CellHealthiness = h
 	if c.virtualCell != nil {
-		c.GetAPIStatus().VirtualCell.CellHealthiness = h
+		c.virtualCell.healthy = c.healthy
+		c.apiStatus.VirtualCell.CellHealthiness = h
 		c.virtualCell.GetAPIStatus().CellHealthiness = h
 		c.virtualCell.GetAPIStatus().PhysicalCell.CellHealthiness = h
 	}
@@ -311,11 +313,10 @@ func (c *PhysicalCell) SetHealthiness(h api.CellHealthiness) {
 // VirtualCell defines a cell in a VC.
 type VirtualCell struct {
 	GenericCell
-	vc                   api.VirtualClusterName // name of its VC
-	pid                  api.PinnedCellId       // pinned cell ID
-	preAssignedCell      *VirtualCell           // top level cell of this cell chain
-	physicalCell         *PhysicalCell          // points to the bound physical cell
-	preBoundPhysicalCell *PhysicalCell          // points to the temporarily bound physical cell (before the binding is confirmed)
+	vc              api.VirtualClusterName // name of its VC
+	pid             api.PinnedCellId       // pinned cell ID
+	preassignedCell *VirtualCell           // top-level ancestor of this cell
+	physicalCell    *PhysicalCell          // points to the bound physical cell
 	// This status only contains the statuses that need to be exposed to external,
 	// and should not be used for internal status management
 	apiStatus *api.VirtualCellStatus
@@ -342,9 +343,11 @@ func NewVirtualCell(
 			totalGpuNum:            n,
 			usedGpuNumAtPriorities: map[CellPriority]int32{},
 			state:                  cellFree,
+			// cells are set to healthy initially, and will be all set to bad in HivedAlgorithm.initBadNodes
+			healthy: true,
 		},
 		vc:              vcn,
-		preAssignedCell: pac,
+		preassignedCell: pac,
 		apiStatus: &api.VirtualCellStatus{
 			CellStatus: api.CellStatus{
 				CellType:        cellType,
@@ -374,16 +377,20 @@ func (c *VirtualCell) SetPriority(p CellPriority) {
 	}
 }
 
+func (c *VirtualCell) GetVirtualCluster() api.VirtualClusterName {
+	return c.vc
+}
+
 func (c *VirtualCell) SetPinnedCellId(pid api.PinnedCellId) {
 	c.pid = pid
 }
 
-func (c *VirtualCell) GetPreAssignedCell() *VirtualCell {
-	return c.preAssignedCell
+func (c *VirtualCell) GetPreassignedCell() *VirtualCell {
+	return c.preassignedCell
 }
 
 func (c *VirtualCell) SetPreAssignedCell(cell *VirtualCell) {
-	c.preAssignedCell = cell
+	c.preassignedCell = cell
 }
 
 func (c *VirtualCell) GetPhysicalCell() *PhysicalCell {
@@ -394,9 +401,12 @@ func (c *VirtualCell) SetPhysicalCell(cell *PhysicalCell) {
 	c.physicalCell = cell
 	if cell == nil {
 		c.apiStatus.PhysicalCell = nil
+		c.state = cellFree
+		c.healthy = true
 		c.apiStatus.CellHealthiness = api.CellHealthy
 		c.apiStatus.CellState = api.CellState(cellFree)
 	} else {
+		c.healthy = cell.healthy
 		pcs := &api.PhysicalCellStatus{}
 		// shallow copy the status, clear the pointers to avoid reference
 		*pcs = *(cell.apiStatus)
@@ -405,14 +415,6 @@ func (c *VirtualCell) SetPhysicalCell(cell *PhysicalCell) {
 		c.apiStatus.PhysicalCell = pcs
 		c.apiStatus.CellHealthiness = pcs.CellHealthiness
 	}
-}
-
-func (c *VirtualCell) GetPreBoundPhysicalCell() *PhysicalCell {
-	return c.preBoundPhysicalCell
-}
-
-func (c *VirtualCell) SetPreBoundPhysicalCell(cell *PhysicalCell) {
-	c.preBoundPhysicalCell = cell
 }
 
 func (c *VirtualCell) GetAPIStatus() *api.VirtualCellStatus {

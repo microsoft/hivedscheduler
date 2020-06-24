@@ -27,119 +27,212 @@ import (
 	"github.com/microsoft/hivedscheduler/pkg/api"
 	"github.com/microsoft/hivedscheduler/pkg/common"
 	"k8s.io/klog"
-	"math"
-	"math/rand"
+	"sort"
 )
 
 // buddyAlloc is used for allocating a free physical cell to a preassigned virtual cell.
 // It splits a higher-level cell when there is no free cell at the current level.
-// As the input cell list is a copy of the real free list and hence is one-off,
-// we won't remove a returned cell from it.
-func buddyAlloc(freeList ChainCellList, level CellLevel, suggestedNodes common.Set) *PhysicalCell {
-	if len(freeList[level]) == 0 && level < CellLevel(len(freeList)) {
-		higherCell := buddyAlloc(freeList, level+1, suggestedNodes)
-		if higherCell != nil {
-			freeList[level] = append(freeList[level], higherCell.GetChildren()...)
-		}
-	}
-	if len(freeList[level]) == 0 {
-		return nil
-	}
-	return getFewestOpporPhysicalCell(freeList[level], suggestedNodes)
-}
+// Note that this is a backtracking version of the buddy alloc algorithm (slightly more complex
+// than the simple recursive version present in the paper). Ideally we do not need to backtrack
+// because buddy alloc has safety guarantee (the simple algorithm already works).
+// But it's possible that the cell allocated by the non-backtrack buddy alloc is temporarily unavailable
+// (e.g., it's bad or not within K8s suggested nodes), then we need to do backtracking search
+// on the free cell list so as to find an available cell.
+func buddyAlloc(
+	cell *cellBindingPathVertex,
+	freeList ChainCellList,
+	currentLevel CellLevel,
+	suggestedNodes common.Set,
+	ignoreSuggestedNodes bool,
+	bindings map[api.CellAddress]*PhysicalCell) bool {
 
-// mapVirtualCellToPhysical maps a virtual cell to a physical cell. This mapping is done in two steps:
-// We first map its preassigned cell to a physical cell, by calling the buddy cell allocation algorithm.
-// We then map the virtual cell inside the preassigned one to a physical cell, while maintaining
-// equivalence of the topology of the preassigned cell and that of its physical cell.
-func mapVirtualCellToPhysical(c *VirtualCell, freeList ChainCellList, suggestedNodes common.Set) *PhysicalCell {
-	pac := c.GetPreAssignedCell()
-	// check if the preassigned cell has been (temporarily) bound to a physical cell
-	preassignedPhysical := pac.GetPhysicalCell()
-	if preassignedPhysical == nil {
-		preassignedPhysical = pac.GetPreBoundPhysicalCell()
+	if currentLevel == cell.cell.GetLevel() {
+		ok, pickedCells := mapVirtualCellsToPhysical(
+			[]*cellBindingPathVertex{cell},
+			freeList[currentLevel],
+			suggestedNodes,
+			ignoreSuggestedNodes,
+			bindings,
+			true)
+		if ok {
+			for _, c := range pickedCells {
+				freeList.remove(c, currentLevel)
+			}
+			return true
+		}
+		return false
 	}
-	if preassignedPhysical == nil {
-		// Allocate a new physical cell to the preassigned cell. Input a copy of the free cell list
-		// because during the scheduling we should not make in-place change to the data structures
-		// (they can be modified only when adding or deleting pods)
-		c := buddyAlloc(freeList.shallowCopy(), pac.GetLevel(), suggestedNodes)
-		if c == nil {
-			panic(fmt.Sprintf(
-				"VC Safety Broken: Cannot find physical cell for a VC cell: %v", pac.GetAddress()))
+	freeCells := getUsablePhysicalCells(freeList[currentLevel], 1, suggestedNodes, ignoreSuggestedNodes)
+	if freeCells == nil {
+		return false
+	}
+	for _, c := range freeCells {
+		freeList[currentLevel-1] = append(freeList[currentLevel-1], c.GetChildren()...)
+		if buddyAlloc(cell, freeList, currentLevel-1, suggestedNodes, ignoreSuggestedNodes, bindings) {
+			freeList.remove(c, currentLevel)
+			return true
 		} else {
-			preassignedPhysical = c
-			// create binding (which is temporary and will be cleared after the scheduling,
-			// same reason as above)
-			pac.SetPreBoundPhysicalCell(preassignedPhysical)
-			preassignedPhysical.SetPreBoundVirtualCell(pac)
+			freeList[currentLevel-1] = nil
 		}
 	}
-	return mapNonPreassignedVirtualToPhysical(c, suggestedNodes)
+	return false
 }
 
-// mapNonPreassignedVirtualToPhysical is used for cell binding inside a preassigned virtual cell.
-// It maps a virtual cell (possibly inside a preassigned one) to one of the cell inside the physical cell
-// allocated to the preassigned cell. This operation keeps the inner-cell topology equivalent,
-// by recursively binding the cells inside the preassigned one.
-func mapNonPreassignedVirtualToPhysical(c *VirtualCell, suggestedNodes common.Set) *PhysicalCell {
-	if c.GetPhysicalCell() != nil {
-		return c.GetPhysicalCell()
-	} else if c.GetPreBoundPhysicalCell() != nil {
-		return c.GetPreBoundPhysicalCell()
-	} else {
-		parentPhysical := mapNonPreassignedVirtualToPhysical(c.GetParent().(*VirtualCell), suggestedNodes)
-		pc := getFewestOpporPhysicalCell(parentPhysical.GetChildren(), suggestedNodes)
-		if pc == nil || pc.GetPriority() > opportunisticPriority {
-			panic(fmt.Sprintf("VC Safety Broken: Cannot find physical cell for %v", c.GetAddress()))
+// getLowestFreeCellLevel returns the lowest level in the free cell list with at least one free cell.
+func getLowestFreeCellLevel(freeList ChainCellList, l CellLevel) CellLevel {
+	for ; l <= CellLevel(len(freeList)); l++ {
+		if len(freeList[l]) != 0 {
+			return l
 		}
-		c.SetPreBoundPhysicalCell(pc)
-		pc.SetPreBoundVirtualCell(c)
-		return pc
 	}
+	panic(fmt.Sprintf("VC Safety Broken: free cell not found "+
+		"even split to the highest level %v", l-1))
 }
 
-// getFewestOpporPhysicalCell selects a physical cell with the minimum number of opportunistic pods from a cell list.
-// This function will try to avoid using cells whose resources are not fully within the suggested nodes if possible.
-// In case there is no cell fully within the suggested nodes, we will still return a cell because some of its children
-// may be within suggested nodes, and we can find them when binding the lower-level cells. We will return a random
-// cell in this case to avoid getting stuck in the same cell where we cannot find a child within suggested nodes.
-func getFewestOpporPhysicalCell(cl CellList, suggestedNodes common.Set) *PhysicalCell {
-	var freeCells []*PhysicalCell
-	fewestOpporNumSuggested := int32(math.MaxInt32)
-	var fewestOpporCellSuggested *PhysicalCell
-	for _, c := range cl {
-		if pc := c.(*PhysicalCell); pc.GetVirtualCell() == nil && pc.GetPreBoundVirtualCell() == nil {
-			freeCells = append(freeCells, pc)
-			opporNum := pc.GetUsedGpuNumAtPriorities()[opportunisticPriority]
-			allNodesInSuggested := true
-			nodes, _ := pc.GetPhysicalPlacement()
+// mapVirtualPlacementToPhysical maps cells in a VC placement to the physical cluster.
+// For the preassigned cells, it will call buddy alloc to map them;
+// For the nonPreassigned cells, it will map them following the topology inside the corresponding preassigned cells.
+func mapVirtualPlacementToPhysical(
+	preassignedCells []*cellBindingPathVertex,
+	nonPreassignedCells [][]*cellBindingPathVertex,
+	freeList ChainCellList,
+	suggestedNodes common.Set,
+	ignoreSuggestedNodes bool,
+	bindings map[api.CellAddress]*PhysicalCell) bool {
+
+	for _, c := range preassignedCells {
+		if !buddyAlloc(c, freeList, getLowestFreeCellLevel(
+			freeList, c.cell.GetLevel()), suggestedNodes, ignoreSuggestedNodes, bindings) {
+			return false
+		}
+	}
+	for _, cells := range nonPreassignedCells {
+		ok, _ := mapVirtualCellsToPhysical(
+			cells, cells[0].cell.GetParent().(*VirtualCell).GetPhysicalCell().GetChildren(),
+			suggestedNodes, ignoreSuggestedNodes, bindings, false)
+		if !ok {
+			return false
+		}
+	}
+	return true
+}
+
+// getUsablePhysicalCells returns the usable cells in a physical cell list for cell binding.
+func getUsablePhysicalCells(
+	candidates CellList,
+	numNeeded int32,
+	suggestedNodes common.Set,
+	ignoreSuggestedNodes bool) (usableCandidates CellList) {
+
+	for i := range candidates {
+		c := candidates[i].(*PhysicalCell)
+		// skip the cell if it is already bound
+		if c.GetVirtualCell() != nil {
+			continue
+		}
+		// skip the cell if it is a bad node
+		nodes, _ := c.GetPhysicalPlacement()
+		if len(nodes) == 1 && !c.IsHealthy() {
+			continue
+		}
+		if !ignoreSuggestedNodes {
+			// skip the cell if all of its nodes are not within suggested nodes (if only some of them are,
+			// we can possibly find usable cells when searching in the next level)
+			allNonSuggested := true
 			for _, n := range nodes {
-				if !suggestedNodes.Contains(n) {
-					allNodesInSuggested = false
+				if suggestedNodes.Contains(n) {
+					allNonSuggested = false
 					break
 				}
 			}
-			if allNodesInSuggested && opporNum < fewestOpporNumSuggested {
-				fewestOpporNumSuggested = opporNum
-				fewestOpporCellSuggested = pc
+			if allNonSuggested {
+				continue
 			}
 		}
+		usableCandidates = append(usableCandidates, c)
 	}
-	if fewestOpporCellSuggested != nil {
-		nodes, _ := fewestOpporCellSuggested.GetPhysicalPlacement()
-		klog.Infof("Selected a cell within suggested nodes: %v, nodes %v",
-			fewestOpporCellSuggested.GetAddress(), common.ToJson(nodes))
-		return fewestOpporCellSuggested
+	// the usable candidates should be no fewer than needed
+	if int32(len(usableCandidates)) < numNeeded {
+		return nil
 	}
-	// select a random cell to avoid always picking the same cell in which there might be
-	// no child fully within suggested nodes
-	selectedCell := freeCells[rand.Int31n(int32(len(freeCells)))]
-	nodes, _ := selectedCell.GetPhysicalPlacement()
-	klog.Infof("Selected a cell randomly from the cell list because we cannot find a cell fully within "+
-		"suggested nodes (children of the cell may be within): %v, nodes %v",
-		selectedCell.GetAddress(), common.ToJson(nodes))
-	return selectedCell
+	// prioritize the cells with fewer opportunistic pods (to reduce preemption)
+	sort.SliceStable(candidates, func(i, j int) bool {
+		return candidates[i].GetUsedGpuNumAtPriorities()[opportunisticPriority] <
+			candidates[j].GetUsedGpuNumAtPriorities()[opportunisticPriority]
+	})
+	return usableCandidates
+}
+
+// mapVirtualCellsToPhysical maps a set of virtual cells to a set of candidate physical cells,
+// and recursively for their children. When mapping the children, the candidates for the children
+// will be the children of the currently picked physical cell (this way we will maintain the equivalence
+// of topology inside a preassigned cell and that of its physical cell).
+// Similar to buddyAlloc, this is a backtracking search:
+// if the current candidate cells cannot satisfy the virtual cells (e.g., they are bad or not within
+// K8s suggested nodes), we will backtrack to the last level and try other candidates.
+func mapVirtualCellsToPhysical(
+	cells []*cellBindingPathVertex,
+	candidates CellList,
+	suggestedNodes common.Set,
+	ignoreSuggestedNodes bool,
+	bindings map[api.CellAddress]*PhysicalCell,
+	returnPicked bool) (ok bool, pickedCells CellList) {
+
+	candidates = getUsablePhysicalCells(candidates, int32(len(cells)), suggestedNodes, ignoreSuggestedNodes)
+	if candidates == nil {
+		return false, nil
+	}
+	cellIndex := int32(0)
+	candidateIndex := int32(0)
+	pickedCandidateIndices := make([]int32, len(cells))
+	pickedIndexSet := common.NewSet()
+	for cellIndex >= 0 {
+		for candidateIndex = pickedCandidateIndices[cellIndex]; candidateIndex < int32(len(candidates)); candidateIndex++ {
+			if pickedIndexSet.Contains(candidateIndex) {
+				continue
+			}
+			candidate := candidates[candidateIndex].(*PhysicalCell)
+			picked := false
+			if candidate.GetLevel() == lowestLevel {
+				picked = true
+				// record bindings for the lowest-level cells
+				bindings[cells[cellIndex].cell.GetAddress()] = candidate
+			} else {
+				// search for the next level
+				picked, _ = mapVirtualCellsToPhysical(
+					cells[cellIndex].childrenToBind,
+					candidate.GetChildren(),
+					suggestedNodes,
+					ignoreSuggestedNodes,
+					bindings,
+					false)
+			}
+			if picked {
+				pickedCandidateIndices[cellIndex] = candidateIndex
+				pickedIndexSet.Add(candidateIndex)
+				if cellIndex == int32(len(cells))-1 {
+					if !returnPicked {
+						return true, nil
+					}
+					for _, index := range pickedCandidateIndices {
+						pickedCells = append(pickedCells, candidates[index])
+					}
+					return true, pickedCells
+				}
+				break
+			}
+		}
+		if candidateIndex == int32(len(candidates)) {
+			cellIndex--
+			if cellIndex >= 0 {
+				pickedIndexSet.Delete(pickedCandidateIndices[cellIndex])
+				pickedCandidateIndices[cellIndex]++
+			}
+		} else {
+			cellIndex++
+		}
+	}
+	return false, nil
 }
 
 // mapPhysicalCellToVirtual is an inverse operation of mapVirtualCellToPhysical,
@@ -154,10 +247,10 @@ func mapPhysicalCellToVirtual(
 	if c.GetVirtualCell() != nil {
 		return c.GetVirtualCell(), ""
 	} else if c.GetLevel() == preassignedLevel {
-		if preassignedVirtual := getLowestPriorityCell(vccl[preassignedLevel], p); preassignedVirtual == nil {
+		if preassignedVirtual := getLowestPriorityVirtualCell(vccl[preassignedLevel], p); preassignedVirtual == nil {
 			return nil, fmt.Sprintf("insufficient free cell in the VC at the preassigned level (%v)", preassignedLevel)
 		} else {
-			return preassignedVirtual.(*VirtualCell), ""
+			return preassignedVirtual, ""
 		}
 	} else if c.GetParent() == nil {
 		return nil, fmt.Sprintf(
@@ -168,45 +261,54 @@ func mapPhysicalCellToVirtual(
 		if parentVirtual == nil {
 			return nil, message
 		} else {
-			return getLowestPriorityCell(parentVirtual.GetChildren(), p).(*VirtualCell), ""
+			return getLowestPriorityVirtualCell(parentVirtual.GetChildren(), p), ""
 		}
 	}
 }
 
-// getLowestPriorityCell returns a cell with the lowest priority among the cells
-// whose priorities are lower than the given priority (p).
-func getLowestPriorityCell(cl CellList, p CellPriority) Cell {
+// getLowestPriorityVirtualCell returns a virtual cell with the lowest priority
+// among those whose priorities are lower than the given priority (p).
+// We don't just return a free cell because in cases like reconfiguration, there might be no
+// free cell left. Then we allow to return a non-free, but lowest-priority cell and preempt it.
+func getLowestPriorityVirtualCell(cl CellList, p CellPriority) (lowestPriorityCell *VirtualCell) {
 	lowestPriority := maxGuaranteedPriority
-	var lowestPriorityCell Cell
 	for _, c := range cl {
-		pp := c.GetPriority()
-		if pp == freePriority {
-			return c
-		} else if pp < p && pp < lowestPriority {
-			lowestPriority = pp
-			lowestPriorityCell = c
+		vc := c.(*VirtualCell)
+		priority := vc.GetPriority()
+		if priority == freePriority {
+			if vc.GetPhysicalCell() == nil {
+				return vc
+			} else {
+				// Although freePriority must be the lowest priority, we should not return a free cell
+				// with binding, because such binding cannot be preempted (e.g., the binding is
+				// created for doomed bad cell)
+				continue
+			}
+		} else if priority < p && priority < lowestPriority {
+			lowestPriority = priority
+			lowestPriorityCell = vc
 		}
 	}
 	return lowestPriorityCell
 }
 
+// getUnboundVirtualCell returns a virtual cell that is not bound to a physical cell.
+func getUnboundVirtualCell(cl CellList) *VirtualCell {
+	for _, c := range cl {
+		if vc := c.(*VirtualCell); vc.GetPhysicalCell() == nil {
+			return vc
+		}
+	}
+	return nil
+}
+
 // bindCell binds a virtual cell to a physical cell and its parent recursively.
+// bindCell always starts from the lowest level, i.e., GPU-level cells.
 func bindCell(pc *PhysicalCell, vc *VirtualCell) {
 	for vc.GetPhysicalCell() == nil {
 		pc.SetVirtualCell(vc)
 		vc.SetPhysicalCell(pc)
 		klog.Infof("Virtual cell %v is bound to physical cell %v", vc.GetAddress(), pc.GetAddress())
-		if pc.GetAPIStatus().CellHealthiness == api.CellBad &&
-			(vc.GetParent() == nil ||
-				pc.GetParent().(*PhysicalCell).GetAPIStatus().CellHealthiness == api.CellHealthy) {
-			// If a physical cell is marked as Bad, that means all of its children are bad. In this case, we should also
-			// mark all of the virtual cell's children as bad. We need to do it explicitly because some of the virtual
-			// cell's children might be not bound to a physical cell, so it won't be marked as bad by cell binding.
-			// Because cell binding is done in a bottom-up manner, if we set the virtual cell's healthiness whenever
-			// the physical cell is bad, it would waste computation. So we set the virtual cell only when it is the root
-			// or the parent is no longer bad.
-			setVirtualCellHealthiness(vc, api.CellBad)
-		}
 		if vc.GetParent() == nil {
 			break
 		}
@@ -216,6 +318,7 @@ func bindCell(pc *PhysicalCell, vc *VirtualCell) {
 }
 
 // unbindCell unbinds a virtual cell with a physical cell and its parent recursively.
+// unbindCell always starts from the lowest level, i.e., GPU-level cells.
 func unbindCell(c *PhysicalCell) {
 	boundVirtual := c.GetVirtualCell()
 	for !boundVirtual.GetPhysicalCell().IsPinned() {
@@ -225,29 +328,15 @@ func unbindCell(c *PhysicalCell) {
 		boundVirtual.SetPhysicalCell(nil)
 		boundPhysical.SetVirtualCell(nil)
 		if boundVirtual.GetParent() == nil {
-			break
+			return
 		} else {
-			unbindParent := true
 			for _, cc := range boundVirtual.GetParent().GetChildren() {
 				if child := cc.(*VirtualCell); child.GetPhysicalCell() != nil {
-					unbindParent = false
-					break
+					return
 				}
-			}
-			if !unbindParent {
-				break
 			}
 			boundVirtual = boundVirtual.GetParent().(*VirtualCell)
 		}
-	}
-	if parent := boundVirtual.GetParent(); parent != nil {
-		if parent.(*VirtualCell).GetAPIStatus().CellHealthiness == api.CellBad {
-			// If the unbound virtual cell's parent is still marked as Bad, which means all children should be bad,
-			// we will mark the unbound virtual cell and its children as bad
-			setVirtualCellHealthiness(boundVirtual, api.CellBad)
-		}
-	} else {
-		setVirtualCellHealthiness(boundVirtual, api.CellHealthy)
 	}
 }
 

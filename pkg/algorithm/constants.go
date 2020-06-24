@@ -42,6 +42,8 @@ const (
 
 	// No affinity group is using, reserving, or has reserved the cell.
 	// A Free cell's priority must be freePriority.
+	// Note that a Free cell may also have binding (e.g., when it is a doomed bad cell),
+	// and we should not use such Free cell for cell binding.
 	cellFree CellState = "Free"
 	// An affinity group is using this cell, and no other group is reserving or has reserved it.
 	// A Used cell's priority is that of the group using the cell.

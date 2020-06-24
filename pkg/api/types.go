@@ -75,14 +75,15 @@ type PinnedCellSpec struct {
 }
 
 type PodSchedulingSpec struct {
-	VirtualCluster       VirtualClusterName `yaml:"virtualCluster"`
-	Priority             int32              `yaml:"priority"`
-	PinnedCellId         PinnedCellId       `yaml:"pinnedCellId"`
-	GpuType              string             `yaml:"gpuType"`
-	GpuNumber            int32              `yaml:"gpuNumber"`
-	GangReleaseEnable    bool               `yaml:"gangReleaseEnable"`
-	LazyPreemptionEnable bool               `yaml:"lazyPreemptionEnable"`
-	AffinityGroup        *AffinityGroupSpec `yaml:"affinityGroup"`
+	VirtualCluster          VirtualClusterName `yaml:"virtualCluster"`
+	Priority                int32              `yaml:"priority"`
+	PinnedCellId            PinnedCellId       `yaml:"pinnedCellId"`
+	GpuType                 string             `yaml:"gpuType"`
+	GpuNumber               int32              `yaml:"gpuNumber"`
+	GangReleaseEnable       bool               `yaml:"gangReleaseEnable"`
+	LazyPreemptionEnable    bool               `yaml:"lazyPreemptionEnable"`
+	IgnoreK8sSuggestedNodes bool               `yaml:"ignoreK8sSuggestedNodes"`
+	AffinityGroup           *AffinityGroupSpec `yaml:"affinityGroup"`
 }
 
 type AffinityGroupSpec struct {
@@ -152,13 +153,11 @@ type AffinityGroup struct {
 type AffinityGroupState string
 
 type AffinityGroupStatus struct {
-	VC       VirtualClusterName `json:"vc"`
-	Priority int32              `json:"priority"`
-	State    AffinityGroupState `json:"state"`
-	// node -> GPU indices
-	PhysicalPlacement map[string][]int32 `json:"physicalPlacement,omitempty"`
-	// preassigned cell -> leaf cells
-	VirtualPlacement     map[CellAddress][]CellAddress `json:"virtualPlacement,omitempty"`
+	VC                   VirtualClusterName            `json:"vc"`
+	Priority             int32                         `json:"priority"`
+	State                AffinityGroupState            `json:"state"`
+	PhysicalPlacement    map[string][]int32            `json:"physicalPlacement,omitempty"` // node -> GPU indices
+	VirtualPlacement     map[CellAddress][]CellAddress `json:"virtualPlacement,omitempty"`  // preassigned cell -> leaf cells
 	AllocatedPods        []types.UID                   `json:"allocatedPods,omitempty"`
 	PreemptingPods       []types.UID                   `json:"preemptingPods,omitempty"`
 	LazyPreemptionStatus *LazyPreemptionStatus         `json:"lazyPreemptionStatus,omitempty"`

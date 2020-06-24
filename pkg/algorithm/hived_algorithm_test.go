@@ -62,8 +62,8 @@ func initNodes(h *HivedAlgorithm) {
 	}
 }
 
-var group1, group2, group3, group4, group5, group6, group7, group8, group9, group10, group11, group12,
-	group13, group14, group15, group16, group17, group18, group19, group20, group21, group22, group23, group24, group25, group26 = &api.AffinityGroupSpec{
+var group1, group2, group3, group4, group5, group6, group7, group8, group9, group10, group11, group12, group13, group14,
+	group15, group16, group17, group18, group19, group20, group21, group22, group23, group24, group25, group26, group27, group28, group29 = &api.AffinityGroupSpec{
 	Name:    "group1",
 	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, GpuNumber: 1}},
 }, &api.AffinityGroupSpec{
@@ -141,6 +141,15 @@ var group1, group2, group3, group4, group5, group6, group7, group8, group9, grou
 }, &api.AffinityGroupSpec{
 	Name:    "group26",
 	Members: []api.AffinityGroupMemberSpec{{PodNumber: 2, GpuNumber: 16}},
+}, &api.AffinityGroupSpec{
+	Name:    "group27",
+	Members: []api.AffinityGroupMemberSpec{{PodNumber: 2, GpuNumber: 16}},
+}, &api.AffinityGroupSpec{
+	Name:    "group28",
+	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, GpuNumber: 16}},
+}, &api.AffinityGroupSpec{
+	Name:    "group29",
+	Members: []api.AffinityGroupMemberSpec{{PodNumber: 4, GpuNumber: 16}},
 }
 
 var pss = map[types.UID]api.PodSchedulingSpec{
@@ -432,6 +441,46 @@ var pss = map[types.UID]api.PodSchedulingSpec{
 		GpuType:              "",
 		GpuNumber:            1,
 		AffinityGroup:        group1,
+	}, "pod37": { // used for test aware of suggested nodes in VC
+		VirtualCluster:       "VC1",
+		Priority:             1,
+		LazyPreemptionEnable: true,
+		PinnedCellId:         "VC1-YQW-DGX2",
+		GpuType:              "DGX2-V100",
+		GpuNumber:            1,
+		AffinityGroup:        group1,
+	}, "pod38": { // used for test aware of suggested nodes in VC
+		VirtualCluster:       "VC1",
+		Priority:             1,
+		LazyPreemptionEnable: true,
+		PinnedCellId:         "VC1-YQW-DGX2",
+		GpuType:              "DGX2-V100",
+		GpuNumber:            1,
+		AffinityGroup:        group2,
+	}, "pod39": { // used for triggering backtrack cell search
+		VirtualCluster:       "VC1",
+		Priority:             1,
+		LazyPreemptionEnable: true,
+		PinnedCellId:         "",
+		GpuType:              "DGX2-V100",
+		GpuNumber:            16,
+		AffinityGroup:        group27,
+	}, "pod40": { // backtrack cell search
+		VirtualCluster:       "VC1",
+		Priority:             1,
+		LazyPreemptionEnable: true,
+		PinnedCellId:         "",
+		GpuType:              "DGX2-V100",
+		GpuNumber:            16,
+		AffinityGroup:        group28,
+	}, "pod41": { // revert lazy preemption in backtrack cell search
+		VirtualCluster:       "VC1",
+		Priority:             2,
+		LazyPreemptionEnable: true,
+		PinnedCellId:         "",
+		GpuType:              "DGX2-V100",
+		GpuNumber:            16,
+		AffinityGroup:        group29,
 	},
 }
 
@@ -464,7 +513,7 @@ var expectedBindInfos = map[string]result{
 	"pod4":  {node: "0.0.5.0", gpuIsolation: []int32{0}},
 	"pod5":  {node: "0.0.3.0", gpuIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
 	"pod6":  {node: "0.0.3.1", gpuIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
-	"pod8":  {node: "1.0.0.1", gpuIsolation: []int32{0, 1, 2, 3, 4, 5, 6}},
+	"pod8":  {node: "1.0.0.0", gpuIsolation: []int32{1, 3, 4, 7, 0, 2, 6}},
 	"pod9":  {node: "1.0.0.2", gpuIsolation: []int32{0, 1, 2, 3, 4}},
 	"pod18": {node: "0.0.3.2", gpuIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
 	"pod19": {node: "0.0.3.3", gpuIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
@@ -472,11 +521,15 @@ var expectedBindInfos = map[string]result{
 	"pod21": {node: "0.0.4.1", gpuIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
 	"pod22": {node: "0.0.4.2", gpuIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
 	"pod23": {node: "0.0.4.3", gpuIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
-	"pod24": {node: "0.0.0.0", gpuIsolation: []int32{0, 1}},
-	"pod25": {node: "0.0.0.1", gpuIsolation: []int32{0, 1}},
+	"pod24": {node: "0.0.0.1", gpuIsolation: []int32{0, 1}},
+	"pod25": {node: "0.0.0.0", gpuIsolation: []int32{0, 1}},
 	"pod28": {node: "0.0.3.0", gpuIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
 	"pod34": {node: "0.0.3.0", gpuIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
 	"pod36": {node: "0.0.1.0", gpuIsolation: []int32{0}},
+	"pod37": {node: "0.0.3.0", gpuIsolation: []int32{0}},
+	"pod38": {node: "0.0.3.1", gpuIsolation: []int32{0}},
+	"pod39": {node: "0.0.3.2", gpuIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
+	"pod40": {node: "0.0.4.3", gpuIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
 }
 
 var expectedPreemptInfos = map[string]common.Set{
@@ -507,10 +560,13 @@ func TestHivedAlgorithm(t *testing.T) {
 	for _, chains := range h.cellChains {
 		sortChains(chains)
 	}
+	setHealthyNodes(h)
 
 	printConfig(t, h)
 	testNormalOperations(t, h)
+	testSuggestedNodes(t, configFilePath)
 	testStatefulPreemption(t, configFilePath)
+	testBadNodes(t, configFilePath)
 	testReconfiguration(t, configFilePath)
 	testInvalidInitialAssignment(t, sConfig)
 }
@@ -526,6 +582,17 @@ func sortChains(chains []CellChain) {
 	}
 }
 
+func setHealthyNodes(h *HivedAlgorithm) {
+	for _, ccl := range h.fullCellList {
+		for _, c := range ccl[CellLevel(len(ccl))] {
+			nodes, _ := c.(*PhysicalCell).GetPhysicalPlacement()
+			for _, n := range nodes {
+				h.setHealthyNode(n)
+			}
+		}
+	}
+}
+
 func printConfig(t *testing.T, h *HivedAlgorithm) {
 	for chain, ccl := range h.fullCellList {
 		t.Logf("%v", chain)
@@ -538,7 +605,7 @@ func printConfig(t *testing.T, h *HivedAlgorithm) {
 			t.Logf("%v", ccl)
 		}
 		t.Logf("Pinned cells")
-		for pid, ccl := range vcs.getPinnedCellList() {
+		for pid, ccl := range vcs.getPinnedCells() {
 			t.Logf(string(pid))
 			t.Logf("%v", ccl)
 		}
@@ -552,7 +619,6 @@ func testNormalOperations(t *testing.T, h *HivedAlgorithm) {
 	testCasesThatShouldSucceed(t, h)
 	testCasesThatShouldFail(t, h)
 	testDeletePods(t, h)
-	testSuggestedNodes(t, h)
 }
 
 func testCasesThatShouldSucceed(t *testing.T, h *HivedAlgorithm) {
@@ -624,11 +690,29 @@ func testDeletePods(t *testing.T, h *HivedAlgorithm) {
 	}
 }
 
-func testSuggestedNodes(t *testing.T, h *HivedAlgorithm) {
+func testSuggestedNodes(t *testing.T, configFilePath string) {
+	sConfig := api.NewConfig(api.InitRawConfig(&configFilePath))
+	h := NewHivedAlgorithm(sConfig)
+	for _, chains := range h.cellChains {
+		sortChains(chains)
+	}
+	setHealthyNodes(h)
 	pod := allPods["pod36"]
 	pod.Annotations[api.AnnotationKeyPodSchedulingSpec] = common.ToYaml(pss[pod.UID])
 	psr := h.Schedule(pod, []string{"0.0.1.0"}, internal.PreemptingPhase)
 	compareSchedulingResult(t, pod, psr)
+
+	pod = allPods["pod37"]
+	pod.Annotations[api.AnnotationKeyPodSchedulingSpec] = common.ToYaml(pss[pod.UID])
+	psr = h.Schedule(pod, []string{"0.0.3.0"}, internal.PreemptingPhase)
+	compareSchedulingResult(t, pod, psr)
+	allocatedPod := internal.NewBindingPod(pod, psr.PodBindInfo)
+	h.AddAllocatedPod(allocatedPod)
+	pod = allPods["pod38"]
+	pod.Annotations[api.AnnotationKeyPodSchedulingSpec] = common.ToYaml(pss[pod.UID])
+	psr = h.Schedule(pod, []string{"0.0.3.1"}, internal.PreemptingPhase)
+	compareSchedulingResult(t, pod, psr)
+	h.DeleteAllocatedPod(allocatedPod)
 
 	var nodes []string
 	for _, node := range allNodes {
@@ -668,13 +752,53 @@ func testSuggestedNodes(t *testing.T, h *HivedAlgorithm) {
 	psr = h.Schedule(pod, nodes[:len(nodes)-1], internal.PreemptingPhase)
 	// group should have been deleted because the placement is not within Preempting-phase suggested nodes
 	if g := h.affinityGroups[pss[pod.UID].AffinityGroup.Name]; g != nil {
-		t.Errorf("Groups %v should have been deleted, but not", g.name)
+		t.Errorf("Group %v should have been deleted, but not", g.name)
+	}
+
+	// test backtracking search for cell binding
+	newConfig := api.NewConfig(api.InitRawConfig(&configFilePath))
+	(*newConfig.VirtualClusters)["VC1"].VirtualCells[0].CellNumber = 0
+	(*newConfig.VirtualClusters)["VC1"].VirtualCells[3].CellNumber = 3
+	h = NewHivedAlgorithm(newConfig)
+	for _, chains := range h.cellChains {
+		sortChains(chains)
+	}
+	setHealthyNodes(h)
+	pod = allPods["pod39"]
+	pod.Annotations[api.AnnotationKeyPodSchedulingSpec] = common.ToYaml(pss[pod.UID])
+	psr = h.Schedule(pod, []string{"0.0.3.2", "0.0.3.3"}, internal.PreemptingPhase)
+	compareSchedulingResult(t, pod, psr)
+	h.AddAllocatedPod(internal.NewBindingPod(pod, psr.PodBindInfo))
+	pod = allPods["pod40"]
+	pod.Annotations[api.AnnotationKeyPodSchedulingSpec] = common.ToYaml(pss[pod.UID])
+	psr = h.Schedule(pod, []string{"0.0.4.3"}, internal.PreemptingPhase)
+	compareSchedulingResult(t, pod, psr)
+	h.AddAllocatedPod(internal.NewBindingPod(pod, psr.PodBindInfo))
+	pod = allPods["pod41"]
+	pod.Annotations[api.AnnotationKeyPodSchedulingSpec] = common.ToYaml(pss[pod.UID])
+	psr = h.Schedule(pod, []string{"0.0.3.2", "0.0.3.3", "0.0.4.3"}, internal.PreemptingPhase)
+	// the pod tries to lazy preempt group27 and group28, but is reverted
+	if g := h.affinityGroups["group27"]; g == nil {
+		t.Errorf("Group %v should be allocated but does not exist",
+			pss[pod.UID].AffinityGroup.Name)
+	} else if g.state != groupAllocated {
+		t.Errorf("Group %v should be in Allocated state but not", g.name)
+	}
+	if g := h.affinityGroups["group28"]; g == nil {
+		t.Errorf("Group %v should be allocated but does not exist",
+			pss[pod.UID].AffinityGroup.Name)
+	} else if g.state != groupAllocated {
+		t.Errorf("Group %v should be in Allocated state but not", g.name)
 	}
 }
 
 func testStatefulPreemption(t *testing.T, configFilePath string) {
 	sConfig := api.NewConfig(api.InitRawConfig(&configFilePath))
 	h := NewHivedAlgorithm(sConfig)
+	for _, chains := range h.cellChains {
+		sortChains(chains)
+	}
+	setHealthyNodes(h)
 	allocatedPods = []*core.Pod{}
 	var psr internal.PodScheduleResult
 	for _, podName := range casesForStatefulPreemption {
@@ -722,12 +846,48 @@ func testStatefulPreemption(t *testing.T, configFilePath string) {
 	}
 }
 
+func testBadNodes(t *testing.T, configFilePath string) {
+	sConfig := api.NewConfig(api.InitRawConfig(&configFilePath))
+	h := NewHivedAlgorithm(sConfig)
+	for _, chains := range h.cellChains {
+		sortChains(chains)
+	}
+	setHealthyNodes(h)
+
+	pod := allPods["pod1"]
+	pod.Annotations[api.AnnotationKeyPodSchedulingSpec] = common.ToYaml(pss[pod.UID])
+	psr := h.Schedule(pod, []string{"0.0.2.0"}, internal.PreemptingPhase)
+	h.AddAllocatedPod(internal.NewBindingPod(pod, psr.PodBindInfo))
+	h.setBadNode("0.0.2.1")
+	for _, c := range h.vcSchedulers["VC1"].getNonPinnedPreassignedCells()["3-DGX2-V100-NODE"][5] {
+		if c.(*VirtualCell).GetAPIStatus().CellHealthiness == api.CellBad {
+			t.Errorf(
+				"All free cells in VC1 chain 3-DGX2-V100-NODE should be healthy, but %v is bad", c.GetAddress())
+		}
+	}
+	h.setBadNode("0.0.2.2")
+	for _, c := range h.vcSchedulers["VC1"].getNonPinnedPreassignedCells()["3-DGX2-V100-NODE"][5] {
+		if c.GetPriority() == freePriority && c.(*VirtualCell).GetAPIStatus().CellHealthiness == api.CellHealthy {
+			t.Errorf(
+				"All free cells in VC1 chain 3-DGX2-V100-NODE should be bad, but %v is healthy", c.GetAddress())
+		}
+	}
+	h.setHealthyNode("0.0.2.2")
+	for _, c := range h.vcSchedulers["VC1"].getNonPinnedPreassignedCells()["3-DGX2-V100-NODE"][5] {
+		if c.(*VirtualCell).GetAPIStatus().CellHealthiness == api.CellBad {
+			t.Errorf(
+				"All free cells in VC1 chain 3-DGX2-V100-NODE should be healthy, but %v is bad", c.GetAddress())
+		}
+	}
+}
+
 func testReconfiguration(t *testing.T, configFilePath string) {
 	oldConfig := api.NewConfig(api.InitRawConfig(&configFilePath))
 	h := NewHivedAlgorithm(oldConfig)
 	for _, chains := range h.cellChains {
 		sortChains(chains)
 	}
+	setHealthyNodes(h)
 	testCasesThatShouldSucceed(t, h)
 
 	newConfig := api.InitRawConfig(&configFilePath)
@@ -759,6 +919,7 @@ func testReconfiguration(t *testing.T, configFilePath string) {
 	for _, chains := range h.cellChains {
 		sortChains(chains)
 	}
+	setHealthyNodes(h)
 	for _, pod := range allocatedPods {
 		h.AddAllocatedPod(pod)
 	}

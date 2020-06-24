@@ -34,17 +34,17 @@ import (
 // It should be able to return a set of GPU placements in the VC for a scheduling request.
 type intraVCScheduler interface {
 	getNonPinnedFullCellList() map[CellChain]ChainCellList
-	getNonPinnedFreeCellList() map[CellChain]ChainCellList
-	getPinnedCellList() map[api.PinnedCellId]ChainCellList
+	getNonPinnedPreassignedCells() map[CellChain]ChainCellList
+	getPinnedCells() map[api.PinnedCellId]ChainCellList
 
 	// Schedule an affinity group inside a VC. We use topologyAwareScheduler by default.
-	schedule(schedulingRequest) groupVirtualPlacement
+	schedule(schedulingRequest) (groupVirtualPlacement, string)
 }
 
 type defaultIntraVCScheduler struct {
-	nonPinnedFullCellList map[CellChain]ChainCellList
-	nonPinnedFreeCellList map[CellChain]ChainCellList
-	pinnedCellList        map[api.PinnedCellId]ChainCellList
+	nonPinnedFullCellList     map[CellChain]ChainCellList
+	nonPinnedPreassignedCells map[CellChain]ChainCellList
+	pinnedCells               map[api.PinnedCellId]ChainCellList
 	// Currently we create a topologyAwareScheduler for each cluster view (each chain, each pinned cell).
 	// We plan to support multiple cluster views in one scheduler, and to support schedule pods
 	// across different cluster views.
@@ -62,17 +62,17 @@ func newDefaultIntraVCScheduler(
 	snr := map[CellChain]*topologyAwareScheduler{}
 	sr := map[api.PinnedCellId]*topologyAwareScheduler{}
 	for chain, ccl := range nonPinnedFullList {
-		snr[chain] = NewTopologyAwareScheduler(ccl, gpuNums[chain], true, false)
+		snr[chain] = NewTopologyAwareScheduler(ccl, gpuNums[chain], true)
 	}
 	for pid, ccl := range pinnedList {
-		sr[pid] = NewTopologyAwareScheduler(ccl, gpuNums[ccl[CellLevel(1)][0].GetChain()], true, false)
+		sr[pid] = NewTopologyAwareScheduler(ccl, gpuNums[ccl[CellLevel(1)][0].GetChain()], true)
 	}
 	return &defaultIntraVCScheduler{
-		nonPinnedFullCellList:   nonPinnedFullList,
-		nonPinnedFreeCellList:   nonPinnedFreeList,
-		pinnedCellList:          pinnedList,
-		nonPinnedCellSchedulers: snr,
-		pinnedCellSchedulers:    sr,
+		nonPinnedFullCellList:     nonPinnedFullList,
+		nonPinnedPreassignedCells: nonPinnedFreeList,
+		pinnedCells:               pinnedList,
+		nonPinnedCellSchedulers:   snr,
+		pinnedCellSchedulers:      sr,
 	}
 }
 
@@ -80,15 +80,19 @@ func (s *defaultIntraVCScheduler) getNonPinnedFullCellList() map[CellChain]Chain
 	return s.nonPinnedFullCellList
 }
 
-func (s *defaultIntraVCScheduler) getNonPinnedFreeCellList() map[CellChain]ChainCellList {
-	return s.nonPinnedFreeCellList
+func (s *defaultIntraVCScheduler) getNonPinnedPreassignedCells() map[CellChain]ChainCellList {
+	return s.nonPinnedPreassignedCells
 }
 
-func (s *defaultIntraVCScheduler) getPinnedCellList() map[api.PinnedCellId]ChainCellList {
-	return s.pinnedCellList
+func (s *defaultIntraVCScheduler) getPinnedCells() map[api.PinnedCellId]ChainCellList {
+	return s.pinnedCells
 }
 
-func (s *defaultIntraVCScheduler) schedule(sr schedulingRequest) (placement groupVirtualPlacement) {
+func (s *defaultIntraVCScheduler) schedule(
+	sr schedulingRequest) (
+	placement groupVirtualPlacement,
+	failedReason string) {
+
 	scheduler := s.nonPinnedCellSchedulers[sr.chain]
 	str := fmt.Sprintf("chain %v", sr.chain)
 	if sr.pinnedCellId != "" {
@@ -98,13 +102,15 @@ func (s *defaultIntraVCScheduler) schedule(sr schedulingRequest) (placement grou
 	klog.Infof("Processing scheduling request in VC %v: %v, GPU numbers %v, priority %v",
 		sr.vc, str, common.ToJson(sr.affinityGroupPodNums), sr.priority)
 	if scheduler != nil {
-		placement = scheduler.Schedule(sr.affinityGroupPodNums, sr.priority, common.NewSet())
+		placement, failedReason = scheduler.Schedule(
+			sr.affinityGroupPodNums,
+			sr.priority,
+			sr.suggestedNodes,
+			sr.ignoreSuggestedNodes)
 	}
 	if placement == nil {
-		klog.Infof("Cannot find placement in VC %v", sr.vc)
-	} else {
-		klog.Infof("Found placement in VC %v: %v",
-			sr.vc, placement)
+		return nil, fmt.Sprintf("%v when scheduling in VC %v", failedReason, sr.vc)
 	}
-	return placement
+	klog.Infof("Found placement in VC %v: %v", sr.vc, placement)
+	return placement, ""
 }
