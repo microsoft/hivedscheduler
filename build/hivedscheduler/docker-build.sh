@@ -32,6 +32,10 @@ IMAGE_NAME=hivedscheduler
 
 cd ${PROJECT_DIR}
 
-docker build -t ${IMAGE_NAME} -f ${BASH_DIR}/Dockerfile .
+if [ -z ${1:-} ]; then
+    docker build -t ${IMAGE_NAME} -f ${BASH_DIR}/Dockerfile .
+else
+    docker build -t ${IMAGE_NAME} -f ${BASH_DIR}/Dockerfile --build-arg test=$1 .
+fi
 
 echo Succeeded to build docker image ${IMAGE_NAME}

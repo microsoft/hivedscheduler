@@ -22,13 +22,14 @@
 
 FROM golang:1.12.6-alpine as builder
 
+ARG test=skiptest
 ENV PROJECT_DIR=${GOPATH}/src/github.com/microsoft/hivedscheduler
 ENV INSTALL_DIR=/opt/hivedscheduler/hivedscheduler
 
-RUN apk update && apk add --no-cache bash && \
+RUN apk update && apk add --no-cache bash g++ && \
   mkdir -p ${PROJECT_DIR} ${INSTALL_DIR}
 COPY . ${PROJECT_DIR}
-RUN ${PROJECT_DIR}/build/hivedscheduler/go-build.sh && \
+RUN ${PROJECT_DIR}/build/hivedscheduler/go-build.sh $test && \
   mv ${PROJECT_DIR}/dist/hivedscheduler/* ${INSTALL_DIR}
 
 

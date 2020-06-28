@@ -37,6 +37,9 @@ rm -rf ${DIST_DIR}
 mkdir -p ${DIST_DIR}
 
 go build -o ${DIST_DIR}/hivedscheduler cmd/hivedscheduler/*
+if [ ! -z ${1:-} ] && [ $1 == "test" ]; then
+    go test ./pkg/algorithm/
+fi
 chmod a+x ${DIST_DIR}/hivedscheduler
 cp -r bin/hivedscheduler/* ${DIST_DIR}
 cp -r example/config/default/hivedscheduler.yaml ${DIST_DIR}
