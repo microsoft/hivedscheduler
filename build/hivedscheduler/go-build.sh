@@ -38,8 +38,8 @@ rm -rf ${DIST_DIR}
 mkdir -p ${DIST_DIR}
 
 go build -o ${DIST_DIR}/hivedscheduler cmd/hivedscheduler/*
-if [ ! -z ${TEST_FLAG} ] && [ ${TEST_FLAG} == "test=true" ]; then
-    go test -race ./...
+if [ ! -z ${TEST_FLAG} ] && [ ${TEST_FLAG} == "test" ]; then
+  go test -race ./...
 fi
 chmod a+x ${DIST_DIR}/hivedscheduler
 cp -r bin/hivedscheduler/* ${DIST_DIR}

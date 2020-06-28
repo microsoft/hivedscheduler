@@ -29,7 +29,8 @@ ENV INSTALL_DIR=/opt/hivedscheduler/hivedscheduler
 RUN apk update && apk add --no-cache bash g++ && \
   mkdir -p ${PROJECT_DIR} ${INSTALL_DIR}
 COPY . ${PROJECT_DIR}
-RUN ${PROJECT_DIR}/build/hivedscheduler/go-build.sh test=$test && \
+RUN [ $test == "true" ] && ${PROJECT_DIR}/build/hivedscheduler/go-build.sh test || \
+  ${PROJECT_DIR}/build/hivedscheduler/go-build.sh && \
   mv ${PROJECT_DIR}/dist/hivedscheduler/* ${INSTALL_DIR}
 
 
