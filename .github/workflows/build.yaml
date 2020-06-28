@@ -9,8 +9,14 @@ on:
     - master
 
 jobs:
+  build:
+    name: Build and Test
+    runs-on: ubuntu-16.04
+    steps:
+    - uses: actions/checkout@v2
+    - run: build/hivedscheduler/docker-build.sh test=true
   codecov:
-    name: Code coverage
+    name: Code Coverage
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -38,9 +44,3 @@ jobs:
           file: ${{ github.workspace }}/coverage.txt
           flags: unittests
           name: codecov-go${{ matrix.go }}-${{ matrix.os }}
-  docker:
-    name: Build and test
-    runs-on: ubuntu-16.04
-    steps:
-    - uses: actions/checkout@v2
-    - run: build/hivedscheduler/docker-build.sh test=true
