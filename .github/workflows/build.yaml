@@ -10,12 +10,12 @@ on:
 
 jobs:
   codecov:
-    name: Codecov on Go-${{ matrix.go }}-${{ matrix.os }}
+    name: Code coverage
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        go: [1.12.6, 1.12.x]
-        os: [ubuntu-16.04, ubuntu-latest]
+        go: [1.12.6]
+        os: [ubuntu-16.04]
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -28,12 +28,9 @@ jobs:
           go-version: ${{ matrix.go }}
       - name: Setup GOPATH
         run: echo "::set-env name=GOPATH::${{ github.workspace }}"
-      - name: Go build
-        working-directory: src/github.com/${{ github.repository }}
-        run: go build -o hivedscheduler ./cmd/hivedscheduler/
       - name: Go test
         working-directory: src/github.com/${{ github.repository }}
-        run: go test -race -covermode=atomic -coverprofile=$GOPATH/coverage.txt ./pkg/algorithm/
+        run: go test -race -covermode=atomic -coverprofile=$GOPATH/coverage.txt ./...
       - name: Report coverage
         uses: codecov/codecov-action@v1
         with:
@@ -42,8 +39,8 @@ jobs:
           flags: unittests
           name: codecov-go${{ matrix.go }}-${{ matrix.os }}
   docker:
-    name: Build Docker
+    name: Build and test
     runs-on: ubuntu-16.04
     steps:
     - uses: actions/checkout@v2
-    - run: build/hivedscheduler/docker-build.sh test
+    - run: build/hivedscheduler/docker-build.sh test=true

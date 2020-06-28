@@ -26,16 +26,17 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+TEST_FLAG=${1:-}
 BASH_DIR=$(cd $(dirname ${BASH_SOURCE}) && pwd)
 PROJECT_DIR=${BASH_DIR}/../..
 IMAGE_NAME=hivedscheduler
 
 cd ${PROJECT_DIR}
 
-if [ -z ${1:-} ]; then
+if [ -z ${TEST_FLAG} ]; then
     docker build -t ${IMAGE_NAME} -f ${BASH_DIR}/Dockerfile .
 else
-    docker build -t ${IMAGE_NAME} -f ${BASH_DIR}/Dockerfile --build-arg test=$1 .
+    docker build -t ${IMAGE_NAME} -f ${BASH_DIR}/Dockerfile --build-arg ${TEST_FLAG} .
 fi
 
 echo Succeeded to build docker image ${IMAGE_NAME}

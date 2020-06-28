@@ -26,6 +26,7 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+TEST_FLAG=${1:-}
 BASH_DIR=$(cd $(dirname ${BASH_SOURCE}) && pwd)
 # Ensure ${PROJECT_DIR} is ${GOPATH}/src/github.com/microsoft/hivedscheduler
 PROJECT_DIR=${BASH_DIR}/../..
@@ -37,8 +38,8 @@ rm -rf ${DIST_DIR}
 mkdir -p ${DIST_DIR}
 
 go build -o ${DIST_DIR}/hivedscheduler cmd/hivedscheduler/*
-if [ ! -z ${1:-} ] && [ $1 == "test" ]; then
-    go test ./pkg/algorithm/
+if [ ! -z ${TEST_FLAG} ] && [ ${TEST_FLAG} == "test=true" ]; then
+    go test ./...
 fi
 chmod a+x ${DIST_DIR}/hivedscheduler
 cp -r bin/hivedscheduler/* ${DIST_DIR}
