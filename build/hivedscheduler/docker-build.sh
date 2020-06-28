@@ -34,7 +34,7 @@ IMAGE_NAME=hivedscheduler
 cd ${PROJECT_DIR}
 
 if [ ! -z ${TEST_FLAG} ] && [ ${TEST_FLAG} == "test" ]; then
-  docker build -t ${IMAGE_NAME} -f ${BASH_DIR}/Dockerfile --build-arg test=true .
+  docker build -t ${IMAGE_NAME} -f ${BASH_DIR}/Dockerfile --build-arg TEST=true .
 else
   docker build -t ${IMAGE_NAME} -f ${BASH_DIR}/Dockerfile .
 fi

@@ -23,24 +23,24 @@ jobs:
         go: [1.12.6]
         os: [ubuntu-16.04]
     steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          path: src/github.com/${{ github.repository }}
-      - name: Setup go ${{ matrix.go }}
-        uses: actions/setup-go@v2
-        with:
-          go-version: ${{ matrix.go }}
-      - name: Setup GOPATH
-        run: echo "::set-env name=GOPATH::${{ github.workspace }}"
-      - name: Go test
-        working-directory: src/github.com/${{ github.repository }}
-        run: go test -race -covermode=atomic -coverprofile=$GOPATH/coverage.txt ./...
-      - name: Report coverage
-        uses: codecov/codecov-action@v1
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          file: ${{ github.workspace }}/coverage.txt
-          flags: unittests
-          name: codecov-go${{ matrix.go }}-${{ matrix.os }}
+    - name: Checkout
+      uses: actions/checkout@v2
+      with:
+        ref: ${{ github.event.pull_request.head.sha }}
+        path: src/github.com/${{ github.repository }}
+    - name: Setup go ${{ matrix.go }}
+      uses: actions/setup-go@v2
+      with:
+        go-version: ${{ matrix.go }}
+    - name: Setup GOPATH
+      run: echo "::set-env name=GOPATH::${{ github.workspace }}"
+    - name: Go test
+      working-directory: src/github.com/${{ github.repository }}
+      run: go test -race -covermode=atomic -coverprofile=$GOPATH/coverage.txt ./...
+    - name: Report coverage
+      uses: codecov/codecov-action@v1
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        file: ${{ github.workspace }}/coverage.txt
+        flags: unittests
+        name: codecov-go${{ matrix.go }}-${{ matrix.os }}
