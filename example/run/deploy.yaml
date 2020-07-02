@@ -194,8 +194,6 @@ spec:
       nodeSelector:
         pai-master: "true"
       serviceAccountName: hivedscheduler-account
-      imagePullSecrets:
-      - name: {{ cluster_cfg["cluster"]["docker-registry"]["secret-name"] }}
       containers:
       - name: defaultscheduler
         image: gcr.io/google_containers/kube-scheduler:v1.14.2
