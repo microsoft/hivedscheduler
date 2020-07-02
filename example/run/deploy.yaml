@@ -147,8 +147,6 @@ spec:
       labels:
         app: hivedscheduler-ds-vc1
     spec:
-      nodeSelector:
-        pai-master: "true"
       serviceAccountName: hivedscheduler-account
       containers:
       - name: defaultscheduler
@@ -189,8 +187,6 @@ spec:
       labels:
         app: hivedscheduler-ds-vc2
     spec:
-      nodeSelector:
-        pai-master: "true"
       serviceAccountName: hivedscheduler-account
       containers:
       - name: defaultscheduler
