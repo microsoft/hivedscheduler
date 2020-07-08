@@ -24,6 +24,9 @@ package scheduler
 
 import (
 	"fmt"
+	"sync"
+	"time"
+
 	"github.com/microsoft/hivedscheduler/pkg/algorithm"
 	si "github.com/microsoft/hivedscheduler/pkg/api"
 	"github.com/microsoft/hivedscheduler/pkg/common"
@@ -39,8 +42,6 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog"
 	ei "k8s.io/kubernetes/pkg/scheduler/api"
-	"sync"
-	"time"
 )
 
 // HivedScheduler is the scheduling framework which serves as the bridge between

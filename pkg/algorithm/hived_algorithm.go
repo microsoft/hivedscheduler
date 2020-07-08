@@ -24,13 +24,14 @@ package algorithm
 
 import (
 	"fmt"
+	"sync"
+
 	"github.com/microsoft/hivedscheduler/pkg/api"
 	"github.com/microsoft/hivedscheduler/pkg/common"
 	"github.com/microsoft/hivedscheduler/pkg/internal"
 	core "k8s.io/api/core/v1"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog"
-	"sync"
 )
 
 // HivedAlgorithm implements an internal.SchedulerAlgorithm. It schedules affinity groups using the algorithm of HiveD.
@@ -917,6 +918,7 @@ func (h *HivedAlgorithm) scheduleGuaranteedAffinityGroup(
 		preassignedCells,
 		nonPreassignedCells,
 		h.freeCellList[sr.chain].shallowCopy(),
+		h.allVCFreeCellNum[sr.chain],
 		sr.suggestedNodes,
 		sr.ignoreSuggestedNodes,
 		bindings); ok {

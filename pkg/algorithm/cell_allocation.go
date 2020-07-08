@@ -24,10 +24,11 @@ package algorithm
 
 import (
 	"fmt"
+	"sort"
+
 	"github.com/microsoft/hivedscheduler/pkg/api"
 	"github.com/microsoft/hivedscheduler/pkg/common"
 	"k8s.io/klog"
-	"sort"
 )
 
 // buddyAlloc is used for allocating a free physical cell to a preassigned virtual cell.
@@ -89,6 +90,37 @@ func getLowestFreeCellLevel(freeList ChainCellList, l CellLevel) CellLevel {
 		"even split to the highest level %v", l-1))
 }
 
+// when buddyAlloc allocates bad cells,
+// check whether it is safe to split a higher level cell to get current level cells.
+func checkSplitSafety(freeList ChainCellList, freeCellNum map[CellLevel]int32, l CellLevel) bool {
+	var splitableCell Cell
+	splitableNum := map[CellLevel]int32{}
+	for i := CellLevel(len(freeList)); i >= CellLevel(1); i-- {
+		// calculate splitable number
+		splitableNum[i] = int32(len(freeList[i])) - freeCellNum[i]
+		if i < CellLevel(len(freeList)) && splitableCell != nil {
+			splitableNum[i] += splitableNum[i+1] * int32(len(splitableCell.GetChildren()))
+		}
+		// iterate higher level cell
+		if splitableCell == nil && len(freeList[i]) > 0 {
+			splitableCell = freeList[i][0]
+		} else if splitableCell != nil {
+			splitableCell = splitableCell.GetChildren()[0]
+		}
+		// check safety
+		if splitableNum[i] < 0 {
+			return false
+		}
+	}
+	// if there exists a higher level cell with splitable num > 0
+	for l++; l <= CellLevel(len(freeList)); l++ {
+		if splitableNum[l] > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 // mapVirtualPlacementToPhysical maps cells in a VC placement to the physical cluster.
 // For the preassigned cells, it will call buddy alloc to map them;
 // For the nonPreassigned cells, it will map them following the topology inside the corresponding preassigned cells.
@@ -96,14 +128,21 @@ func mapVirtualPlacementToPhysical(
 	preassignedCells []*cellBindingPathVertex,
 	nonPreassignedCells [][]*cellBindingPathVertex,
 	freeList ChainCellList,
+	freeCellNum map[CellLevel]int32,
 	suggestedNodes common.Set,
 	ignoreSuggestedNodes bool,
 	bindings map[api.CellAddress]*PhysicalCell) bool {
 
 	for _, c := range preassignedCells {
-		if !buddyAlloc(c, freeList, getLowestFreeCellLevel(
+		for !buddyAlloc(c, freeList, getLowestFreeCellLevel(
 			freeList, c.cell.GetLevel()), suggestedNodes, ignoreSuggestedNodes, bindings) {
-			return false
+			klog.Info("Buddy allocation failed due to bad cells, try to split higher level cells")
+			if checkSplitSafety(freeList, freeCellNum, c.cell.GetLevel()) {
+				klog.Infof("Remove level %v free list %v", c.cell.GetLevel(), freeList[c.cell.GetLevel()])
+				freeList[c.cell.GetLevel()] = CellList{}
+			} else {
+				return false
+			}
 		}
 	}
 	for _, cells := range nonPreassignedCells {
