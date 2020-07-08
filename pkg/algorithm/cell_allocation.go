@@ -136,11 +136,11 @@ func mapVirtualPlacementToPhysical(
 	for _, c := range preassignedCells {
 		for !buddyAlloc(c, freeList, getLowestFreeCellLevel(
 			freeList, c.cell.GetLevel()), suggestedNodes, ignoreSuggestedNodes, bindings) {
-			klog.Info("Buddy allocation failed due to bad cells, try to split higher level cells")
-			if checkSplitSafety(freeList, freeCellNum, c.cell.GetLevel()) {
-				klog.Infof("Remove level %v free list %v", c.cell.GetLevel(), freeList[c.cell.GetLevel()])
-				freeList[c.cell.GetLevel()] = CellList{}
-			} else {
+			l := getLowestFreeCellLevel(freeList, c.cell.GetLevel())
+			klog.Infof("Buddy allocation failed due to bad cells, removing level %v free list: %v", l, freeList[l])
+			freeList[l] = CellList{}
+			if !checkSplitSafety(freeList, freeCellNum, c.cell.GetLevel()) {
+				klog.Info("Cannot split higher level cells")
 				return false
 			}
 		}
