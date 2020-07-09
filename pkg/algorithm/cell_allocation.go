@@ -79,6 +79,68 @@ func buddyAlloc(
 	return false
 }
 
+// after buddyAlloc failed to allocate cells,
+// try to split a higher level cell to get current level cells.
+func splitAlloc(
+	cell *cellBindingPathVertex,
+	freeList ChainCellList,
+	freeCellNum map[CellLevel]int32,
+	currentLevel CellLevel,
+	suggestedNodes common.Set,
+	ignoreSuggestedNodes bool,
+	bindings map[api.CellAddress]*PhysicalCell) bool {
+
+	var splittableCell Cell
+	splittableNum := map[CellLevel]int32{}
+	for i := CellLevel(len(freeList)); i >= CellLevel(1); i-- {
+		// calculate splitable number
+		splittableNum[i] = int32(len(freeList[i])) - freeCellNum[i]
+		if i < CellLevel(len(freeList)) && splittableCell != nil {
+			splittableNum[i] += splittableNum[i+1] * int32(len(splittableCell.GetChildren()))
+		}
+		// iterate higher level cell
+		if splittableCell == nil && len(freeList[i]) > 0 {
+			splittableCell = freeList[i][0]
+		} else if splittableCell != nil {
+			splittableCell = splittableCell.GetChildren()[0]
+		}
+		// check safety
+		if splittableNum[i] < 0 {
+			// TODO: panic(fmt.Sprintf("VC Safety Broken: level %v cell is unsplittable", i))
+			return false
+		}
+	}
+
+	for l := currentLevel + 1; l <= CellLevel(len(freeList)); l++ {
+		cellNum := int32(len(freeList[l]))
+		if cellNum > splittableNum[l] {
+			cellNum = splittableNum[l]
+		}
+		if cellNum > 0 {
+			splitList := freeList[l][:cellNum]
+			freeList[l] = freeList[l][cellNum:]
+			splittableNum[l] -= cellNum
+			for sl := l; sl > currentLevel; sl-- {
+				for _, sc := range splitList {
+					splitList = append(splitList[1:], sc.GetChildren()...)
+				}
+			}
+			freeList[currentLevel] = append(splitList, freeList[currentLevel]...)
+			ok, _ := mapVirtualCellsToPhysical(
+				[]*cellBindingPathVertex{cell},
+				freeList[currentLevel],
+				suggestedNodes,
+				ignoreSuggestedNodes,
+				bindings,
+				true)
+			if ok {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // getLowestFreeCellLevel returns the lowest level in the free cell list with at least one free cell.
 func getLowestFreeCellLevel(freeList ChainCellList, l CellLevel) CellLevel {
 	for ; l <= CellLevel(len(freeList)); l++ {
@@ -88,37 +150,6 @@ func getLowestFreeCellLevel(freeList ChainCellList, l CellLevel) CellLevel {
 	}
 	panic(fmt.Sprintf("VC Safety Broken: free cell not found "+
 		"even split to the highest level %v", l-1))
-}
-
-// when buddyAlloc allocates bad cells,
-// check whether it is safe to split a higher level cell to get current level cells.
-func checkSplitSafety(freeList ChainCellList, freeCellNum map[CellLevel]int32, l CellLevel) bool {
-	var splitableCell Cell
-	splitableNum := map[CellLevel]int32{}
-	for i := CellLevel(len(freeList)); i >= CellLevel(1); i-- {
-		// calculate splitable number
-		splitableNum[i] = int32(len(freeList[i])) - freeCellNum[i]
-		if i < CellLevel(len(freeList)) && splitableCell != nil {
-			splitableNum[i] += splitableNum[i+1] * int32(len(splitableCell.GetChildren()))
-		}
-		// iterate higher level cell
-		if splitableCell == nil && len(freeList[i]) > 0 {
-			splitableCell = freeList[i][0]
-		} else if splitableCell != nil {
-			splitableCell = splitableCell.GetChildren()[0]
-		}
-		// check safety
-		if splitableNum[i] < 0 {
-			return false
-		}
-	}
-	// if there exists a higher level cell with splitable num > 0
-	for l++; l <= CellLevel(len(freeList)); l++ {
-		if splitableNum[l] > 0 {
-			return true
-		}
-	}
-	return false
 }
 
 // mapVirtualPlacementToPhysical maps cells in a VC placement to the physical cluster.
@@ -134,12 +165,10 @@ func mapVirtualPlacementToPhysical(
 	bindings map[api.CellAddress]*PhysicalCell) bool {
 
 	for _, c := range preassignedCells {
-		for !buddyAlloc(c, freeList, getLowestFreeCellLevel(
+		if !buddyAlloc(c, freeList, getLowestFreeCellLevel(
 			freeList, c.cell.GetLevel()), suggestedNodes, ignoreSuggestedNodes, bindings) {
-			l := getLowestFreeCellLevel(freeList, c.cell.GetLevel())
-			klog.Infof("Buddy allocation failed due to bad cells, removing level %v free list: %v", l, freeList[l])
-			freeList[l] = CellList{}
-			if !checkSplitSafety(freeList, freeCellNum, c.cell.GetLevel()) {
+			klog.Info("Buddy allocation failed due to bad cells, try to split higher level cells")
+			if !splitAlloc(c, freeList, freeCellNum, c.cell.GetLevel(), suggestedNodes, ignoreSuggestedNodes, bindings) {
 				klog.Info("Cannot split higher level cells")
 				return false
 			}
