@@ -914,11 +914,15 @@ func (h *HivedAlgorithm) scheduleGuaranteedAffinityGroup(
 	common.SortInt32(gpuNums)
 	lazyPreemptedGroups := h.tryLazyPreempt(virtualPlacement, gpuNums, sr.affinityGroupName)
 	preassignedCells, nonPreassignedCells := virtualPlacement.toBindingPaths(gpuNums, bindings)
+	freeCellNum := map[CellLevel]int32{}
+	for k, v := range h.allVCFreeCellNum[sr.chain] {
+		freeCellNum[k] = v
+	}
 	if ok := mapVirtualPlacementToPhysical(
 		preassignedCells,
 		nonPreassignedCells,
 		h.freeCellList[sr.chain].shallowCopy(),
-		h.allVCFreeCellNum[sr.chain],
+		freeCellNum,
 		sr.suggestedNodes,
 		sr.ignoreSuggestedNodes,
 		bindings); ok {

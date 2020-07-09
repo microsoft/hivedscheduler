@@ -106,8 +106,7 @@ func splitAlloc(
 		}
 		// check safety
 		if splittableNum[i] < 0 {
-			// TODO: panic(fmt.Sprintf("VC Safety Broken: level %v cell is unsplittable", i))
-			return false
+			panic(fmt.Sprintf("VC Safety Broken: level %v cell is unsplittable", i))
 		}
 	}
 
@@ -126,7 +125,7 @@ func splitAlloc(
 				}
 			}
 			freeList[currentLevel] = append(splitList, freeList[currentLevel]...)
-			ok, _ := mapVirtualCellsToPhysical(
+			ok, pickedCells := mapVirtualCellsToPhysical(
 				[]*cellBindingPathVertex{cell},
 				freeList[currentLevel],
 				suggestedNodes,
@@ -134,6 +133,9 @@ func splitAlloc(
 				bindings,
 				true)
 			if ok {
+				for _, c := range pickedCells {
+					freeList.remove(c, currentLevel)
+				}
 				return true
 			}
 		}
@@ -172,6 +174,8 @@ func mapVirtualPlacementToPhysical(
 				klog.Info("Cannot split higher level cells")
 				return false
 			}
+		} else {
+			freeCellNum[c.cell.GetLevel()]--
 		}
 	}
 	for _, cells := range nonPreassignedCells {
