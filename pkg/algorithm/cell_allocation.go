@@ -124,12 +124,11 @@ func safeRelaxedBuddyAlloc(
 			}
 			splittableNum[l] -= cellNum
 			for sl := l; sl > currentLevel; sl-- {
-				for i := len(splitList); i > 0; i-- {
-					splitList = append(splitList, splitList[0].GetChildren()...)
-					copy(splitList[:], splitList[1:])
-					splitList[len(splitList)-1] = nil
-					splitList = splitList[:len(splitList)-1]
+				splitChildrenList := CellList{}
+				for _, sc := range splitList {
+					splitChildrenList = append(splitChildrenList, sc.GetChildren()...)
 				}
+				splitList = splitChildrenList
 			}
 			freeList[currentLevel] = append(splitList, freeList[currentLevel]...)
 			ok, pickedCells := mapVirtualCellsToPhysical(
