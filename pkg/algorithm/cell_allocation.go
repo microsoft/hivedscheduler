@@ -106,7 +106,8 @@ func safeRelaxedBuddyAlloc(
 		}
 		// check safety
 		if splittableNum[i] < 0 {
-			panic(fmt.Sprintf("VC Safety Broken: level %v cell is unsplittable", i))
+			panic(fmt.Sprintf("VC Safety Broken: level %v cell with free list %v is unsplittable, splittableNum=%v",
+				i, freeList[i], splittableNum[i]))
 		}
 	}
 
@@ -176,7 +177,8 @@ func mapVirtualPlacementToPhysical(
 		if !buddyAlloc(c, freeList, getLowestFreeCellLevel(
 			freeList, c.cell.GetLevel()), suggestedNodes, ignoreSuggestedNodes, bindings) {
 			klog.Info("Buddy allocation failed due to bad cells, try to split higher level cells")
-			if !safeRelaxedBuddyAlloc(c, freeList, freeCellNum, c.cell.GetLevel(), suggestedNodes, ignoreSuggestedNodes, bindings) {
+			if !safeRelaxedBuddyAlloc(c, freeList, freeCellNum, c.cell.GetLevel(),
+				suggestedNodes, ignoreSuggestedNodes, bindings) {
 				klog.Info("Cannot split higher level cells")
 				return false
 			}
