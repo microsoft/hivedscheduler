@@ -79,9 +79,9 @@ func buddyAlloc(
 	return false
 }
 
-// after buddyAlloc failed to allocate cells,
-// try to split a higher level cell to get current level cells.
-func splitAlloc(
+// after buddyAlloc cannot find a healthy cell (or not in suggested nodes),
+// try to split a higher level cell safely to get current level cells
+func safeRelaxedBuddyAlloc(
 	cell *cellBindingPathVertex,
 	freeList ChainCellList,
 	freeCellNum map[CellLevel]int32,
@@ -93,7 +93,7 @@ func splitAlloc(
 	var splittableCell Cell
 	splittableNum := map[CellLevel]int32{}
 	for i := CellLevel(len(freeList)); i >= CellLevel(1); i-- {
-		// calculate splitable number
+		// calculate splittable number
 		splittableNum[i] = int32(len(freeList[i])) - freeCellNum[i]
 		if i < CellLevel(len(freeList)) && splittableCell != nil {
 			splittableNum[i] += splittableNum[i+1] * int32(len(splittableCell.GetChildren()))
@@ -116,12 +116,18 @@ func splitAlloc(
 			cellNum = splittableNum[l]
 		}
 		if cellNum > 0 {
-			splitList := freeList[l][:cellNum]
-			freeList[l] = freeList[l][cellNum:]
+			splitList := CellList{}
+			for i := int32(0); i < cellNum; i++ {
+				splitList = append(splitList, freeList[l][0])
+				freeList.remove(freeList[l][0], l)
+			}
 			splittableNum[l] -= cellNum
 			for sl := l; sl > currentLevel; sl-- {
-				for _, sc := range splitList {
-					splitList = append(splitList[1:], sc.GetChildren()...)
+				for i := len(splitList); i > 0; i-- {
+					splitList = append(splitList, splitList[0].GetChildren()...)
+					copy(splitList[:], splitList[1:])
+					splitList[len(splitList)-1] = nil
+					splitList = splitList[:len(splitList)-1]
 				}
 			}
 			freeList[currentLevel] = append(splitList, freeList[currentLevel]...)
@@ -170,7 +176,7 @@ func mapVirtualPlacementToPhysical(
 		if !buddyAlloc(c, freeList, getLowestFreeCellLevel(
 			freeList, c.cell.GetLevel()), suggestedNodes, ignoreSuggestedNodes, bindings) {
 			klog.Info("Buddy allocation failed due to bad cells, try to split higher level cells")
-			if !splitAlloc(c, freeList, freeCellNum, c.cell.GetLevel(), suggestedNodes, ignoreSuggestedNodes, bindings) {
+			if !safeRelaxedBuddyAlloc(c, freeList, freeCellNum, c.cell.GetLevel(), suggestedNodes, ignoreSuggestedNodes, bindings) {
 				klog.Info("Cannot split higher level cells")
 				return false
 			}
