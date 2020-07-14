@@ -24,9 +24,10 @@ package algorithm
 
 import (
 	"fmt"
+	"sort"
+
 	"github.com/microsoft/hivedscheduler/pkg/api"
 	"github.com/microsoft/hivedscheduler/pkg/common"
-	"sort"
 )
 
 // topologyAwareScheduler can schedule a set of pods on a cluster view.
@@ -432,6 +433,9 @@ func removePickedGpus(gpus CellList, indices []int32) CellList {
 		} else {
 			copy(gpus[index-offset:], gpus[index+1:])
 		}
+	}
+	for i := len(gpus) - len(indices); i < len(gpus); i++ {
+		gpus[i] = nil
 	}
 	return gpus[:len(gpus)-len(indices)]
 }
