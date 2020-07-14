@@ -92,7 +92,7 @@ func safeRelaxedBuddyAlloc(
 
 	var splittableCell Cell
 	splittableNum := map[CellLevel]int32{}
-	for i := CellLevel(len(freeList)); i >= CellLevel(1); i-- {
+	for i := CellLevel(len(freeList)); i > currentLevel; i-- {
 		// calculate splittable number
 		splittableNum[i] = int32(len(freeList[i])) - freeCellNum[i]
 		if i < CellLevel(len(freeList)) && splittableCell != nil {
