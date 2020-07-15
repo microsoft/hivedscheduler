@@ -24,7 +24,7 @@ kubeApiServerAddress: http://10.10.10.10:8080
 ################################################################################
 physicalCluster:
   # Define the cell structures.
-  # Each leaf cellType contains a single GPU and also defines a gpuType of the
+  # Each leaf cellType contains a single GPU and also defines a skuType of the
   # same name.
   cellTypes:
     #######################################
@@ -36,7 +36,7 @@ physicalCluster:
       # Specify how many child cells it contains.
       childCellNumber: 2
       # Specify whether it is a node level cellType, i.e. contains all GPUs of
-      # its corresponding gpuType within one node and only contains these GPUs.
+      # its corresponding skuType within one node and only contains these GPUs.
       # Defaults to false.
       isNodeLevel: true
 
@@ -149,7 +149,7 @@ physicalCluster:
     cellAddress: 0.0.0.0
   - cellType: CT1-NODE
     cellAddress: 0.0.0.1
-  # One node has multiple gpu types and
+  # One node has multiple sku types and
   # non-standard gpu indices (by explicitly specifying cell addresses)
   - cellType: CT1-NODE
     cellAddress: 1.0.0.2  # NODE Name

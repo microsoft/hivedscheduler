@@ -36,9 +36,9 @@ import (
 type topologyAwareScheduler struct {
 	// a list of nodes (node-level cells or top-level cells that are lower than node level)
 	cv clusterView
-	// GPU number at each level in the cell hierarchy. we use this to
-	// calculate the optimal affinity for a given GPU number.
-	levelGpuNum map[CellLevel]int32
+	// SKU number at each level in the cell hierarchy. we use this to
+	// calculate the optimal affinity for a given SKU number.
+	levelSkuNum map[CellLevel]int32
 	// pack pods cross different priorities, or inside each priority. the former is for intra-VC scheduling,
 	// because high-priority can avoid preemption in the whole cluster view,
 	// and hence we can pack pods with different priorities.
@@ -52,103 +52,103 @@ type topologyAwareScheduler struct {
 // (lower-level if no node-level) from a free cell list.
 func NewTopologyAwareScheduler(
 	ccl ChainCellList,
-	levelGpuNum map[CellLevel]int32,
+	levelSkuNum map[CellLevel]int32,
 	crossPriorityPack bool) *topologyAwareScheduler {
 
 	return &topologyAwareScheduler{
 		cv:                newClusterView(ccl),
-		levelGpuNum:       levelGpuNum,
+		levelSkuNum:       levelSkuNum,
 		crossPriorityPack: crossPriorityPack,
 	}
 }
 
 func (t *topologyAwareScheduler) Schedule(
-	podGpuNumbers map[int32]int32,
+	podSkuNumbers map[int32]int32,
 	p CellPriority,
 	suggestedNodes common.Set,
 	ignoreSuggestedNodes bool) (
 	podPlacements map[int32][]CellList,
 	failedReason string) {
 
-	// GPU numbers of the pods to schedule
-	var sortedPodGpuNumbers []int32
-	for gpuNum, podNum := range podGpuNumbers {
+	// SKU numbers of the pods to schedule
+	var sortedPodSkuNumbers []int32
+	for skuNum, podNum := range podSkuNumbers {
 		for i := int32(0); i < podNum; i++ {
-			sortedPodGpuNumbers = append(sortedPodGpuNumbers, gpuNum)
+			sortedPodSkuNumbers = append(sortedPodSkuNumbers, skuNum)
 		}
 	}
-	common.SortInt32(sortedPodGpuNumbers)
+	common.SortInt32(sortedPodSkuNumbers)
 
 	// disable preemption first (reduce preemption)
 	priority := opportunisticPriority
 	t.updateClusterView(priority, suggestedNodes, ignoreSuggestedNodes)
 	// try to fit the pods to a set of nodes
-	selectedNodeIndices, failedReason := findNodesForPods(t.cv, sortedPodGpuNumbers)
+	selectedNodeIndices, failedReason := findNodesForPods(t.cv, sortedPodSkuNumbers)
 	// enable preemption if scheduling failed
 	if selectedNodeIndices == nil && p > opportunisticPriority {
 		priority = p
 		t.updateClusterView(priority, suggestedNodes, ignoreSuggestedNodes)
-		selectedNodeIndices, failedReason = findNodesForPods(t.cv, sortedPodGpuNumbers)
+		selectedNodeIndices, failedReason = findNodesForPods(t.cv, sortedPodSkuNumbers)
 	}
 	if selectedNodeIndices == nil {
 		return nil, failedReason
 	}
 	// find GPUs inside the selected node for each pod
-	selectedNodes := make(CellList, len(sortedPodGpuNumbers))
+	selectedNodes := make(CellList, len(sortedPodSkuNumbers))
 	for i := 0; i < len(selectedNodeIndices); i++ {
 		selectedNodes[i] = t.cv[selectedNodeIndices[i]].c
 	}
 	selectedGpus := CellList{}
 	nodeAvailableGpus := map[Cell]CellList{}
 	podPlacements = map[int32][]CellList{}
-	for podIndex := 0; podIndex < len(sortedPodGpuNumbers); podIndex++ {
-		gpuNumber := sortedPodGpuNumbers[podIndex]
+	for podIndex := 0; podIndex < len(sortedPodSkuNumbers); podIndex++ {
+		skuNumber := sortedPodSkuNumbers[podIndex]
 		n := selectedNodes[podIndex]
 		// TODO: Optimize findNodesForPods and findGpusInNode together to get a better placement,
 		//  such as also aware intra node topology when findNodesForPods.
-		selectedGpus, nodeAvailableGpus[n] = findGpusInNode(n, gpuNumber, priority, nodeAvailableGpus[n], t.levelGpuNum)
-		if podPlacements[gpuNumber] == nil {
-			podPlacements[gpuNumber] = []CellList{}
+		selectedGpus, nodeAvailableGpus[n] = findGpusInNode(n, skuNumber, priority, nodeAvailableGpus[n], t.levelSkuNum)
+		if podPlacements[skuNumber] == nil {
+			podPlacements[skuNumber] = []CellList{}
 		}
-		podPlacements[gpuNumber] = append(podPlacements[gpuNumber], selectedGpus)
+		podPlacements[skuNumber] = append(podPlacements[skuNumber], selectedGpus)
 	}
 	return podPlacements, ""
 }
 
 type node struct {
 	c                        Cell            // a node-level cell or a top-level cell that is lower than node level
-	freeGpuNumAtPriority     int32           // free GPU number at the priority of the pod to be scheduled (lower priority considered as free)
-	usedGpuNumSamePriority   int32           // GPU number used by the same priority as that of the pod to be scheduled
-	usedGpuNumHigherPriority int32           // GPU number used by higher priorities than that of the pod to be scheduled
+	freeSkuNumAtPriority     int32           // free SKU number at the priority of the pod to be scheduled (lower priority considered as free)
+	usedSkuNumSamePriority   int32           // SKU number used by the same priority as that of the pod to be scheduled
+	usedSkuNumHigherPriority int32           // SKU number used by higher priorities than that of the pod to be scheduled
 	healthy                  bool            // if the node is healthy
 	suggested                bool            // if the node is within suggested nodes
 	nodeAddress              api.CellAddress // used for logging the node address when bad or not suggested
 }
 
-// When cross-priority packing is not enabled, we count the GPU numbers used by the current
-// priority (n.usedGpuNumSamePriority), and the higher priorities (n.usedGpuNumHigherPriority), respectively.
-// When sorting the nodes, nodes with higher usedGpuNumSamePriority and lower usedGpuNumHigherPriority
+// When cross-priority packing is not enabled, we count the SKU numbers used by the current
+// priority (n.usedSkuNumSamePriority), and the higher priorities (n.usedSkuNumHigherPriority), respectively.
+// When sorting the nodes, nodes with higher usedSkuNumSamePriority and lower usedSkuNumHigherPriority
 // will be preferred (i.e., pack pods inside the same priority, and stay from higher priorities).
-// Note that in this case, the nodes may NOT be ordered in term of total used GPU number,
+// Note that in this case, the nodes may NOT be ordered in term of total used SKU number,
 // which may result in feasible pod placements being not found.
 //
-// Otherwise, n.usedGpuNumSamePriority is set to the total used GPU number,
+// Otherwise, n.usedSkuNumSamePriority is set to the total used SKU number,
 // so that nodes with more used GPUs will be preferred (i.e., pack pods globally across priorities).
 // In this case a feasible pod placement is guaranteed to be found (as long as all nodes are in suggested nodes).
-func (n *node) updateUsedGpuNumForPriority(p CellPriority, crossPriorityPack bool) {
-	n.usedGpuNumSamePriority = n.c.GetUsedGpuNumAtPriorities()[p]
-	n.usedGpuNumHigherPriority = 0
-	n.freeGpuNumAtPriority = n.c.GetTotalGpuNum()
-	for priority, num := range n.c.GetUsedGpuNumAtPriorities() {
+func (n *node) updateUsedSkuNumForPriority(p CellPriority, crossPriorityPack bool) {
+	n.usedSkuNumSamePriority = n.c.GetUsedSkuNumAtPriorities()[p]
+	n.usedSkuNumHigherPriority = 0
+	n.freeSkuNumAtPriority = n.c.GetTotalSkuNum()
+	for priority, num := range n.c.GetUsedSkuNumAtPriorities() {
 		if crossPriorityPack {
 			if priority != p {
-				n.usedGpuNumSamePriority += num
+				n.usedSkuNumSamePriority += num
 			}
 		} else if priority > p {
-			n.usedGpuNumHigherPriority += num
+			n.usedSkuNumHigherPriority += num
 		}
 		if priority >= p {
-			n.freeGpuNumAtPriority -= num
+			n.freeSkuNumAtPriority -= num
 		}
 	}
 }
@@ -205,18 +205,18 @@ func (cv clusterView) Len() int {
 // We sort the nodes in decreasing significance of:
 // (1) if the node is healthy (avoid unhealthy),
 // (2) if the node is suggested (avoid non-suggested),
-// (3) usedGpuNumSamePriority (more is preferred),
-// (4) usedGpuNumHigherPriority (less is preferred).
+// (3) usedSkuNumSamePriority (more is preferred),
+// (4) usedSkuNumHigherPriority (less is preferred).
 func (cv clusterView) Less(i int, j int) bool {
 	if cv[i].healthy != cv[j].healthy {
 		return cv[i].healthy
 	} else if cv[i].suggested != cv[j].suggested {
 		return cv[i].suggested
-	} else if cv[i].usedGpuNumSamePriority > cv[j].usedGpuNumSamePriority {
+	} else if cv[i].usedSkuNumSamePriority > cv[j].usedSkuNumSamePriority {
 		return true
-	} else if cv[i].usedGpuNumSamePriority < cv[j].usedGpuNumSamePriority {
+	} else if cv[i].usedSkuNumSamePriority < cv[j].usedSkuNumSamePriority {
 		return false
-	} else if cv[i].usedGpuNumHigherPriority < cv[j].usedGpuNumHigherPriority {
+	} else if cv[i].usedSkuNumHigherPriority < cv[j].usedSkuNumHigherPriority {
 		return true
 	} else {
 		return false
@@ -227,14 +227,14 @@ func (cv clusterView) Swap(i int, j int) {
 	cv[i], cv[j] = cv[j], cv[i]
 }
 
-// updateClusterView updates the GPU numbers of the nodes for the sorting.
+// updateClusterView updates the SKU numbers of the nodes for the sorting.
 func (t *topologyAwareScheduler) updateClusterView(
 	p CellPriority,
 	suggestedNodes common.Set,
 	ignoreSuggestedNodes bool) {
 
 	for _, n := range t.cv {
-		n.updateUsedGpuNumForPriority(p, t.crossPriorityPack)
+		n.updateUsedSkuNumForPriority(p, t.crossPriorityPack)
 		n.healthy, n.suggested, n.nodeAddress = nodeHealthyAndInSuggested(n, suggestedNodes, ignoreSuggestedNodes)
 	}
 }
@@ -265,23 +265,23 @@ func nodeHealthyAndInSuggested(
 }
 
 // findNodesForPods finds a set of nodes that can accommodate the GPU requirements of the pods.
-func findNodesForPods(cv clusterView, gpuNums []int32) (pickedNodeIndices []int32, failedReason string) {
-	// sort the nodes according to gpu numbers in each node.
+func findNodesForPods(cv clusterView, skuNums []int32) (pickedNodeIndices []int32, failedReason string) {
+	// sort the nodes according to sku numbers in each node.
 	// this is achieved through the Less method defined in type clusterView.
 	// TODO: Ensure Opportunistic Pods also can always can find the solution, regardless of
 	//  the iteration order.
 	//  For example:
 	//   1. clusterView = 2GPU Node, 1GPU Node
-	//   2. gpuNums = 1GPU Pod, 2GPU Pod
+	//   2. skuNums = 1GPU Pod, 2GPU Pod
 	//   First 1GPU Pod may allocate to 2GPU Node, but the latter pod cannot be fitted anymore.
 	sort.Stable(cv)
-	pickedNodeIndices = make([]int32, len(gpuNums)) // indices of the currently picked nodes
+	pickedNodeIndices = make([]int32, len(skuNums)) // indices of the currently picked nodes
 	podIndex := 0
-	pickedGpuNum := int32(0)
+	pickedSkuNum := int32(0)
 	var n *node
 	for nodeIndex := 0; nodeIndex < len(cv); {
 		n = cv[nodeIndex]
-		if n.freeGpuNumAtPriority-pickedGpuNum >= gpuNums[podIndex] {
+		if n.freeSkuNumAtPriority-pickedSkuNum >= skuNums[podIndex] {
 			// fail when encountering a node that is either bad or not within suggested nodes
 			if !n.healthy {
 				return nil, fmt.Sprintf(
@@ -292,13 +292,13 @@ func findNodesForPods(cv clusterView, gpuNums []int32) (pickedNodeIndices []int3
 					"have to use at least one non-suggested node %v", n.nodeAddress)
 			}
 			pickedNodeIndices[podIndex] = int32(nodeIndex)
-			pickedGpuNum += gpuNums[podIndex]
+			pickedSkuNum += skuNums[podIndex]
 			podIndex++
-			if podIndex == len(gpuNums) {
+			if podIndex == len(skuNums) {
 				return pickedNodeIndices, ""
 			}
 		} else {
-			pickedGpuNum = 0
+			pickedSkuNum = 0
 			nodeIndex++
 		}
 	}
@@ -308,24 +308,24 @@ func findNodesForPods(cv clusterView, gpuNums []int32) (pickedNodeIndices []int3
 // findGpusInNode finds a set of GPUs with the best affinity in a node for a pod.
 func findGpusInNode(
 	n Cell,
-	gpuNum int32,
+	skuNum int32,
 	p CellPriority,
 	availableGpus CellList,
-	levelGpuNum map[CellLevel]int32) (CellList, CellList) {
+	levelSkuNum map[CellLevel]int32) (CellList, CellList) {
 
 	// indices of the currently picked GPUs
-	currentGpuIndices := make([]int32, gpuNum)
+	currentGpuIndices := make([]int32, skuNum)
 	// affinity of the currently picked GPUs, defined as the lowest common ancestor
 	// of the GPUs in the cell hierarchy (lower level means better affinity)
-	currentAffinity := make(CellList, gpuNum)
+	currentAffinity := make(CellList, skuNum)
 	// GPUs with the best affinity ever seen
-	bestAffinityGpus := make(CellList, gpuNum)
+	bestAffinityGpus := make(CellList, skuNum)
 	// indices of the GPUs with the best affinity ever seen
-	bestAffinityGpuIndices := make([]int32, gpuNum)
+	bestAffinityGpuIndices := make([]int32, skuNum)
 	// the best affinity ever seen (i.e., lowest level of lowest common ancestor of a set of GPUs)
 	bestAffinity := highestLevel
-	// the optimal affinity for the GPU number, i.e., the lowest possible of the lowest common ancestor of GPUs
-	optimalAffinity := getOptimalAffinity(gpuNum, levelGpuNum)
+	// the optimal affinity for the SKU number, i.e., the lowest possible of the lowest common ancestor of GPUs
+	optimalAffinity := getOptimalAffinity(skuNum, levelSkuNum)
 
 	if availableGpus == nil {
 		availableGpus = CellList{}
@@ -353,7 +353,7 @@ func findGpusInNode(
 					continue
 				}
 			}
-			if searchGpuIndex == gpuNum-1 {
+			if searchGpuIndex == skuNum-1 {
 				foundOptimalAffinity := false
 				bestAffinity, foundOptimalAffinity = checkCurrentGpus(
 					currentAffinity[len(currentAffinity)-1].GetLevel(),
@@ -377,7 +377,7 @@ func findGpusInNode(
 		if searchGpuIndex < 0 {
 			if bestAffinity == highestLevel {
 				// Unreachable
-				panic(fmt.Sprintf("Assert Failure: failed to allocate %v GPUs in picked node %v", gpuNum, n.GetAddress()))
+				panic(fmt.Sprintf("Assert Failure: failed to allocate %v GPUs in picked node %v", skuNum, n.GetAddress()))
 			}
 			availableGpus = removePickedGpus(availableGpus, bestAffinityGpuIndices)
 			return bestAffinityGpus, availableGpus
@@ -386,10 +386,10 @@ func findGpusInNode(
 	}
 }
 
-// getOptimalAffinity calculates the optimal affinity for a given GPU number.
-func getOptimalAffinity(gpuNum int32, levelGpuNum map[CellLevel]int32) CellLevel {
-	for l := CellLevel(1); l <= CellLevel(len(levelGpuNum)); l++ {
-		if levelGpuNum[l] >= gpuNum {
+// getOptimalAffinity calculates the optimal affinity for a given SKU number.
+func getOptimalAffinity(skuNum int32, levelSkuNum map[CellLevel]int32) CellLevel {
+	for l := CellLevel(1); l <= CellLevel(len(levelSkuNum)); l++ {
+		if levelSkuNum[l] >= skuNum {
 			return l
 		}
 	}

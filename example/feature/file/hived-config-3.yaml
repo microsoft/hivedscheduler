@@ -1,7 +1,7 @@
 kubeApiServerAddress: http://10.151.41.16:8080
 
 physicalCluster:
-  gpuTypes:
+  skuTypes:
     K80:
       gpu: 1
       cpu: 4

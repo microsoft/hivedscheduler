@@ -29,4 +29,4 @@ extras:
     jobPriorityClass: prod
     taskRoles:
       train:
-        gpuType: K80
+        skuType: K80

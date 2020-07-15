@@ -24,6 +24,7 @@ package algorithm
 
 import (
 	"fmt"
+
 	"github.com/microsoft/hivedscheduler/pkg/api"
 	"k8s.io/klog"
 )
@@ -41,9 +42,9 @@ type Cell interface {
 	AtOrHigherThanNode() bool
 	GetPriority() CellPriority
 	SetPriority(CellPriority)
-	GetTotalGpuNum() int32
-	GetUsedGpuNumAtPriorities() map[CellPriority]int32
-	IncreaseUsedGpuNumAtPriority(CellPriority, int32)
+	GetTotalSkuNum() int32
+	GetUsedSkuNumAtPriorities() map[CellPriority]int32
+	IncreaseUsedSkuNumAtPriority(CellPriority, int32)
 }
 
 func CellEqual(c1 Cell, c2 Cell) bool {
@@ -66,8 +67,8 @@ type GenericCell struct {
 	// A cell is healthy if all of the cell's children are healthy (bad if any child is bad).
 	// The healthy field is orthogonal to priority and state.
 	healthy                bool
-	totalGpuNum            int32                  // total GPU number of a cell
-	usedGpuNumAtPriorities map[CellPriority]int32 // GPU number used by each priority
+	totalSkuNum            int32                  // total SKU number of a cell
+	usedSkuNumAtPriorities map[CellPriority]int32 // SKU number used by each priority
 }
 
 func (c *GenericCell) GetChain() CellChain {
@@ -110,18 +111,18 @@ func (c *GenericCell) IsHealthy() bool {
 	return c.healthy
 }
 
-func (c *GenericCell) GetTotalGpuNum() int32 {
-	return c.totalGpuNum
+func (c *GenericCell) GetTotalSkuNum() int32 {
+	return c.totalSkuNum
 }
 
-func (c *GenericCell) GetUsedGpuNumAtPriorities() map[CellPriority]int32 {
-	return c.usedGpuNumAtPriorities
+func (c *GenericCell) GetUsedSkuNumAtPriorities() map[CellPriority]int32 {
+	return c.usedSkuNumAtPriorities
 }
 
-func (c *GenericCell) IncreaseUsedGpuNumAtPriority(p CellPriority, delta int32) {
-	c.usedGpuNumAtPriorities[p] += delta
-	if c.usedGpuNumAtPriorities[p] == 0 {
-		delete(c.usedGpuNumAtPriorities, p)
+func (c *GenericCell) IncreaseUsedSkuNumAtPriority(p CellPriority, delta int32) {
+	c.usedSkuNumAtPriorities[p] += delta
+	if c.usedSkuNumAtPriorities[p] == 0 {
+		delete(c.usedSkuNumAtPriorities, p)
 	}
 }
 
@@ -156,8 +157,8 @@ func NewPhysicalCell(
 			priority:               freePriority,
 			address:                address,
 			atOrHigherThanNode:     g,
-			totalGpuNum:            n,
-			usedGpuNumAtPriorities: map[CellPriority]int32{},
+			totalSkuNum:            n,
+			usedSkuNumAtPriorities: map[CellPriority]int32{},
 			state:                  cellFree,
 			// cells are set to healthy initially, and will be all set to bad in HivedAlgorithm.initBadNodes
 			healthy: true,
@@ -340,8 +341,8 @@ func NewVirtualCell(
 			priority:               freePriority,
 			address:                address,
 			atOrHigherThanNode:     g,
-			totalGpuNum:            n,
-			usedGpuNumAtPriorities: map[CellPriority]int32{},
+			totalSkuNum:            n,
+			usedSkuNumAtPriorities: map[CellPriority]int32{},
 			state:                  cellFree,
 			// cells are set to healthy initially, and will be all set to bad in HivedAlgorithm.initBadNodes
 			healthy: true,

@@ -27,5 +27,5 @@ extras:
     jobPriorityClass: test
     taskRoles:
       train:
-        gpuType: M60
+        skuType: M60
   submitFrom: submit-job-v2

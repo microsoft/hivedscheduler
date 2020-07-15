@@ -2,8 +2,8 @@
 # [Optional]: Job User -> RestServer Request
 #
 # Constrains:
-# 1. For one task, only need to specify gpuType or pinnedCellId, not both.
-# 2. All gpuTypes or pinnedCellIds under the same affinityGroup must be the same.
+# 1. For one task, only need to specify skuType or pinnedCellId, not both.
+# 2. All skuTypes or pinnedCellIds under the same affinityGroup must be the same.
 #
 # affinityGroupName:
 # An affinityGroup forms a cell request and scheduler will try all candidate
@@ -27,63 +27,63 @@ taskRoles:
   # All tasks in role A, B, C should be within the same cell named PCN-ABC.
   #
   # Total request of PCN-ABC:
-  #   gpuType: DGX2-V100
-  #   gpuNumber: 1 * 16 + 3 * 8 + 1 * 4 = 44 GPUs = 2.75 DGX2 nodes
+  #   skuType: DGX2-V100
+  #   skuNumber: 1 * 16 + 3 * 8 + 1 * 4 = 44 GPUs = 2.75 DGX2 nodes
   # Candidate cellTypes:
   #   3-DGX2-NODE, 4-DGX2-NODE, 4-DIRECT-DGX2-NODE, 5-DGX2-NODE.
   A:
     taskNumber: 1
-    gpuType: DGX2-V100
-    gpuNumber: 16
+    skuType: DGX2-V100
+    skuNumber: 16
     affinityGroupName: PCN-ABC
   B:
     taskNumber: 3
-    gpuType: DGX2-V100
-    gpuNumber: 8
+    skuType: DGX2-V100
+    skuNumber: 8
     affinityGroupName: PCN-ABC
   C:
     taskNumber: 1
-    gpuType: DGX2-V100
-    gpuNumber: 4
+    skuType: DGX2-V100
+    skuNumber: 4
     affinityGroupName: PCN-ABC
 
   # All tasks in role D should be within the same cell named PCN-D.
   #
   # Total request of PCN-D:
-  #   gpuType: null -> any gpuType
-  #   gpuNumber: 2 * CP2(3) = 2 * 4 = 8 GPUs
+  #   skuType: null -> any skuType
+  #   skuNumber: 2 * CP2(3) = 2 * 4 = 8 GPUs
   # Candidate cellTypes:
   #   DGX1-P100-NODE, DGX1-V100-NODE, DGX2-NODE-8-GPU, IB-DGX2-NODE-8-GPU.
   D:
     taskNumber: 2
-    gpuType: null # null, empty or not specified -> any gpuType
-    gpuNumber: 3
+    skuType: null # null, empty or not specified -> any skuType
+    skuNumber: 3
     affinityGroupName: PCN-D
 
   # Tasks in role E is not required to be within the same cell.
   #
   # Each task forms a cell request:
-  #   gpuType: DGX2-V100
-  #   gpuNumber: 1 * 16 = 16 GPUs = 1 DGX2 node
+  #   skuType: DGX2-V100
+  #   skuNumber: 1 * 16 = 16 GPUs = 1 DGX2 node
   # Candidate cellTypes:
   #   DGX2-NODE.
   E:
     taskNumber: 2
-    gpuType: DGX2-V100
-    gpuNumber: 16
+    skuType: DGX2-V100
+    skuNumber: 16
     affinityGroupName: null # null, empty or not specified -> no affinityGroup
 
   # All tasks in role F should be within the same cell named PCN-F.
   #
   # Total request of PCN-F:
   #   pinnedCellId: VC1-YQW-IB-DGX2
-  #   gpuNumber: 2 * CP2(3) = 2 * 4 = 8 GPUs
+  #   skuNumber: 2 * CP2(3) = 2 * 4 = 8 GPUs
   # Candidate physicalCells:
   #   VC1-YQW-IB-DGX2.
   F:
     taskNumber: 2
     pinnedCellId: VC1-YQW-IB-DGX2
-    gpuNumber: 3
+    skuNumber: 3
     affinityGroupName: PCN-F
 
 ---
@@ -94,10 +94,10 @@ taskRoles:
 # things in advance.
 # For example:
 # Pod Spec cpu, memory.
-# 1. Given gpuType or pinnedCellId, just pick the corresponding cpu, memory unit.
-# 2. No gpuType or pinnedCellId is given, choose the minimal cpu, memory unit.
+# 1. Given skuType or pinnedCellId, just pick the corresponding cpu, memory unit.
+# 2. No skuType or pinnedCellId is given, choose the minimal cpu, memory unit.
 physicalCluster:
-  gpuTypes:
+  skuTypes:
     # Check resource value format in
     #   k8s.io/apimachinery/pkg/api/resource/quantity.go
 
@@ -146,17 +146,17 @@ spec:
             hivedscheduler.microsoft.com/pod-scheduling-spec: |-
               virtualCluster: VC1
               priority: 1000
-              gpuType: DGX2-V100
-              gpuNumber: 16
+              skuType: DGX2-V100
+              skuNumber: 16
               affinityGroup:
                 name: JOBX/PCN-ABC
                 members:
                 - podNumber: 1
-                  gpuNumber: 16
+                  skuNumber: 16
                 - podNumber: 3
-                  gpuNumber: 8
+                  skuNumber: 8
                 - podNumber: 1
-                  gpuNumber: 4
+                  skuNumber: 4
         spec:
           # See ../../run/deploy.yaml for why and how to specify the schedulerName.
           schedulerName: hivedscheduler
@@ -200,17 +200,17 @@ spec:
             hivedscheduler.microsoft.com/pod-scheduling-spec: |-
               virtualCluster: VC1
               priority: 1000
-              gpuType: DGX2-V100
-              gpuNumber: 8
+              skuType: DGX2-V100
+              skuNumber: 8
               affinityGroup:
                 name: JOBX/PCN-ABC
                 members:
                 - podNumber: 1
-                  gpuNumber: 16
+                  skuNumber: 16
                 - podNumber: 3
-                  gpuNumber: 8
+                  skuNumber: 8
                 - podNumber: 1
-                  gpuNumber: 4
+                  skuNumber: 4
         spec:
           schedulerName: hivedscheduler
           priority: 1000
@@ -234,17 +234,17 @@ spec:
             hivedscheduler.microsoft.com/pod-scheduling-spec: |-
               virtualCluster: VC1
               priority: 1000
-              gpuType: DGX2-V100
-              gpuNumber: 4
+              skuType: DGX2-V100
+              skuNumber: 4
               affinityGroup:
                 name: JOBX/PCN-ABC
                 members:
                 - podNumber: 1
-                  gpuNumber: 16
+                  skuNumber: 16
                 - podNumber: 3
-                  gpuNumber: 8
+                  skuNumber: 8
                 - podNumber: 1
-                  gpuNumber: 4
+                  skuNumber: 4
         spec:
           schedulerName: hivedscheduler
           priority: 1000
@@ -268,13 +268,13 @@ spec:
             hivedscheduler.microsoft.com/pod-scheduling-spec: |-
               virtualCluster: VC1
               priority: 1000
-              gpuType: null
-              gpuNumber: 3
+              skuType: null
+              skuNumber: 3
               affinityGroup:
                 name: JOBX/PCN-D
                 members:
                 - podNumber: 2
-                  gpuNumber: 3
+                  skuNumber: 3
         spec:
           schedulerName: hivedscheduler
           priority: 1000
@@ -300,8 +300,8 @@ spec:
             hivedscheduler.microsoft.com/pod-scheduling-spec: |-
               virtualCluster: VC1
               priority: 1000
-              gpuType: DGX2-V100
-              gpuNumber: 16
+              skuType: DGX2-V100
+              skuNumber: 16
               affinityGroup: null
         spec:
           schedulerName: hivedscheduler
@@ -327,12 +327,12 @@ spec:
               virtualCluster: VC1
               priority: 1000
               pinnedCellId: VC1-YQW-IB-DGX2
-              gpuNumber: 3
+              skuNumber: 3
               affinityGroup:
                 name: JOBX/PCN-F
                 members:
                 - podNumber: 2
-                  gpuNumber: 3
+                  skuNumber: 3
         spec:
           schedulerName: hivedscheduler
           priority: 1000
@@ -360,17 +360,17 @@ metadata:
     hivedscheduler.microsoft.com/pod-scheduling-spec: |-
       virtualCluster: VC1
       priority: 1000
-      gpuType: DGX2-V100
-      gpuNumber: 16
+      skuType: DGX2-V100
+      skuNumber: 16
       affinityGroup:
         name: JOBX/PCN-ABC
         members:
         - podNumber: 1
-          gpuNumber: 16
+          skuNumber: 16
         - podNumber: 3
-          gpuNumber: 8
+          skuNumber: 8
         - podNumber: 1
-          gpuNumber: 4
+          skuNumber: 4
 spec:
   schedulerName: hivedscheduler
   priority: 1000
@@ -395,17 +395,17 @@ metadata:
     hivedscheduler.microsoft.com/pod-scheduling-spec: |-
       virtualCluster: VC1
       priority: 1000
-      gpuType: DGX2-V100
-      gpuNumber: 8
+      skuType: DGX2-V100
+      skuNumber: 8
       affinityGroup:
         name: JOBX/PCN-ABC
         members:
         - podNumber: 1
-          gpuNumber: 16
+          skuNumber: 16
         - podNumber: 3
-          gpuNumber: 8
+          skuNumber: 8
         - podNumber: 1
-          gpuNumber: 4
+          skuNumber: 4
 spec:
   schedulerName: hivedscheduler
   priority: 1000
@@ -429,17 +429,17 @@ metadata:
     hivedscheduler.microsoft.com/pod-scheduling-spec: |-
       virtualCluster: VC1
       priority: 1000
-      gpuType: DGX2-V100
-      gpuNumber: 4
+      skuType: DGX2-V100
+      skuNumber: 4
       affinityGroup:
         name: JOBX/PCN-ABC
         members:
         - podNumber: 1
-          gpuNumber: 16
+          skuNumber: 16
         - podNumber: 3
-          gpuNumber: 8
+          skuNumber: 8
         - podNumber: 1
-          gpuNumber: 4
+          skuNumber: 4
 spec:
   schedulerName: hivedscheduler
   priority: 1000
@@ -464,13 +464,13 @@ metadata:
     hivedscheduler.microsoft.com/pod-scheduling-spec: |-
       virtualCluster: VC1
       priority: 1000
-      gpuType: null
-      gpuNumber: 3
+      skuType: null
+      skuNumber: 3
       affinityGroup:
         name: JOBX/PCN-D
         members:
         - podNumber: 2
-          gpuNumber: 3
+          skuNumber: 3
 spec:
   schedulerName: hivedscheduler
   priority: 1000
@@ -495,8 +495,8 @@ metadata:
     hivedscheduler.microsoft.com/pod-scheduling-spec: |-
       virtualCluster: VC1
       priority: 1000
-      gpuType: DGX2-V100
-      gpuNumber: 16
+      skuType: DGX2-V100
+      skuNumber: 16
       affinityGroup: null
 spec:
   schedulerName: hivedscheduler
@@ -523,12 +523,12 @@ metadata:
       virtualCluster: VC1
       priority: 1000
       pinnedCellId: VC1-YQW-IB-DGX2
-      gpuNumber: 3
+      skuNumber: 3
       affinityGroup:
         name: JOBX/PCN-F
         members:
         - podNumber: 2
-          gpuNumber: 3
+          skuNumber: 3
 spec:
   schedulerName: hivedscheduler
   priority: 1000

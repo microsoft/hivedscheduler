@@ -236,8 +236,8 @@ func getUsablePhysicalCells(
 	}
 	// prioritize the cells with fewer opportunistic pods (to reduce preemption)
 	sort.SliceStable(candidates, func(i, j int) bool {
-		return candidates[i].GetUsedGpuNumAtPriorities()[opportunisticPriority] <
-			candidates[j].GetUsedGpuNumAtPriorities()[opportunisticPriority]
+		return candidates[i].GetUsedSkuNumAtPriorities()[opportunisticPriority] <
+			candidates[j].GetUsedSkuNumAtPriorities()[opportunisticPriority]
 	})
 	return usableCandidates
 }
@@ -440,15 +440,15 @@ func setCellPriority(c Cell, p CellPriority) {
 	}
 }
 
-// updateUsedGpuNumAtPriority updates the number of used GPUs at a priority for a cell
+// updateUsedSkuNumAtPriority updates the number of used GPUs at a priority for a cell
 // and its parent recursively.
-func updateUsedGpuNumAtPriority(c Cell, p CellPriority, increase bool) {
+func updateUsedSkuNumAtPriority(c Cell, p CellPriority, increase bool) {
 	for c != nil {
 		delta := int32(-1)
 		if increase {
 			delta = 1
 		}
-		c.IncreaseUsedGpuNumAtPriority(p, delta)
+		c.IncreaseUsedSkuNumAtPriority(p, delta)
 		c = c.GetParent()
 	}
 }

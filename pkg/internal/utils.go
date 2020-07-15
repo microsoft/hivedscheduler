@@ -24,6 +24,8 @@ package internal
 
 import (
 	"fmt"
+	"net/http"
+
 	si "github.com/microsoft/hivedscheduler/pkg/api"
 	"github.com/microsoft/hivedscheduler/pkg/common"
 	core "k8s.io/api/core/v1"
@@ -32,7 +34,6 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog"
-	"net/http"
 )
 
 func CreateClient(kConfig *rest.Config) kubeClient.Interface {
@@ -227,7 +228,7 @@ func ExtractPodSchedulingSpec(pod *core.Pod) *si.PodSchedulingSpec {
 			Name: fmt.Sprintf("%v/%v", pod.Namespace, pod.Name),
 			Members: []si.AffinityGroupMemberSpec{{
 				PodNumber: 1,
-				GpuNumber: podSchedulingSpec.GpuNumber},
+				SkuNumber: podSchedulingSpec.SkuNumber},
 			},
 		}
 	}
@@ -242,8 +243,8 @@ func ExtractPodSchedulingSpec(pod *core.Pod) *si.PodSchedulingSpec {
 	if podSchedulingSpec.Priority > si.MaxGuaranteedPriority {
 		panic(fmt.Errorf(errPfx+"Priority is greater than %v", si.MaxGuaranteedPriority))
 	}
-	if podSchedulingSpec.GpuNumber <= 0 {
-		panic(fmt.Errorf(errPfx + "GpuNumber is non-positive"))
+	if podSchedulingSpec.SkuNumber <= 0 {
+		panic(fmt.Errorf(errPfx + "SkuNumber is non-positive"))
 	}
 	if podSchedulingSpec.AffinityGroup.Name == "" {
 		panic(fmt.Errorf(errPfx + "AffinityGroup.Name is empty"))
@@ -254,10 +255,10 @@ func ExtractPodSchedulingSpec(pod *core.Pod) *si.PodSchedulingSpec {
 		if member.PodNumber <= 0 {
 			panic(fmt.Errorf(errPfx + "AffinityGroup.Members has non-positive PodNumber"))
 		}
-		if member.GpuNumber <= 0 {
-			panic(fmt.Errorf(errPfx + "AffinityGroup.Members has non-positive GpuNumber"))
+		if member.SkuNumber <= 0 {
+			panic(fmt.Errorf(errPfx + "AffinityGroup.Members has non-positive SkuNumber"))
 		}
-		if member.GpuNumber == podSchedulingSpec.GpuNumber {
+		if member.SkuNumber == podSchedulingSpec.SkuNumber {
 			isPodInGroup = true
 		}
 	}

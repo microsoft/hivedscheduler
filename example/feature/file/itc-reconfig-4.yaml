@@ -27,5 +27,5 @@ extras:
     jobPriorityClass: test
     taskRoles:
       train:
-        gpuType: K80
+        skuType: K80
   submitFrom: submit-job-v2

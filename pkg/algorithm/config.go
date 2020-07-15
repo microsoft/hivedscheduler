@@ -24,9 +24,10 @@ package algorithm
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/microsoft/hivedscheduler/pkg/api"
 	"github.com/microsoft/hivedscheduler/pkg/common"
-	"strings"
 )
 
 // internal wrapper for spec cellTypes
@@ -37,8 +38,8 @@ type cellChainElement struct {
 	childNumber   int32        // child number
 	hasNode       bool         // current cell type is a node or above cell
 	isMultiNodes  bool         // current cell type is a multiple node cell
-	gpuType       string       // current cell gpu type
-	gpuNumber     int32        // how many gpu in current cell
+	skuType       string       // current cell sku type
+	skuNumber     int32        // how many sku in current cell
 }
 
 type cellTypeConstructor struct {
@@ -72,8 +73,8 @@ func (c *cellTypeConstructor) addCellChain(ct api.CellType) {
 			childNumber:   0,
 			hasNode:       false,
 			isMultiNodes:  false,
-			gpuType:       string(ct),
-			gpuNumber:     1,
+			skuType:       string(ct),
+			skuNumber:     1,
 		}
 		return
 	}
@@ -93,8 +94,8 @@ func (c *cellTypeConstructor) addCellChain(ct api.CellType) {
 		childNumber:   ctSpec.ChildCellNumber,
 		hasNode:       cct.hasNode || ctSpec.IsNodeLevel,
 		isMultiNodes:  cct.hasNode,
-		gpuType:       cct.gpuType,
-		gpuNumber:     cct.gpuNumber * ctSpec.ChildCellNumber,
+		skuType:       cct.skuType,
+		skuNumber:     cct.skuNumber * ctSpec.ChildCellNumber,
 	}
 	return
 }
@@ -188,7 +189,7 @@ func (c *physicalCellConstructor) addCell(
 	address api.CellAddress) *PhysicalCell {
 
 	cellInstance := NewPhysicalCell(
-		c.buildingChain, ce.level, ce.hasNode, ce.gpuNumber, ce.cellType, address, ce.hasNode && !ce.isMultiNodes)
+		c.buildingChain, ce.level, ce.hasNode, ce.skuNumber, ce.cellType, address, ce.hasNode && !ce.isMultiNodes)
 	if _, ok := c.fullCellList[chain]; !ok {
 		c.fullCellList[chain] = ChainCellList{}
 	}
@@ -211,8 +212,8 @@ func (c *physicalCellConstructor) buildFullTree() *PhysicalCell {
 		panic(fmt.Sprintf("top cell must be node-level or above: %v", cc))
 	}
 	cellInstance := c.buildChildCell(c.buildingSpec, api.CellType(cc), "")
-	// set GPU type only for top-level cells (as a chain shares the same GPU type)
-	cellInstance.GetAPIStatus().GpuType = ce.gpuType
+	// set SKU type only for top-level cells (as a chain shares the same SKU type)
+	cellInstance.GetAPIStatus().SkuType = ce.skuType
 	return cellInstance
 }
 
@@ -289,7 +290,7 @@ func (c *virtualCellConstructor) addCell(
 		c.buildingChain,
 		ce.level,
 		ce.hasNode,
-		ce.gpuNumber,
+		ce.skuNumber,
 		nil,
 		ce.cellType,
 		address,
@@ -345,8 +346,8 @@ func (c *virtualCellConstructor) buildFullTree(address api.CellAddress) *Virtual
 		panic(fmt.Sprintf("cellType %v in VirtualCells is not found in cell types definition", c.buildingChild))
 	}
 	cellInstance := c.buildChildCell(c.buildingChild, address)
-	// set GPU type only for top-level cells (as a chain shares the same GPU type)
-	cellInstance.GetAPIStatus().GpuType = ce.gpuType
+	// set SKU type only for top-level cells (as a chain shares the same SKU type)
+	cellInstance.GetAPIStatus().SkuType = ce.skuType
 	return cellInstance
 }
 
@@ -418,23 +419,23 @@ func parseCellChainInfo(
 	map[CellChain]map[CellLevel]api.CellType,
 	map[string][]CellChain) {
 
-	cellLevelToGpuNum := map[CellChain]map[CellLevel]int32{}
+	cellLevelToSkuNum := map[CellChain]map[CellLevel]int32{}
 	cellLevelToType := map[CellChain]map[CellLevel]api.CellType{}
-	gpuTypeToChain := map[string][]CellChain{}
+	skuTypeToChain := map[string][]CellChain{}
 	for _, chain := range chains {
 		ce := cellChainElements[api.CellType(chain)]
-		gpuTypeToChain[ce.gpuType] = append(gpuTypeToChain[ce.gpuType], chain)
+		skuTypeToChain[ce.skuType] = append(skuTypeToChain[ce.skuType], chain)
 
-		cellLevelToGpuNum[chain] = map[CellLevel]int32{}
+		cellLevelToSkuNum[chain] = map[CellLevel]int32{}
 		cellLevelToType[chain] = map[CellLevel]api.CellType{}
 		ce, ok := cellChainElements[api.CellType(chain)]
 		for ok {
-			cellLevelToGpuNum[chain][ce.level] = ce.gpuNumber
+			cellLevelToSkuNum[chain][ce.level] = ce.skuNumber
 			cellLevelToType[chain][ce.level] = ce.cellType
 			ce, ok = cellChainElements[ce.childCellType]
 		}
 	}
-	return cellLevelToGpuNum, cellLevelToType, gpuTypeToChain
+	return cellLevelToSkuNum, cellLevelToType, skuTypeToChain
 
 }
 
@@ -446,8 +447,8 @@ func ParseConfig(sConfig *api.Config) (
 	virtualNonPinnedFreeList map[api.VirtualClusterName]map[CellChain]ChainCellList, // vc:chain:level:[]virtualCell
 	virtualPinnedCells map[api.VirtualClusterName]map[api.PinnedCellId]ChainCellList, // vc:pinnedCellId:level:[]virtualCell
 	physicalPinnedCells map[api.VirtualClusterName]map[api.PinnedCellId]*PhysicalCell, // vc:pinnedCellId:PhysicalCell
-	cellLevelToGpuNum map[CellChain]map[CellLevel]int32, // chain:level:gpuNumber
-	gpuTypeToChain map[string][]CellChain, // gpuType:[]chain
+	cellLevelToSkuNum map[CellChain]map[CellLevel]int32, // chain:level:skuNumber
+	skuTypeToChain map[string][]CellChain, // skuType:[]chain
 	cellLevelToType map[CellChain]map[CellLevel]api.CellType, // chain:level:cellType
 ) {
 
@@ -470,7 +471,7 @@ func ParseConfig(sConfig *api.Config) (
 	for k := range physicalFullList {
 		cellChains = append(cellChains, k)
 	}
-	cellLevelToGpuNum, cellLevelToType, gpuTypeToChain = parseCellChainInfo(cellChainElements, cellChains)
+	cellLevelToSkuNum, cellLevelToType, skuTypeToChain = parseCellChainInfo(cellChainElements, cellChains)
 
 	return
 }

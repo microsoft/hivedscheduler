@@ -49,7 +49,7 @@ data:
     webServerAddress: ":30096"
     waitingPodSchedulingBlockMilliSec: 50
     physicalCluster:
-      gpuTypes:
+      skuTypes:
         K80:
           gpu: 1
           cpu: 5

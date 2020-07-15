@@ -24,13 +24,14 @@ package algorithm
 
 import (
 	"fmt"
+	"math/rand"
+
 	"github.com/microsoft/hivedscheduler/pkg/api"
 	"github.com/microsoft/hivedscheduler/pkg/common"
 	"github.com/microsoft/hivedscheduler/pkg/internal"
 	core "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog"
-	"math/rand"
 )
 
 // generatePodScheduleResult writes the scheduling result into a PodScheduleResult.
@@ -40,7 +41,7 @@ func generatePodScheduleResult(
 	preemptionVictims map[string]common.Set,
 	waitReason string,
 	cellLevelToType map[CellChain]map[CellLevel]api.CellType,
-	currentGpuNum int32,
+	currentSkuNum int32,
 	currentPodIndex int32,
 	group *AlgoAffinityGroup,
 	groupName string,
@@ -64,7 +65,7 @@ func generatePodScheduleResult(
 	// we find the selected node after the preemption is done, otherwise the preemption victims
 	// may cause the selected node to be excluded from the suggested nodes
 	affinityGroupBindInfo, selectedNode, selectedGpuIndices, cellChain := generateAffinityGroupBindInfo(
-		groupPhysicalPlacement, groupVirtualPlacement, cellLevelToType, currentGpuNum, currentPodIndex, group, groupName)
+		groupPhysicalPlacement, groupVirtualPlacement, cellLevelToType, currentSkuNum, currentPodIndex, group, groupName)
 	klog.Infof("[%v]: pod is decided to be scheduled to node %v, GPUs %v",
 		internal.Key(pod), selectedNode, common.ToJson(selectedGpuIndices))
 	return internal.PodScheduleResult{
@@ -108,7 +109,7 @@ func generateAffinityGroupBindInfo(
 	groupPhysicalPlacement groupPhysicalPlacement,
 	groupVirtualPlacement groupVirtualPlacement,
 	cellLevelToType map[CellChain]map[CellLevel]api.CellType,
-	currentGpuNum int32,
+	currentSkuNum int32,
 	currentPodIndex int32,
 	group *AlgoAffinityGroup,
 	groupName string) (
@@ -119,14 +120,14 @@ func generateAffinityGroupBindInfo(
 
 	affinityGroupBindInfo = make([]api.AffinityGroupMemberBindInfo, len(groupPhysicalPlacement))
 	groupMemberIndex := 0
-	for podGpuNum, podPhysicalPlacements := range groupPhysicalPlacement {
+	for podSkuNum, podPhysicalPlacements := range groupPhysicalPlacement {
 		mbi := api.AffinityGroupMemberBindInfo{
 			PodPlacements: make([]api.PodPlacementInfo, len(podPhysicalPlacements)),
 		}
 		for podIndex := int32(0); podIndex < int32(len(podPhysicalPlacements)); podIndex++ {
-			mbi.PodPlacements[podIndex].PhysicalGpuIndices = make([]int32, podGpuNum)
-			mbi.PodPlacements[podIndex].PreassignedCellTypes = make([]api.CellType, podGpuNum)
-			for gpuIndex := int32(0); gpuIndex < podGpuNum; gpuIndex++ {
+			mbi.PodPlacements[podIndex].PhysicalGpuIndices = make([]int32, podSkuNum)
+			mbi.PodPlacements[podIndex].PreassignedCellTypes = make([]api.CellType, podSkuNum)
+			for gpuIndex := int32(0); gpuIndex < podSkuNum; gpuIndex++ {
 				pGpu := podPhysicalPlacements[podIndex][gpuIndex]
 				if pGpu == nil {
 					if group == nil || group.state == groupPreempting {
@@ -134,7 +135,7 @@ func generateAffinityGroupBindInfo(
 					}
 					// if the physical placement of this pod is not found (e.g., removed due to reconfiguration),
 					// we will insist the decision by retrieving it from other pods
-					mbi.PodPlacements[podIndex], chain = retrieveMissingPodPlacement(group, podGpuNum, podIndex)
+					mbi.PodPlacements[podIndex], chain = retrieveMissingPodPlacement(group, podSkuNum, podIndex)
 					klog.Warningf(
 						"pod placement has been invalid and is retrieved from annotation of other pods: node %v, GPU %v",
 						mbi.PodPlacements[podIndex].PhysicalNode, mbi.PodPlacements[podIndex].PhysicalGpuIndices[gpuIndex])
@@ -147,7 +148,7 @@ func generateAffinityGroupBindInfo(
 					}
 					mbi.PodPlacements[podIndex].PhysicalGpuIndices[gpuIndex] = gpuIndices[0]
 					if groupVirtualPlacement != nil {
-						vGpu := groupVirtualPlacement[podGpuNum][podIndex][gpuIndex].(*VirtualCell)
+						vGpu := groupVirtualPlacement[podSkuNum][podIndex][gpuIndex].(*VirtualCell)
 						mbi.PodPlacements[podIndex].PreassignedCellTypes[gpuIndex] =
 							cellLevelToType[vGpu.GetChain()][vGpu.GetPreassignedCell().GetLevel()]
 					} else {
@@ -156,10 +157,10 @@ func generateAffinityGroupBindInfo(
 				}
 			}
 		}
-		if podGpuNum == currentGpuNum {
+		if podSkuNum == currentSkuNum {
 			selectedNode = mbi.PodPlacements[currentPodIndex].PhysicalNode
 			selectedGpuIndices = mbi.PodPlacements[currentPodIndex].PhysicalGpuIndices
-			if pGpu := groupPhysicalPlacement[currentGpuNum][currentPodIndex][0]; pGpu != nil {
+			if pGpu := groupPhysicalPlacement[currentSkuNum][currentPodIndex][0]; pGpu != nil {
 				chain = string(pGpu.GetChain())
 			}
 		}
@@ -178,9 +179,9 @@ func collectBadOrNonSuggestedNodes(
 	badOrNonSuggestedNodes common.Set) {
 
 	badOrNonSuggestedNodes = common.NewSet()
-	for gpuNum := range placement {
-		for podIndex := range placement[gpuNum] {
-			for _, gpu := range placement[gpuNum][podIndex] {
+	for skuNum := range placement {
+		for podIndex := range placement[skuNum] {
+			for _, gpu := range placement[skuNum][podIndex] {
 				if gpu == nil {
 					continue
 				}
@@ -203,9 +204,9 @@ func collectPreemptionVictims(placement groupPhysicalPlacement) (
 
 	victimPods = map[string]common.Set{} // node -> pods
 	overlappingPreemptorGroups = common.NewSet()
-	for gpuNum := range placement {
-		for podIndex := range placement[gpuNum] {
-			for _, gpu := range placement[gpuNum][podIndex] {
+	for skuNum := range placement {
+		for podIndex := range placement[skuNum] {
+			for _, gpu := range placement[skuNum][podIndex] {
 				if gpu == nil {
 					continue
 				}
@@ -246,13 +247,13 @@ func victimsToString(victimPods map[string]common.Set) string {
 
 // retrieveMissingPodPlacement finds the placement of a pod from the annotation of other pods in the same group
 // when the pod's placement has been invalid (i.e., not found in the spec).
-func retrieveMissingPodPlacement(g *AlgoAffinityGroup, gpuNum int32, podIndex int32) (api.PodPlacementInfo, string) {
+func retrieveMissingPodPlacement(g *AlgoAffinityGroup, skuNum int32, podIndex int32) (api.PodPlacementInfo, string) {
 	for _, pods := range g.allocatedPods {
 		for _, p := range pods {
 			if p != nil {
 				info := internal.ExtractPodBindInfo(p)
 				for _, mbi := range info.AffinityGroupBindInfo {
-					if gpuNum == int32(len(mbi.PodPlacements[0].PhysicalGpuIndices)) {
+					if skuNum == int32(len(mbi.PodPlacements[0].PhysicalGpuIndices)) {
 						return mbi.PodPlacements[podIndex], info.CellChain
 					}
 				}
@@ -260,7 +261,7 @@ func retrieveMissingPodPlacement(g *AlgoAffinityGroup, gpuNum int32, podIndex in
 		}
 	}
 	panic(fmt.Sprintf(
-		"No allocated pod found in an allocated group %v when retrieving placement for pod %v with GPU number %v", g.name, podIndex, gpuNum))
+		"No allocated pod found in an allocated group %v when retrieving placement for pod %v with SKU number %v", g.name, podIndex, skuNum))
 }
 
 // retrieveVirtualCell finds the corresponding virtual cell for a physical cell in the placements of an affinity group.
@@ -269,11 +270,11 @@ func retrieveVirtualCell(
 	virtualPlacement groupVirtualPlacement,
 	pGpu *PhysicalCell) (vGpu *VirtualCell) {
 
-	for gpuNum := range physicalPlacement {
-		for podIndex := range physicalPlacement[gpuNum] {
-			for gpuIndex, gpu := range physicalPlacement[gpuNum][podIndex] {
+	for skuNum := range physicalPlacement {
+		for podIndex := range physicalPlacement[skuNum] {
+			for gpuIndex, gpu := range physicalPlacement[skuNum][podIndex] {
 				if gpu != nil && CellEqual(gpu, pGpu) {
-					return virtualPlacement[gpuNum][podIndex][gpuIndex].(*VirtualCell)
+					return virtualPlacement[skuNum][podIndex][gpuIndex].(*VirtualCell)
 				}
 			}
 		}
@@ -294,9 +295,9 @@ func getNewPodIndex(pods []*core.Pod) int32 {
 }
 
 // getAllocatedPodIndex finds the index of an allocated pod in its group according to its placement.
-func getAllocatedPodIndex(info *api.PodBindInfo, gpuNum int32) int32 {
+func getAllocatedPodIndex(info *api.PodBindInfo, skuNum int32) int32 {
 	for _, gms := range info.AffinityGroupBindInfo {
-		if gpuNumber := int32(len(gms.PodPlacements[0].PhysicalGpuIndices)); gpuNumber == gpuNum {
+		if skuNumber := int32(len(gms.PodPlacements[0].PhysicalGpuIndices)); skuNumber == skuNum {
 			for podIndex, placement := range gms.PodPlacements {
 				if placement.PhysicalNode == info.Node && common.Int32SliceContains(
 					placement.PhysicalGpuIndices, info.GpuIsolation[0]) {
@@ -418,7 +419,7 @@ func allChildrenSameState(c *PhysicalCell, s CellState) bool {
 func generateOTVirtualCell(pc *api.PhysicalCellStatus) *api.VirtualCellStatus {
 	vc := &api.VirtualCellStatus{
 		CellStatus: api.CellStatus{
-			GpuType:         pc.GpuType,
+			SkuType:         pc.SkuType,
 			CellType:        pc.CellType,
 			CellAddress:     pc.CellAddress + "-opp",
 			CellState:       api.CellState(cellUsed),

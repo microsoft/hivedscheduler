@@ -24,6 +24,7 @@ package api
 
 import (
 	"fmt"
+
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
@@ -78,8 +79,8 @@ type PodSchedulingSpec struct {
 	VirtualCluster          VirtualClusterName `yaml:"virtualCluster"`
 	Priority                int32              `yaml:"priority"`
 	PinnedCellId            PinnedCellId       `yaml:"pinnedCellId"`
-	GpuType                 string             `yaml:"gpuType"`
-	GpuNumber               int32              `yaml:"gpuNumber"`
+	SkuType                 string             `yaml:"skuType"`
+	SkuNumber               int32              `yaml:"skuNumber"`
 	GangReleaseEnable       bool               `yaml:"gangReleaseEnable"`
 	LazyPreemptionEnable    bool               `yaml:"lazyPreemptionEnable"`
 	IgnoreK8sSuggestedNodes bool               `yaml:"ignoreK8sSuggestedNodes"`
@@ -93,7 +94,7 @@ type AffinityGroupSpec struct {
 
 type AffinityGroupMemberSpec struct {
 	PodNumber int32 `yaml:"podNumber"`
-	GpuNumber int32 `yaml:"gpuNumber"`
+	SkuNumber int32 `yaml:"skuNumber"`
 }
 
 // Used to recover scheduler allocated resource
@@ -181,7 +182,7 @@ const (
 )
 
 type CellStatus struct {
-	GpuType     string   `json:"gpuType,omitempty"`
+	SkuType     string   `json:"skuType,omitempty"`
 	CellType    CellType `json:"cellType"`
 	IsNodeLevel bool     `json:"isNodeLevel,omitempty"`
 	// Address of a physical cell consists of its address (or index) in each level
