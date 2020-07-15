@@ -24,13 +24,14 @@ package algorithm
 
 import (
 	"fmt"
+	"sync"
+
 	"github.com/microsoft/hivedscheduler/pkg/api"
 	"github.com/microsoft/hivedscheduler/pkg/common"
 	"github.com/microsoft/hivedscheduler/pkg/internal"
 	core "k8s.io/api/core/v1"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog"
-	"sync"
 )
 
 // HivedAlgorithm implements an internal.SchedulerAlgorithm. It schedules affinity groups using the algorithm of HiveD.
@@ -913,10 +914,16 @@ func (h *HivedAlgorithm) scheduleGuaranteedAffinityGroup(
 	common.SortInt32(gpuNums)
 	lazyPreemptedGroups := h.tryLazyPreempt(virtualPlacement, gpuNums, sr.affinityGroupName)
 	preassignedCells, nonPreassignedCells := virtualPlacement.toBindingPaths(gpuNums, bindings)
+	// make a copy of freeCellNum, may change its values during allocation
+	freeCellNumCopy := map[CellLevel]int32{}
+	for k, v := range h.allVCFreeCellNum[sr.chain] {
+		freeCellNumCopy[k] = v
+	}
 	if ok := mapVirtualPlacementToPhysical(
 		preassignedCells,
 		nonPreassignedCells,
 		h.freeCellList[sr.chain].shallowCopy(),
+		freeCellNumCopy,
 		sr.suggestedNodes,
 		sr.ignoreSuggestedNodes,
 		bindings); ok {

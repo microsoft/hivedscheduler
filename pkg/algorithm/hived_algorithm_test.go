@@ -24,15 +24,16 @@ package algorithm
 
 import (
 	"fmt"
+	"net/http"
+	"sort"
+	"testing"
+
 	"github.com/microsoft/hivedscheduler/pkg/api"
 	"github.com/microsoft/hivedscheduler/pkg/common"
 	"github.com/microsoft/hivedscheduler/pkg/internal"
 	core "k8s.io/api/core/v1"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"net/http"
-	"sort"
-	"testing"
 )
 
 var allPods = map[string]*core.Pod{}
@@ -63,7 +64,8 @@ func initNodes(h *HivedAlgorithm) {
 }
 
 var group1, group2, group3, group4, group5, group6, group7, group8, group9, group10, group11, group12, group13, group14,
-	group15, group16, group17, group18, group19, group20, group21, group22, group23, group24, group25, group26, group27, group28, group29, group30, group31 = &api.AffinityGroupSpec{
+	group15, group16, group17, group18, group19, group20, group21, group22, group23, group24, group25, group26, group27,
+	group28, group29, group30, group31, group32, group33, group34 = &api.AffinityGroupSpec{
 	Name:    "group1",
 	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, GpuNumber: 1}},
 }, &api.AffinityGroupSpec{
@@ -155,6 +157,15 @@ var group1, group2, group3, group4, group5, group6, group7, group8, group9, grou
 	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, GpuNumber: 16}},
 }, &api.AffinityGroupSpec{
 	Name:    "group31",
+	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, GpuNumber: 16}},
+}, &api.AffinityGroupSpec{
+	Name:    "group32",
+	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, GpuNumber: 16}},
+}, &api.AffinityGroupSpec{
+	Name:    "group33",
+	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, GpuNumber: 16}},
+}, &api.AffinityGroupSpec{
+	Name:    "group34",
 	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, GpuNumber: 16}},
 }
 
@@ -503,6 +514,30 @@ var pss = map[types.UID]api.PodSchedulingSpec{
 		GpuType:              "DGX2-V100",
 		GpuNumber:            16,
 		AffinityGroup:        group31,
+	}, "pod44": { // safe relaxed buddy allocate for bad node test
+		VirtualCluster:       "VC1",
+		Priority:             0,
+		LazyPreemptionEnable: true,
+		PinnedCellId:         "",
+		GpuType:              "DGX2-V100",
+		GpuNumber:            16,
+		AffinityGroup:        group32,
+	}, "pod45": { // safe relaxed buddy allocate for bad node test
+		VirtualCluster:       "VC1",
+		Priority:             0,
+		LazyPreemptionEnable: true,
+		PinnedCellId:         "",
+		GpuType:              "DGX2-V100",
+		GpuNumber:            16,
+		AffinityGroup:        group33,
+	}, "pod46": { // safe relaxed buddy allocate safety test
+		VirtualCluster:       "VC1",
+		Priority:             0,
+		LazyPreemptionEnable: true,
+		PinnedCellId:         "",
+		GpuType:              "DGX2-V100",
+		GpuNumber:            16,
+		AffinityGroup:        group34,
 	},
 }
 
@@ -552,6 +587,8 @@ var expectedBindInfos = map[string]result{
 	"pod38": {node: "0.0.3.1", gpuIsolation: []int32{0}},
 	"pod39": {node: "0.0.3.2", gpuIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
 	"pod40": {node: "0.0.4.3", gpuIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
+	"pod44": {node: "0.0.3.2", gpuIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
+	"pod45": {node: "0.0.4.2", gpuIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
 }
 
 var expectedPreemptInfos = map[string]common.Set{
@@ -589,6 +626,7 @@ func TestHivedAlgorithm(t *testing.T) {
 	testSuggestedNodes(t, configFilePath)
 	testStatefulPreemption(t, configFilePath)
 	testBadNodes(t, configFilePath)
+	testSafeRelaxedBuddyAlloc(t, configFilePath)
 	testReconfiguration(t, configFilePath)
 	testInvalidInitialAssignment(t, sConfig)
 }
@@ -958,6 +996,47 @@ func testBadNodes(t *testing.T, configFilePath string) {
 				"All free cells in VC2 chain 3-DGX2-V100-NODE should be bad, but %v is healthy", c.GetAddress())
 		}
 	}
+}
+
+func testSafeRelaxedBuddyAlloc(t *testing.T, configFilePath string) {
+	sConfig := api.NewConfig(api.InitRawConfig(&configFilePath))
+	(*sConfig.VirtualClusters)["VC1"].VirtualCells[0].CellNumber = 4
+	(*sConfig.VirtualClusters)["VC1"].VirtualCells[2].CellNumber = 0
+	(*sConfig.VirtualClusters)["VC1"].VirtualCells[3].CellNumber = 0
+	(*sConfig.VirtualClusters)["VC2"].VirtualCells[2].CellType = "4-DGX2-V100-NODE.2-DGX2-V100-NODE"
+	(*sConfig.VirtualClusters)["VC2"].VirtualCells[2].CellNumber = 1
+	h := NewHivedAlgorithm(sConfig)
+	for _, chains := range h.cellChains {
+		sortChains(chains)
+	}
+	setHealthyNodes(h)
+	allocatedPods = []*core.Pod{}
+
+	pod := allPods["pod44"]
+	pod.Annotations[api.AnnotationKeyPodSchedulingSpec] = common.ToYaml(pss[pod.UID])
+	psr := h.Schedule(pod, []string{"0.0.3.2", "0.0.3.3", "0.0.4.2", "0.0.4.3"}, internal.PreemptingPhase)
+	bindingPod := internal.NewBindingPod(pod, psr.PodBindInfo)
+	h.AddAllocatedPod(bindingPod)
+	allocatedPods = append(allocatedPods, bindingPod)
+	compareSchedulingResult(t, pod, psr)
+
+	h.setBadNode("0.0.3.3")
+	pod = allPods["pod45"]
+	pod.Annotations[api.AnnotationKeyPodSchedulingSpec] = common.ToYaml(pss[pod.UID])
+	psr = h.Schedule(pod, []string{"0.0.3.2", "0.0.3.3", "0.0.4.2", "0.0.4.3"}, internal.PreemptingPhase)
+	if psr.PodBindInfo == nil {
+		t.Errorf("Cannot split higher level cells when requested level cell is bad")
+	}
+	bindingPod = internal.NewBindingPod(pod, psr.PodBindInfo)
+	h.AddAllocatedPod(bindingPod)
+	allocatedPods = append(allocatedPods, bindingPod)
+	compareSchedulingResult(t, pod, psr)
+
+	h.setBadNode("0.0.4.3")
+	pod = allPods["pod46"]
+	pod.Annotations[api.AnnotationKeyPodSchedulingSpec] = common.ToYaml(pss[pod.UID])
+	psr = h.Schedule(pod, []string{"0.0.3.2", "0.0.3.3", "0.0.4.0", "0.0.4.1", "0.0.4.2", "0.0.4.3"}, internal.PreemptingPhase)
+	compareSchedulingResult(t, pod, psr)
 }
 
 func testReconfiguration(t *testing.T, configFilePath string) {

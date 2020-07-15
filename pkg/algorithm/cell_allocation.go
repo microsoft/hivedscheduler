@@ -24,10 +24,11 @@ package algorithm
 
 import (
 	"fmt"
+	"sort"
+
 	"github.com/microsoft/hivedscheduler/pkg/api"
 	"github.com/microsoft/hivedscheduler/pkg/common"
 	"k8s.io/klog"
-	"sort"
 )
 
 // buddyAlloc is used for allocating a free physical cell to a preassigned virtual cell.
@@ -78,6 +79,76 @@ func buddyAlloc(
 	return false
 }
 
+// after buddyAlloc cannot find a healthy cell (or not in suggested nodes),
+// try to split a higher level cell safely to get current level cells
+func safeRelaxedBuddyAlloc(
+	cell *cellBindingPathVertex,
+	freeList ChainCellList,
+	freeCellNum map[CellLevel]int32,
+	currentLevel CellLevel,
+	suggestedNodes common.Set,
+	ignoreSuggestedNodes bool,
+	bindings map[api.CellAddress]*PhysicalCell) bool {
+
+	var splittableCell Cell
+	splittableNum := map[CellLevel]int32{}
+	for i := CellLevel(len(freeList)); i > currentLevel; i-- {
+		// calculate splittable number
+		splittableNum[i] = int32(len(freeList[i])) - freeCellNum[i]
+		if i < CellLevel(len(freeList)) && splittableCell != nil {
+			splittableNum[i] += splittableNum[i+1] * int32(len(splittableCell.GetChildren()))
+		}
+		// iterate higher level cell
+		if splittableCell == nil && len(freeList[i]) > 0 {
+			splittableCell = freeList[i][0]
+		} else if splittableCell != nil {
+			splittableCell = splittableCell.GetChildren()[0]
+		}
+		// check safety
+		if splittableNum[i] < 0 {
+			panic(fmt.Sprintf("VC Safety Broken: level %v cell with free list %v is unsplittable, splittableNum=%v",
+				i, freeList[i], splittableNum[i]))
+		}
+	}
+
+	for l := currentLevel + 1; l <= CellLevel(len(freeList)); l++ {
+		cellNum := int32(len(freeList[l]))
+		if cellNum > splittableNum[l] {
+			cellNum = splittableNum[l]
+		}
+		if cellNum > 0 {
+			splitList := CellList{}
+			for i := int32(0); i < cellNum; i++ {
+				splitList = append(splitList, freeList[l][0])
+				freeList.remove(freeList[l][0], l)
+			}
+			splittableNum[l] -= cellNum
+			for sl := l; sl > currentLevel; sl-- {
+				splitChildrenList := CellList{}
+				for _, sc := range splitList {
+					splitChildrenList = append(splitChildrenList, sc.GetChildren()...)
+				}
+				splitList = splitChildrenList
+			}
+			freeList[currentLevel] = append(splitList, freeList[currentLevel]...)
+			ok, pickedCells := mapVirtualCellsToPhysical(
+				[]*cellBindingPathVertex{cell},
+				freeList[currentLevel],
+				suggestedNodes,
+				ignoreSuggestedNodes,
+				bindings,
+				true)
+			if ok {
+				for _, c := range pickedCells {
+					freeList.remove(c, currentLevel)
+				}
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // getLowestFreeCellLevel returns the lowest level in the free cell list with at least one free cell.
 func getLowestFreeCellLevel(freeList ChainCellList, l CellLevel) CellLevel {
 	for ; l <= CellLevel(len(freeList)); l++ {
@@ -96,6 +167,7 @@ func mapVirtualPlacementToPhysical(
 	preassignedCells []*cellBindingPathVertex,
 	nonPreassignedCells [][]*cellBindingPathVertex,
 	freeList ChainCellList,
+	freeCellNum map[CellLevel]int32,
 	suggestedNodes common.Set,
 	ignoreSuggestedNodes bool,
 	bindings map[api.CellAddress]*PhysicalCell) bool {
@@ -103,7 +175,14 @@ func mapVirtualPlacementToPhysical(
 	for _, c := range preassignedCells {
 		if !buddyAlloc(c, freeList, getLowestFreeCellLevel(
 			freeList, c.cell.GetLevel()), suggestedNodes, ignoreSuggestedNodes, bindings) {
-			return false
+			klog.Info("Buddy allocation failed due to bad cells, try to split higher level cells")
+			if !safeRelaxedBuddyAlloc(c, freeList, freeCellNum, c.cell.GetLevel(),
+				suggestedNodes, ignoreSuggestedNodes, bindings) {
+				klog.Info("Cannot split higher level cells")
+				return false
+			}
+		} else {
+			freeCellNum[c.cell.GetLevel()]--
 		}
 	}
 	for _, cells := range nonPreassignedCells {
