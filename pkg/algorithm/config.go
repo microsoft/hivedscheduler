@@ -156,7 +156,7 @@ func (c *physicalCellConstructor) buildChildCell(
 		return cellInstance
 	}
 	var currentCellNodes []string
-	var currentCellGpuIndices []int32
+	var currentCellDeviceIndices []int32
 	var currentCellChildren CellList
 	for _, childSpec := range spec.CellChildren {
 		childCellInstance := c.buildChildCell(childSpec, ce.childCellType, currentNode)
@@ -166,18 +166,18 @@ func (c *physicalCellConstructor) buildChildCell(
 			// super-node cell merge child nodes
 			currentCellNodes = append(currentCellNodes, childCellInstance.nodes...)
 		} else {
-			// sub-node cell merge child node gpu indices
-			currentCellGpuIndices = append(currentCellGpuIndices, childCellInstance.gpuIndices...)
+			// sub-node cell merge child node device indices
+			currentCellDeviceIndices = append(currentCellDeviceIndices, childCellInstance.deviceIndices...)
 		}
 	}
 	// update current cell children and resource
 	cellInstance.SetChildren(currentCellChildren)
 	if ce.isMultiNodes {
-		currentCellGpuIndices = []int32{-1}
+		currentCellDeviceIndices = []int32{-1}
 	} else {
 		currentCellNodes = []string{currentNode}
 	}
-	cellInstance.SetPhysicalResources(currentCellNodes, currentCellGpuIndices)
+	cellInstance.SetPhysicalResources(currentCellNodes, currentCellDeviceIndices)
 
 	return cellInstance
 }

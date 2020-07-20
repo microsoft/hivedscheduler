@@ -31,8 +31,8 @@ import (
 )
 
 // topologyAwareScheduler can schedule a set of pods on a cluster view.
-// It first tries to place pods to nodes with fewer free GPUs (i.e., packing), while trying to avoid preemptions.
-// Then inside each node, it tries to allocate GPUs with better affinity.
+// It first tries to place pods to nodes with fewer free devices (i.e., packing), while trying to avoid preemptions.
+// Then inside each node, it tries to allocate devices with better affinity.
 type topologyAwareScheduler struct {
 	// a list of nodes (node-level cells or top-level cells that are lower than node level)
 	cv clusterView
@@ -93,24 +93,24 @@ func (t *topologyAwareScheduler) Schedule(
 	if selectedNodeIndices == nil {
 		return nil, failedReason
 	}
-	// find GPUs inside the selected node for each pod
+	// find devices inside the selected node for each pod
 	selectedNodes := make(CellList, len(sortedPodSkuNumbers))
 	for i := 0; i < len(selectedNodeIndices); i++ {
 		selectedNodes[i] = t.cv[selectedNodeIndices[i]].c
 	}
-	selectedGpus := CellList{}
-	nodeAvailableGpus := map[Cell]CellList{}
+	selectedDevices := CellList{}
+	nodeAvailableDevices := map[Cell]CellList{}
 	podPlacements = map[int32][]CellList{}
 	for podIndex := 0; podIndex < len(sortedPodSkuNumbers); podIndex++ {
 		skuNumber := sortedPodSkuNumbers[podIndex]
 		n := selectedNodes[podIndex]
-		// TODO: Optimize findNodesForPods and findGpusInNode together to get a better placement,
+		// TODO: Optimize findNodesForPods and findDevicesInNode together to get a better placement,
 		//  such as also aware intra node topology when findNodesForPods.
-		selectedGpus, nodeAvailableGpus[n] = findGpusInNode(n, skuNumber, priority, nodeAvailableGpus[n], t.levelSkuNum)
+		selectedDevices, nodeAvailableDevices[n] = findDevicesInNode(n, skuNumber, priority, nodeAvailableDevices[n], t.levelSkuNum)
 		if podPlacements[skuNumber] == nil {
 			podPlacements[skuNumber] = []CellList{}
 		}
-		podPlacements[skuNumber] = append(podPlacements[skuNumber], selectedGpus)
+		podPlacements[skuNumber] = append(podPlacements[skuNumber], selectedDevices)
 	}
 	return podPlacements, ""
 }
@@ -133,7 +133,7 @@ type node struct {
 // which may result in feasible pod placements being not found.
 //
 // Otherwise, n.usedSkuNumSamePriority is set to the total used SKU number,
-// so that nodes with more used GPUs will be preferred (i.e., pack pods globally across priorities).
+// so that nodes with more used devices will be preferred (i.e., pack pods globally across priorities).
 // In this case a feasible pod placement is guaranteed to be found (as long as all nodes are in suggested nodes).
 func (n *node) updateUsedSkuNumForPriority(p CellPriority, crossPriorityPack bool) {
 	n.usedSkuNumSamePriority = n.c.GetUsedSkuNumAtPriorities()[p]
@@ -158,10 +158,10 @@ type clusterView []*node
 func newClusterView(ccl ChainCellList) clusterView {
 	var l CellLevel
 	// TODO: currently if a top-level cell is lower than node level, it will be considered as a single node.
-	// For example, 2 single GPU-level cells are considered as 2 nodes each with 1 GPU.
+	// For example, 2 single device-level cells are considered as 2 nodes each with 1 device.
 	// We cannot merge them because the 2 cells might be mapped to different physical nodes.
-	// We plan to support using multiple cells in a best-effort manner (for example, schedule a 2-GPU pod
-	// on 2 1-GPU cells, if we can find 2 1-GPU cells that can be mapped to the same physical node).
+	// We plan to support using multiple cells in a best-effort manner (for example, schedule a 2-device pod
+	// on 2 1-device cells, if we can find 2 1-device cells that can be mapped to the same physical node).
 	for l = CellLevel(1); l <= CellLevel(len(ccl)); l++ {
 		if ccl[l][0].AtOrHigherThanNode() {
 			break
@@ -264,16 +264,16 @@ func nodeHealthyAndInSuggested(
 	return true, true, ""
 }
 
-// findNodesForPods finds a set of nodes that can accommodate the GPU requirements of the pods.
+// findNodesForPods finds a set of nodes that can accommodate the device requirements of the pods.
 func findNodesForPods(cv clusterView, skuNums []int32) (pickedNodeIndices []int32, failedReason string) {
 	// sort the nodes according to sku numbers in each node.
 	// this is achieved through the Less method defined in type clusterView.
 	// TODO: Ensure Opportunistic Pods also can always can find the solution, regardless of
 	//  the iteration order.
 	//  For example:
-	//   1. clusterView = 2GPU Node, 1GPU Node
-	//   2. skuNums = 1GPU Pod, 2GPU Pod
-	//   First 1GPU Pod may allocate to 2GPU Node, but the latter pod cannot be fitted anymore.
+	//   1. clusterView = 2-device Node, 1-device Node
+	//   2. skuNums = 1-device Pod, 2-device Pod
+	//   First 1-device Pod may allocate to 2-device Node, but the latter pod cannot be fitted anymore.
 	sort.Stable(cv)
 	pickedNodeIndices = make([]int32, len(skuNums)) // indices of the currently picked nodes
 	podIndex := 0
@@ -305,84 +305,84 @@ func findNodesForPods(cv clusterView, skuNums []int32) (pickedNodeIndices []int3
 	return nil, "insufficient capacity"
 }
 
-// findGpusInNode finds a set of GPUs with the best affinity in a node for a pod.
-func findGpusInNode(
+// findDevicesInNode finds a set of devices with the best affinity in a node for a pod.
+func findDevicesInNode(
 	n Cell,
 	skuNum int32,
 	p CellPriority,
-	availableGpus CellList,
+	availableDevices CellList,
 	levelSkuNum map[CellLevel]int32) (CellList, CellList) {
 
-	// indices of the currently picked GPUs
-	currentGpuIndices := make([]int32, skuNum)
-	// affinity of the currently picked GPUs, defined as the lowest common ancestor
-	// of the GPUs in the cell hierarchy (lower level means better affinity)
+	// indices of the currently picked devices
+	currentDeviceIndices := make([]int32, skuNum)
+	// affinity of the currently picked devices, defined as the lowest common ancestor
+	// of the devices in the cell hierarchy (lower level means better affinity)
 	currentAffinity := make(CellList, skuNum)
-	// GPUs with the best affinity ever seen
-	bestAffinityGpus := make(CellList, skuNum)
-	// indices of the GPUs with the best affinity ever seen
-	bestAffinityGpuIndices := make([]int32, skuNum)
-	// the best affinity ever seen (i.e., lowest level of lowest common ancestor of a set of GPUs)
+	// devices with the best affinity ever seen
+	bestAffinityDevices := make(CellList, skuNum)
+	// indices of the devices with the best affinity ever seen
+	bestAffinityDeviceIndices := make([]int32, skuNum)
+	// the best affinity ever seen (i.e., lowest level of lowest common ancestor of a set of devices)
 	bestAffinity := highestLevel
-	// the optimal affinity for the SKU number, i.e., the lowest possible of the lowest common ancestor of GPUs
+	// the optimal affinity for the SKU number, i.e., the lowest possible of the lowest common ancestor of devices
 	optimalAffinity := getOptimalAffinity(skuNum, levelSkuNum)
 
-	if availableGpus == nil {
-		availableGpus = CellList{}
-		preemptibleGpus := CellList{}
-		availableGpus, preemptibleGpus = getGpusFromNode(n, p, availableGpus, preemptibleGpus)
-		// free GPUs will be used first (before preemptible GPUs)
-		availableGpus = append(availableGpus, preemptibleGpus...)
+	if availableDevices == nil {
+		availableDevices = CellList{}
+		preemptibleDevices := CellList{}
+		availableDevices, preemptibleDevices = getDevicesFromNode(n, p, availableDevices, preemptibleDevices)
+		// free devices will be used first (before preemptible devices)
+		availableDevices = append(availableDevices, preemptibleDevices...)
 	}
-	availableGpuIndex := int32(0)
-	searchGpuIndex := int32(0)
-	var gpu Cell
+	availableDeviceIndex := int32(0)
+	searchDeviceIndex := int32(0)
+	var device Cell
 	for {
-		for availableGpuIndex < int32(len(availableGpus)) {
-			gpu = availableGpus[availableGpuIndex]
-			currentGpuIndices[searchGpuIndex] = availableGpuIndex
-			if searchGpuIndex == 0 {
-				currentAffinity[searchGpuIndex] = gpu
+		for availableDeviceIndex < int32(len(availableDevices)) {
+			device = availableDevices[availableDeviceIndex]
+			currentDeviceIndices[searchDeviceIndex] = availableDeviceIndex
+			if searchDeviceIndex == 0 {
+				currentAffinity[searchDeviceIndex] = device
 			} else {
-				currentAffinity[searchGpuIndex] = findLCA(gpu, currentAffinity[searchGpuIndex-1])
+				currentAffinity[searchDeviceIndex] = findLCA(device, currentAffinity[searchDeviceIndex-1])
 				// pruning: if the current LCA has been higher than the lowest ever,
 				// the node will be skipped
-				if (currentAffinity[searchGpuIndex] == nil && bestAffinity < highestLevel) ||
-					(currentAffinity[searchGpuIndex] != nil && currentAffinity[searchGpuIndex].GetLevel() > bestAffinity) {
-					availableGpuIndex++
+				if (currentAffinity[searchDeviceIndex] == nil && bestAffinity < highestLevel) ||
+					(currentAffinity[searchDeviceIndex] != nil && currentAffinity[searchDeviceIndex].GetLevel() > bestAffinity) {
+					availableDeviceIndex++
 					continue
 				}
 			}
-			if searchGpuIndex == skuNum-1 {
+			if searchDeviceIndex == skuNum-1 {
 				foundOptimalAffinity := false
-				bestAffinity, foundOptimalAffinity = checkCurrentGpus(
+				bestAffinity, foundOptimalAffinity = checkCurrentDevices(
 					currentAffinity[len(currentAffinity)-1].GetLevel(),
-					availableGpus,
-					currentGpuIndices,
+					availableDevices,
+					currentDeviceIndices,
 					bestAffinity,
-					bestAffinityGpus,
-					bestAffinityGpuIndices,
+					bestAffinityDevices,
+					bestAffinityDeviceIndices,
 					optimalAffinity)
 				if foundOptimalAffinity {
 					// early stop: return if the solution is optimal (i.e., all buddies)
-					availableGpus = removePickedGpus(availableGpus, bestAffinityGpuIndices)
-					return bestAffinityGpus, availableGpus
+					availableDevices = removePickedDevices(availableDevices, bestAffinityDeviceIndices)
+					return bestAffinityDevices, availableDevices
 				}
 			} else {
-				searchGpuIndex++
+				searchDeviceIndex++
 			}
-			availableGpuIndex++
+			availableDeviceIndex++
 		}
-		searchGpuIndex--
-		if searchGpuIndex < 0 {
+		searchDeviceIndex--
+		if searchDeviceIndex < 0 {
 			if bestAffinity == highestLevel {
 				// Unreachable
-				panic(fmt.Sprintf("Assert Failure: failed to allocate %v GPUs in picked node %v", skuNum, n.GetAddress()))
+				panic(fmt.Sprintf("Assert Failure: failed to allocate %v devices in picked node %v", skuNum, n.GetAddress()))
 			}
-			availableGpus = removePickedGpus(availableGpus, bestAffinityGpuIndices)
-			return bestAffinityGpus, availableGpus
+			availableDevices = removePickedDevices(availableDevices, bestAffinityDeviceIndices)
+			return bestAffinityDevices, availableDevices
 		}
-		availableGpuIndex = currentGpuIndices[searchGpuIndex] + 1
+		availableDeviceIndex = currentDeviceIndices[searchDeviceIndex] + 1
 	}
 }
 
@@ -398,21 +398,21 @@ func getOptimalAffinity(skuNum int32, levelSkuNum map[CellLevel]int32) CellLevel
 	panic(fmt.Sprintf("Assert Failure: pod allocated a node but exceeds the capacity of the current chain"))
 }
 
-// checkCurrentGpus checks if the currently picked GPUs have the lowest LCA. It also checks if the solution
-// is optimal (if the GPUs are all buddies).
-func checkCurrentGpus(
+// checkCurrentDevices checks if the currently picked devices have the lowest LCA. It also checks if the solution
+// is optimal (if the devices are all buddies).
+func checkCurrentDevices(
 	affinity CellLevel,
-	gpus CellList,
+	devices CellList,
 	currentIndices []int32,
 	bestAffinity CellLevel,
-	bestAffinityGpus CellList,
-	bestAffinityGpuIndices []int32,
+	bestAffinityDevices CellList,
+	bestAffinityDeviceIndices []int32,
 	optimalAffinity CellLevel) (CellLevel, bool) {
 
 	if affinity < bestAffinity {
-		copy(bestAffinityGpuIndices, currentIndices)
+		copy(bestAffinityDeviceIndices, currentIndices)
 		for i := 0; i < len(currentIndices); i++ {
-			bestAffinityGpus[i] = gpus[currentIndices[i]]
+			bestAffinityDevices[i] = devices[currentIndices[i]]
 		}
 		if affinity == optimalAffinity {
 			return affinity, true
@@ -423,21 +423,21 @@ func checkCurrentGpus(
 	return bestAffinity, false
 }
 
-// removePickedGpus remove picked GPUs from the available GPU list.
-func removePickedGpus(gpus CellList, indices []int32) CellList {
+// removePickedDevices remove picked devices from the available device list.
+func removePickedDevices(devices CellList, indices []int32) CellList {
 	for i, index := range indices {
 		offset := int32(i)
 		if i < len(indices)-1 {
 			nextIndex := indices[i+1]
-			copy(gpus[index-offset:nextIndex-offset-1], gpus[index+1:nextIndex])
+			copy(devices[index-offset:nextIndex-offset-1], devices[index+1:nextIndex])
 		} else {
-			copy(gpus[index-offset:], gpus[index+1:])
+			copy(devices[index-offset:], devices[index+1:])
 		}
 	}
-	for i := len(gpus) - len(indices); i < len(gpus); i++ {
-		gpus[i] = nil
+	for i := len(devices) - len(indices); i < len(devices); i++ {
+		devices[i] = nil
 	}
-	return gpus[:len(gpus)-len(indices)]
+	return devices[:len(devices)-len(indices)]
 }
 
 // findLCA finds the lowest common ancestor of two cells (nil if they have no LCA).
@@ -461,16 +461,16 @@ func findLCA(lower Cell, higher Cell) Cell {
 	return lower.GetParent()
 }
 
-// getGpusFromNode collects free GPUs and preemptible GPUs according to the priority.
-func getGpusFromNode(c Cell, p CellPriority, freeGpus CellList, preemptibleGpus CellList) (CellList, CellList) {
+// getDevicesFromNode collects free devices and preemptible devices according to the priority.
+func getDevicesFromNode(c Cell, p CellPriority, freeDevices CellList, preemptibleDevices CellList) (CellList, CellList) {
 	if c.GetLevel() > 1 {
 		for _, cc := range c.GetChildren() {
-			freeGpus, preemptibleGpus = getGpusFromNode(cc, p, freeGpus, preemptibleGpus)
+			freeDevices, preemptibleDevices = getDevicesFromNode(cc, p, freeDevices, preemptibleDevices)
 		}
 	} else if c.GetPriority() == freePriority {
-		freeGpus = append(freeGpus, c)
+		freeDevices = append(freeDevices, c)
 	} else if c.GetPriority() < p {
-		preemptibleGpus = append(preemptibleGpus, c)
+		preemptibleDevices = append(preemptibleDevices, c)
 	}
-	return freeGpus, preemptibleGpus
+	return freeDevices, preemptibleDevices
 }

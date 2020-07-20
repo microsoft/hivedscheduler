@@ -68,7 +68,7 @@ For all cells currently associated with other AGs:
 
 `Used` (by other AGs) -> `Reserving` (by this AG) (e<sub>2</sub> in cell state machine);
 
-`Reserving`/`Reserved` (by other AGs) -> `Reserving`/`Reserved` (by this AG) (e<sub>3</sub>/e<sub>6</sub> in cell state machine); 
+`Reserving`/`Reserved` (by other AGs) -> `Reserving`/`Reserved` (by this AG) (e<sub>3</sub>/e<sub>6</sub> in cell state machine);
 
 For free cells:
 
@@ -94,7 +94,7 @@ __e<sub>4</sub>__:
 
 Condition: all pods of this AG are deleted.
 
-Operation: 
+Operation:
 all cells `Used` (by this AG) -> `Free` (e<sub>1</sub> in cell state machine).
 
 __e<sub>5</sub>__:
@@ -118,7 +118,7 @@ __e<sub>7</sub>__:
 
 Condition: all pods of this AG are deleted.
 
-Operation: 
+Operation:
 
 All the `Reserving` cells (by this AG) -> `Used` (by the `Being preempted` AG currently associated with the cell) (e<sub>4</sub> in cell state machine).
 
@@ -132,7 +132,7 @@ Operation: none.
 
 ## Cell State Machine
 
-Cell is the resource unit in HiveD. The figure below shows the state machine of cell. Note that here cells are _lowest-level physical cells_, e.g., single-GPU cells in typical configs (we record states only in these cells).
+Cell is the resource unit in HiveD. The figure below shows the state machine of cell. Note that here cells are _lowest-level physical cells_, e.g., single-device cells in typical configs (we record states only in these cells).
 
 <p style="text-align: center;">
   <img src="img/cell-state-machine.png" title="cell" alt="cell" width="70%"/>
@@ -188,7 +188,7 @@ __e<sub>2</sub>__:
 
 Condition: triggered by another AG from `Pending` to `Preempting` (i.e., that AG is preempting the `Allocated` AG currently associated with this cell) (e<sub>1</sub> in AG state machine).
 
-Operation: 
+Operation:
 
 The `Allocated` AG on this cell -> `Being preempted` (e<sub>6</sub> in AG state machine);
 
@@ -236,7 +236,7 @@ __e<sub>8</sub>__:
 
 Condition: triggered by (i) there is currently a `Preempting` AG on this cell but another `Allocated` AG is now associated with the cell (e<sub>0</sub> in AG state machine); OR (ii) the `Preempting` AG currently associated with this cell transitions to `Allocated` (e<sub>2</sub> in AG state machine).
 
-Operation: 
+Operation:
 
 For (i): the `Preempting` AG on this cell -> `Pending`  (e<sub>5</sub> in AG state machine); release the cell and then allocate it to the new `Allocated` AG.
 

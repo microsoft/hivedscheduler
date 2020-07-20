@@ -192,8 +192,8 @@ func (h *HivedAlgorithm) Schedule(
 		suggestedNodeSet.Add(n)
 	}
 	var (
-		groupPhysicalPlacement groupPhysicalPlacement // SKU number -> a set of pods -> a set of GPUs of each pod
-		groupVirtualPlacement  groupVirtualPlacement  // SKU number -> a set of pods -> a set of GPUs of each pod
+		groupPhysicalPlacement groupPhysicalPlacement // SKU number -> a set of pods -> a set of devices of each pod
+		groupVirtualPlacement  groupVirtualPlacement  // SKU number -> a set of pods -> a set of devices of each pod
 		preemptionVictims      map[string]common.Set  // node -> pods
 		waitReason             string
 		podIndex               int32 // index of current pod among those of the same SKU number in the group, 0 by default
@@ -251,7 +251,7 @@ func (h *HivedAlgorithm) AddAllocatedPod(pod *core.Pod) {
 	s := internal.ExtractPodSchedulingSpec(pod)
 	info := internal.ExtractPodBindInfo(pod)
 	klog.Infof("[%v]: Adding allocated pod to affinity group %v...", internal.Key(pod), s.AffinityGroup.Name)
-	klog.Infof("[%v]: Adding to node %v, GPUs %v", internal.Key(pod), info.Node, common.ToJson(info.GpuIsolation))
+	klog.Infof("[%v]: Adding to node %v, devices %v", internal.Key(pod), info.Node, common.ToJson(info.DeviceIsolation))
 
 	podIndex := int32(0)
 	if g := h.affinityGroups[s.AffinityGroup.Name]; g != nil {
@@ -259,8 +259,8 @@ func (h *HivedAlgorithm) AddAllocatedPod(pod *core.Pod) {
 			h.allocatePreemptingAffinityGroup(g, pod)
 		}
 		if podIndex = getAllocatedPodIndex(info, s.SkuNumber); podIndex == -1 {
-			klog.Errorf("[%v]: Pod placement not found in group %v: node %v, GPUs %v",
-				internal.Key(pod), s.AffinityGroup.Name, info.Node, info.GpuIsolation)
+			klog.Errorf("[%v]: Pod placement not found in group %v: node %v, devices %v",
+				internal.Key(pod), s.AffinityGroup.Name, info.Node, info.DeviceIsolation)
 			return
 		}
 	} else {
@@ -276,15 +276,15 @@ func (h *HivedAlgorithm) DeleteAllocatedPod(pod *core.Pod) {
 	s := internal.ExtractPodSchedulingSpec(pod)
 	info := internal.ExtractPodBindInfo(pod)
 	klog.Infof("[%v]: Deleting allocated pod from affinity group %v...", internal.Key(pod), s.AffinityGroup.Name)
-	klog.Infof("[%v]: Deleting from node %v, GPUs %v", internal.Key(pod), info.Node, common.ToJson(info.GpuIsolation))
+	klog.Infof("[%v]: Deleting from node %v, devices %v", internal.Key(pod), info.Node, common.ToJson(info.DeviceIsolation))
 
 	if g := h.affinityGroups[s.AffinityGroup.Name]; g == nil {
 		klog.Errorf("[%v]: Group %v not found when deleting pod", internal.Key(pod), s.AffinityGroup.Name)
 		return
 	} else {
 		if podIndex := getAllocatedPodIndex(info, s.SkuNumber); podIndex == -1 {
-			klog.Errorf("[%v]: Pod placement not found in group %v: node %v, GPUs %v",
-				internal.Key(pod), s.AffinityGroup.Name, info.Node, info.GpuIsolation)
+			klog.Errorf("[%v]: Pod placement not found in group %v: node %v, devices %v",
+				internal.Key(pod), s.AffinityGroup.Name, info.Node, info.DeviceIsolation)
 			return
 		} else {
 			g.allocatedPods[s.SkuNumber][podIndex] = nil
@@ -470,11 +470,11 @@ func (h *HivedAlgorithm) setBadNode(nodeName string) {
 	}
 	h.badNodes.Add(nodeName)
 	for _, ccl := range h.fullCellList {
-		for _, gpu := range ccl[1] {
-			pGpu := gpu.(*PhysicalCell)
-			nodes, _ := pGpu.GetPhysicalPlacement()
+		for _, device := range ccl[1] {
+			pDevice := device.(*PhysicalCell)
+			nodes, _ := pDevice.GetPhysicalPlacement()
 			if nodes[0] == nodeName {
-				h.setBadCell(pGpu)
+				h.setBadCell(pDevice)
 			}
 		}
 	}
@@ -487,11 +487,11 @@ func (h *HivedAlgorithm) setHealthyNode(nodeName string) {
 	}
 	h.badNodes.Delete(nodeName)
 	for _, ccl := range h.fullCellList {
-		for _, gpu := range ccl[1] {
-			pGpu := gpu.(*PhysicalCell)
-			nodes, _ := pGpu.GetPhysicalPlacement()
+		for _, device := range ccl[1] {
+			pDevice := device.(*PhysicalCell)
+			nodes, _ := pDevice.GetPhysicalPlacement()
 			if nodes[0] == nodeName {
-				h.setHealthyCell(pGpu)
+				h.setHealthyCell(pDevice)
 			}
 		}
 	}
@@ -499,7 +499,7 @@ func (h *HivedAlgorithm) setHealthyNode(nodeName string) {
 
 // setBadCell marks a physical cell (and also the virtual cell it is bound to) as bad,
 // and recursively for its parent, guaranteeing that a cell is bad if any of its children is bad.
-// setBadCell always starts from the lowest level, i.e., GPU-level cells.
+// setBadCell always starts from the lowest level, i.e., device-level cells.
 func (h *HivedAlgorithm) setBadCell(c *PhysicalCell) {
 	if !c.IsHealthy() {
 		return
@@ -522,7 +522,7 @@ func (h *HivedAlgorithm) setBadCell(c *PhysicalCell) {
 
 // setHealthyCell marks a physical cell (and also the virtual cell it is bound to) as healthy,
 // and recursively for its parent, guaranteeing that a cell is healthy if all of its children are healthy.
-// setHealthy always starts from the lowest level, i.e., GPU-level cells.
+// setHealthy always starts from the lowest level, i.e., device-level cells.
 func (h *HivedAlgorithm) setHealthyCell(c *PhysicalCell) {
 	if c.IsHealthy() {
 		return
@@ -667,13 +667,13 @@ func (h *HivedAlgorithm) schedulePodFromExistingGroup(
 	podIndex int32) {
 
 	badOrNonSuggestedNodes := collectBadOrNonSuggestedNodes(
-		g.physicalGpuPlacement, suggestedNodes, g.ignoreK8sSuggestedNodes)
+		g.physicalDevicePlacement, suggestedNodes, g.ignoreK8sSuggestedNodes)
 	// state of an existing group can be either Allocated or Preempting
 	if g.state == groupAllocated {
 		klog.Infof("[%v]: Pod is from an affinity group that is already allocated: %v",
 			internal.Key(pod), s.AffinityGroup.Name)
-		groupPhysicalPlacement = g.physicalGpuPlacement
-		groupVirtualPlacement = g.virtualGpuPlacement
+		groupPhysicalPlacement = g.physicalDevicePlacement
+		groupVirtualPlacement = g.virtualDevicePlacement
 		if !badOrNonSuggestedNodes.IsEmpty() {
 			// for an allocated group, we always insist the previous scheduling decision
 			// even if some pods are now bad or not within suggested nodes
@@ -682,7 +682,7 @@ func (h *HivedAlgorithm) schedulePodFromExistingGroup(
 		}
 		if podIndex = getNewPodIndex(g.allocatedPods[s.SkuNumber]); podIndex == -1 {
 			panic(internal.NewBadRequestError(fmt.Sprintf(
-				"Requesting more pods than the configured number for %v GPUs (%v pods) in affinity group %v",
+				"Requesting more pods than the configured number for %v devices (%v pods) in affinity group %v",
 				s.SkuNumber, g.totalPodNums[s.SkuNumber], s.AffinityGroup.Name)))
 		}
 	} else { // groupPreempting
@@ -698,8 +698,8 @@ func (h *HivedAlgorithm) schedulePodFromExistingGroup(
 				internal.Key(pod), g.name, badOrNonSuggestedNodes)
 			h.deletePreemptingAffinityGroup(g, pod)
 		} else {
-			groupPhysicalPlacement = g.physicalGpuPlacement
-			groupVirtualPlacement = g.virtualGpuPlacement
+			groupPhysicalPlacement = g.physicalDevicePlacement
+			groupVirtualPlacement = g.virtualDevicePlacement
 			preemptionVictims, _ = collectPreemptionVictims(groupPhysicalPlacement)
 			if len(preemptionVictims) == 0 {
 				klog.Infof(
@@ -751,7 +751,7 @@ func (h *HivedAlgorithm) schedulePodFromNewGroup(
 	return groupPhysicalPlacement, groupVirtualPlacement, preemptionVictims, waitReason
 }
 
-// scheduleNewAffinityGroup schedules each pod of a new affinity group to a set of GPUs
+// scheduleNewAffinityGroup schedules each pod of a new affinity group to a set of devices
 // (in both the physical cluster and the VC). This is the entrance of a new scheduling attempt.
 func (h *HivedAlgorithm) scheduleNewAffinityGroup(
 	pod *core.Pod,
@@ -951,11 +951,11 @@ func (h *HivedAlgorithm) tryLazyPreempt(
 	for _, podSkuNum := range skuNums {
 		podPlacements := p[podSkuNum]
 		for _, pod := range podPlacements {
-			for _, gpu := range pod {
-				if pGpu := gpu.(*VirtualCell).GetPhysicalCell(); pGpu != nil {
-					if pGpu.GetState() == cellUsed && pGpu.GetUsingGroup().lazyPreemptionEnable {
-						preemptedGroups[pGpu.GetUsingGroup().name] = h.lazyPreemptAffinityGroup(
-							pGpu.GetUsingGroup(), groupName)
+			for _, device := range pod {
+				if pDevice := device.(*VirtualCell).GetPhysicalCell(); pDevice != nil {
+					if pDevice.GetState() == cellUsed && pDevice.GetUsingGroup().lazyPreemptionEnable {
+						preemptedGroups[pDevice.GetUsingGroup().name] = h.lazyPreemptAffinityGroup(
+							pDevice.GetUsingGroup(), groupName)
 					}
 				}
 			}
@@ -985,46 +985,46 @@ func (h *HivedAlgorithm) createAllocatedAffinityGroup(s *api.PodSchedulingSpec, 
 		s.AffinityGroup, s.VirtualCluster, s.LazyPreemptionEnable, s.Priority, groupAllocated)
 	shouldLazyPreempt := false
 	for _, gms := range info.AffinityGroupBindInfo {
-		skuNumber := int32(len(gms.PodPlacements[0].PhysicalGpuIndices))
+		skuNumber := int32(len(gms.PodPlacements[0].PhysicalDeviceIndices))
 		for podIndex := int32(0); podIndex < int32(len(gms.PodPlacements)); podIndex++ {
 			node := gms.PodPlacements[podIndex].PhysicalNode
-			for gpuIndex := int32(0); gpuIndex < int32(
-				len(gms.PodPlacements[podIndex].PhysicalGpuIndices)); gpuIndex++ {
-				pGpu, vGpu, lazyPreempt := h.findAllocatedGpu(
-					gpuIndex,
-					gms.PodPlacements[podIndex].PhysicalGpuIndices,
+			for deviceIndex := int32(0); deviceIndex < int32(
+				len(gms.PodPlacements[podIndex].PhysicalDeviceIndices)); deviceIndex++ {
+				pDevice, vDevice, lazyPreempt := h.findAllocatedDevice(
+					deviceIndex,
+					gms.PodPlacements[podIndex].PhysicalDeviceIndices,
 					gms.PodPlacements[podIndex].PreassignedCellTypes,
 					CellChain(info.CellChain), node, shouldLazyPreempt, s, newGroup, pod)
-				if pGpu == nil {
-					// pGpu not being found means that this GPU address does not exist in the spec.
-					// we simply ignore this GPU, and let the job run normally
-					// (but we cannot ignore the other GPUs of this pod that are still in the spec,
+				if pDevice == nil {
+					// pDevice not being found means that this device address does not exist in the spec.
+					// we simply ignore this device, and let the job run normally
+					// (but we cannot ignore the other devices of this pod that are still in the spec,
 					// otherwise it may cause resource conflicts)
 					continue
 				} else {
-					newGroup.physicalGpuPlacement[skuNumber][podIndex][gpuIndex] = pGpu
+					newGroup.physicalDevicePlacement[skuNumber][podIndex][deviceIndex] = pDevice
 					if lazyPreempt == nil {
-						newGroup.virtualGpuPlacement = nil
-					} else if vGpu != nil {
-						newGroup.virtualGpuPlacement[skuNumber][podIndex][gpuIndex] = vGpu
-						if inFreeCellList(pGpu) && vGpu.GetPreassignedCell().GetPriority() > freePriority {
+						newGroup.virtualDevicePlacement = nil
+					} else if vDevice != nil {
+						newGroup.virtualDevicePlacement[skuNumber][podIndex][deviceIndex] = vDevice
+						if inFreeCellList(pDevice) && vDevice.GetPreassignedCell().GetPriority() > freePriority {
 							// This means we decide to bind this cell to a virtual cell whose preassigned cell
 							// has been bound (in cases like reconfiguration and the VC's cells are fewer than before).
 							// We need to destroy the previous binding, by lazy preempting all the groups
 							// in the preassigned cell
-							h.lazyPreemptCell(vGpu.GetPreassignedCell(), newGroup.name)
+							h.lazyPreemptCell(vDevice.GetPreassignedCell(), newGroup.name)
 						}
 					} else {
 						shouldLazyPreempt = shouldLazyPreempt || *lazyPreempt
 					}
-					// Even if we have successfully found the vGpu and pGpu, there is still one possibility
+					// Even if we have successfully found the vDevice and pDevice, there is still one possibility
 					// that we should not bind them: allocating the physical cell may lead to broken safety.
 					// Such case won't happen by design as buddy alloc guarantees safety; but this could
 					// happen due to inconsistency of VC assignments for reasons like reconfiguration.
 					// In this case, we will lazy preempt this affinity group.
-					safetyOk, reason := h.allocateGpu(pGpu, vGpu, CellPriority(s.Priority), newGroup.vc)
-					pGpu.AddUsingGroup(newGroup)
-					setCellState(pGpu, cellUsed)
+					safetyOk, reason := h.allocateDevice(pDevice, vDevice, CellPriority(s.Priority), newGroup.vc)
+					pDevice.AddUsingGroup(newGroup)
+					setCellState(pDevice, cellUsed)
 					if !safetyOk {
 						shouldLazyPreempt = true
 						klog.Warningf("[%v]: %v", internal.Key(pod), reason)
@@ -1045,22 +1045,22 @@ func (h *HivedAlgorithm) createAllocatedAffinityGroup(s *api.PodSchedulingSpec, 
 func (h *HivedAlgorithm) deleteAllocatedAffinityGroup(g *AlgoAffinityGroup, pod *core.Pod) {
 	klog.Infof("[%v]: All pods complete, deleting allocated affinity group: %v",
 		internal.Key(pod), g.name)
-	for _, podPlacements := range g.physicalGpuPlacement {
+	for _, podPlacements := range g.physicalDevicePlacement {
 		for _, podPlacement := range podPlacements {
-			for _, gpu := range podPlacement {
-				if gpu == nil {
+			for _, device := range podPlacement {
+				if device == nil {
 					continue
 				}
-				pGpu := gpu.(*PhysicalCell)
-				pGpu.DeleteUsingGroup(g)
-				// state of pGpu can be either Used or Reserving
-				if pGpu.GetState() == cellUsed {
-					h.releaseGpu(pGpu, g.vc)
-					setCellState(pGpu, cellFree)
+				pDevice := device.(*PhysicalCell)
+				pDevice.DeleteUsingGroup(g)
+				// state of pDevice can be either Used or Reserving
+				if pDevice.GetState() == cellUsed {
+					h.releaseDevice(pDevice, g.vc)
+					setCellState(pDevice, cellFree)
 				} else { // cellReserving
-					// When pGpu is in Reserving state, we shouldn't call h.releaseGpu
+					// When pDevice is in Reserving state, we shouldn't call h.releaseDevice
 					// because it must have been allocated to the reserving group before
-					setCellState(pGpu, cellReserved)
+					setCellState(pDevice, cellReserved)
 				}
 			}
 		}
@@ -1082,26 +1082,26 @@ func (h *HivedAlgorithm) createPreemptingAffinityGroup(
 	klog.Infof("[%v]: Creating new preempting affinity group: %v", internal.Key(pod), s.AffinityGroup.Name)
 	newGroup := newAlgoAffinityGroup(
 		s.AffinityGroup, s.VirtualCluster, s.LazyPreemptionEnable, s.Priority, groupPreempting)
-	newGroup.physicalGpuPlacement = physicalPlacement
-	newGroup.virtualGpuPlacement = virtualPlacement
+	newGroup.physicalDevicePlacement = physicalPlacement
+	newGroup.virtualDevicePlacement = virtualPlacement
 	for skuNum := range physicalPlacement {
 		for podIndex := range physicalPlacement[skuNum] {
-			for gpuIndex, gpu := range physicalPlacement[skuNum][podIndex] {
-				pGpu := gpu.(*PhysicalCell)
-				vGpu := virtualPlacement[skuNum][podIndex][gpuIndex].(*VirtualCell)
-				if pGpu.GetState() == cellUsed {
-					usingGroup := pGpu.GetUsingGroup()
-					h.releaseGpu(pGpu, usingGroup.vc)
+			for deviceIndex, device := range physicalPlacement[skuNum][podIndex] {
+				pDevice := device.(*PhysicalCell)
+				vDevice := virtualPlacement[skuNum][podIndex][deviceIndex].(*VirtualCell)
+				if pDevice.GetState() == cellUsed {
+					usingGroup := pDevice.GetUsingGroup()
+					h.releaseDevice(pDevice, usingGroup.vc)
 					usingGroup.state = groupBeingPreempted
 				}
-				h.allocateGpu(pGpu, vGpu, CellPriority(s.Priority), newGroup.vc)
-				pGpu.AddReservingOrReservedGroup(newGroup)
-				// state of pGpu can be either Used or Free (if it was Reserving or Reserved,
+				h.allocateDevice(pDevice, vDevice, CellPriority(s.Priority), newGroup.vc)
+				pDevice.AddReservingOrReservedGroup(newGroup)
+				// state of pDevice can be either Used or Free (if it was Reserving or Reserved,
 				// we must have canceled the ongoing preemption before, in h.Schedule)
-				if pGpu.GetState() == cellUsed {
-					setCellState(pGpu, cellReserving)
+				if pDevice.GetState() == cellUsed {
+					setCellState(pDevice, cellReserving)
 				} else { // cellFree
-					setCellState(pGpu, cellReserved)
+					setCellState(pDevice, cellReserved)
 				}
 			}
 		}
@@ -1114,27 +1114,27 @@ func (h *HivedAlgorithm) createPreemptingAffinityGroup(
 // deletePreemptingAffinityGroup revokes a preemption and deletes the affinity group that is
 // still waiting for the completion of the preemption.
 func (h *HivedAlgorithm) deletePreemptingAffinityGroup(g *AlgoAffinityGroup, pod *core.Pod) {
-	for skuNum := range g.physicalGpuPlacement {
-		for podIndex := range g.physicalGpuPlacement[skuNum] {
-			for _, gpu := range g.physicalGpuPlacement[skuNum][podIndex] {
-				pGpu := gpu.(*PhysicalCell)
-				h.releaseGpu(pGpu, g.vc)
-				pGpu.DeleteReservingOrReservedGroup(pGpu.GetReservingOrReservedGroup())
-				// state of pGpu can be either Reserving or Reserved
-				if pGpu.GetState() == cellReserving {
-					setCellState(pGpu, cellUsed)
+	for skuNum := range g.physicalDevicePlacement {
+		for podIndex := range g.physicalDevicePlacement[skuNum] {
+			for _, device := range g.physicalDevicePlacement[skuNum][podIndex] {
+				pDevice := device.(*PhysicalCell)
+				h.releaseDevice(pDevice, g.vc)
+				pDevice.DeleteReservingOrReservedGroup(pDevice.GetReservingOrReservedGroup())
+				// state of pDevice can be either Reserving or Reserved
+				if pDevice.GetState() == cellReserving {
+					setCellState(pDevice, cellUsed)
 					// return the cell to the group being preempted
-					beingPreemptedGroup := pGpu.GetUsingGroup()
-					var beingPreemptedVGpu *VirtualCell
-					if beingPreemptedGroup.virtualGpuPlacement != nil {
-						beingPreemptedVGpu = retrieveVirtualCell(
-							beingPreemptedGroup.physicalGpuPlacement,
-							beingPreemptedGroup.virtualGpuPlacement, pGpu)
+					beingPreemptedGroup := pDevice.GetUsingGroup()
+					var beingPreemptedVDevice *VirtualCell
+					if beingPreemptedGroup.virtualDevicePlacement != nil {
+						beingPreemptedVDevice = retrieveVirtualCell(
+							beingPreemptedGroup.physicalDevicePlacement,
+							beingPreemptedGroup.virtualDevicePlacement, pDevice)
 					}
-					h.allocateGpu(
-						pGpu, beingPreemptedVGpu, CellPriority(beingPreemptedGroup.priority), beingPreemptedGroup.vc)
+					h.allocateDevice(
+						pDevice, beingPreemptedVDevice, CellPriority(beingPreemptedGroup.priority), beingPreemptedGroup.vc)
 				} else { // cellReserved
-					setCellState(pGpu, cellFree)
+					setCellState(pDevice, cellFree)
 				}
 			}
 		}
@@ -1146,13 +1146,13 @@ func (h *HivedAlgorithm) deletePreemptingAffinityGroup(g *AlgoAffinityGroup, pod
 // allocatePreemptingAffinityGroup lets a preemptor affinity group whose preemption has completed
 // transition to allocated state.
 func (h *HivedAlgorithm) allocatePreemptingAffinityGroup(g *AlgoAffinityGroup, pod *core.Pod) {
-	for skuNum := range g.physicalGpuPlacement {
-		for podIndex := range g.physicalGpuPlacement[skuNum] {
-			for _, gpu := range g.physicalGpuPlacement[skuNum][podIndex] {
-				pGpu := gpu.(*PhysicalCell)
-				pGpu.DeleteReservingOrReservedGroup(g)
-				pGpu.AddUsingGroup(g)
-				setCellState(pGpu, cellUsed)
+	for skuNum := range g.physicalDevicePlacement {
+		for podIndex := range g.physicalDevicePlacement[skuNum] {
+			for _, device := range g.physicalDevicePlacement[skuNum][podIndex] {
+				pDevice := device.(*PhysicalCell)
+				pDevice.DeleteReservingOrReservedGroup(g)
+				pDevice.AddUsingGroup(g)
+				setCellState(pDevice, cellUsed)
 			}
 		}
 	}
@@ -1166,20 +1166,20 @@ func (h *HivedAlgorithm) allocatePreemptingAffinityGroup(g *AlgoAffinityGroup, p
 func (h *HivedAlgorithm) lazyPreemptAffinityGroup(
 	victim *AlgoAffinityGroup,
 	preemptor string) (originalVirtualPlacement groupVirtualPlacement) {
-	for _, podVirtualPlacements := range victim.virtualGpuPlacement {
+	for _, podVirtualPlacements := range victim.virtualDevicePlacement {
 		for _, podVirtualPlacement := range podVirtualPlacements {
-			for _, gpu := range podVirtualPlacement {
-				if gpu != nil {
-					vGpu := gpu.(*VirtualCell)
-					pGpu := vGpu.GetPhysicalCell()
-					h.releaseGpu(pGpu, victim.vc)
-					h.allocateGpu(pGpu, nil, opportunisticPriority, victim.vc)
+			for _, device := range podVirtualPlacement {
+				if device != nil {
+					vDevice := device.(*VirtualCell)
+					pDevice := vDevice.GetPhysicalCell()
+					h.releaseDevice(pDevice, victim.vc)
+					h.allocateDevice(pDevice, nil, opportunisticPriority, victim.vc)
 				}
 			}
 		}
 	}
-	originalVirtualPlacement = victim.virtualGpuPlacement
-	victim.virtualGpuPlacement = nil
+	originalVirtualPlacement = victim.virtualDevicePlacement
+	victim.virtualDevicePlacement = nil
 	victim.lazyPreemptionStatus = &api.LazyPreemptionStatus{
 		Preemptor:      preemptor,
 		PreemptionTime: meta.Now(),
@@ -1200,30 +1200,30 @@ func (h *HivedAlgorithm) lazyPreemptCell(c *VirtualCell, preemptor string) {
 
 // revertLazyPreempt reverts the lazy preemption of an affinity group.
 func (h *HivedAlgorithm) revertLazyPreempt(g *AlgoAffinityGroup, virtualPlacement groupVirtualPlacement) {
-	for skuNum := range g.physicalGpuPlacement {
-		for podIndex := range g.physicalGpuPlacement[skuNum] {
-			for gpuIndex, gpu := range g.physicalGpuPlacement[skuNum][podIndex] {
-				if gpu == nil {
+	for skuNum := range g.physicalDevicePlacement {
+		for podIndex := range g.physicalDevicePlacement[skuNum] {
+			for deviceIndex, device := range g.physicalDevicePlacement[skuNum][podIndex] {
+				if device == nil {
 					continue
 				}
-				pGpu := gpu.(*PhysicalCell)
-				vGpu := virtualPlacement[skuNum][podIndex][gpuIndex].(*VirtualCell)
-				h.releaseGpu(pGpu, g.vc)
-				h.allocateGpu(pGpu, vGpu, CellPriority(g.priority), g.vc)
+				pDevice := device.(*PhysicalCell)
+				vDevice := virtualPlacement[skuNum][podIndex][deviceIndex].(*VirtualCell)
+				h.releaseDevice(pDevice, g.vc)
+				h.allocateDevice(pDevice, vDevice, CellPriority(g.priority), g.vc)
 			}
 		}
 	}
-	g.virtualGpuPlacement = virtualPlacement
+	g.virtualDevicePlacement = virtualPlacement
 	g.lazyPreemptionStatus = nil
 	klog.Infof("Lazy preemption of affinity group %v is reverted", g.name)
 }
 
-// findAllocatedGpu finds the physical and virtual GPUs in the full cell lists for an allocate pod.
+// findAllocatedDevice finds the physical and virtual devices in the full cell lists for an allocate pod.
 // The boolean return value indicates whether the affinity group should be lazy-preempted.
 // The bool being nil means the group is OT and has no virtual placement.
-func (h *HivedAlgorithm) findAllocatedGpu(
+func (h *HivedAlgorithm) findAllocatedDevice(
 	index int32,
-	physicalGpuIndices []int32,
+	physicalDeviceIndices []int32,
 	preassignedCellTypes []api.CellType,
 	chain CellChain,
 	node string,
@@ -1233,24 +1233,24 @@ func (h *HivedAlgorithm) findAllocatedGpu(
 	pod *core.Pod) (*PhysicalCell, *VirtualCell, *bool) {
 
 	priority := CellPriority(s.Priority)
-	physicalGpuIndex := physicalGpuIndices[index]
-	if pGpu := findPhysicalGpu(h.fullCellList, chain, node, physicalGpuIndex); pGpu == nil {
+	physicalDeviceIndex := physicalDeviceIndices[index]
+	if pDevice := findPhysicalDevice(h.fullCellList, chain, node, physicalDeviceIndex); pDevice == nil {
 		klog.Warningf(
-			"[%v]: Cannot find GPU %v on node %v: not found in the spec. Pod ignored",
-			internal.Key(pod), physicalGpuIndex, node)
+			"[%v]: Cannot find device %v on node %v: not found in the spec. Pod ignored",
+			internal.Key(pod), physicalDeviceIndex, node)
 		return nil, nil, common.PtrBool(false)
 	} else {
-		var vGpu *VirtualCell
+		var vDevice *VirtualCell
 		if preassignedCellTypes == nil {
 			klog.Warningf("[%v]: Cannot find virtual cell: preassigned cell not found in pod bind info", internal.Key(pod))
-			return pGpu, nil, common.PtrBool(true)
+			return pDevice, nil, common.PtrBool(true)
 		}
-		if group.virtualGpuPlacement != nil && !lazyPreempted {
+		if group.virtualDevicePlacement != nil && !lazyPreempted {
 			preassignedType := preassignedCellTypes[index]
 			if preassignedType != "" {
 				var preassignedLevel CellLevel
 				typeFound := false
-				for l, t := range h.cellTypes[pGpu.GetChain()] {
+				for l, t := range h.cellTypes[pDevice.GetChain()] {
 					if t == preassignedType {
 						preassignedLevel = l
 						typeFound = true
@@ -1258,12 +1258,12 @@ func (h *HivedAlgorithm) findAllocatedGpu(
 				}
 				var message string
 				if !typeFound {
-					message = fmt.Sprintf("Preassigned cell type %v not found in chain %v", preassignedType, pGpu.GetChain())
+					message = fmt.Sprintf("Preassigned cell type %v not found in chain %v", preassignedType, pDevice.GetChain())
 				} else if vcs := h.vcSchedulers[s.VirtualCluster]; vcs == nil {
 					message = fmt.Sprintf("VC %v not found", s.VirtualCluster)
 				} else {
-					vccl := vcs.getNonPinnedPreassignedCells()[pGpu.GetChain()]
-					str := string(pGpu.GetChain())
+					vccl := vcs.getNonPinnedPreassignedCells()[pDevice.GetChain()]
+					str := string(pDevice.GetChain())
 					if s.PinnedCellId != "" {
 						vccl = vcs.getPinnedCells()[s.PinnedCellId]
 						str = string(s.PinnedCellId)
@@ -1271,84 +1271,84 @@ func (h *HivedAlgorithm) findAllocatedGpu(
 					if vccl == nil {
 						message = fmt.Sprintf("VC %v has no cell for %v", s.VirtualCluster, str)
 					} else {
-						vGpu, message = mapPhysicalCellToVirtual(pGpu, vccl, preassignedLevel, priority)
+						vDevice, message = mapPhysicalCellToVirtual(pDevice, vccl, preassignedLevel, priority)
 					}
 				}
-				if vGpu == nil {
+				if vDevice == nil {
 					klog.Warningf("[%v]: Cannot find virtual cell: %v", internal.Key(pod), message)
-					return pGpu, nil, common.PtrBool(true)
+					return pDevice, nil, common.PtrBool(true)
 				} else {
-					return pGpu, vGpu, common.PtrBool(false)
+					return pDevice, vDevice, common.PtrBool(false)
 				}
 			} else {
-				return pGpu, nil, nil
+				return pDevice, nil, nil
 			}
 		} else {
-			return pGpu, nil, common.PtrBool(false)
+			return pDevice, nil, common.PtrBool(false)
 		}
 	}
 }
 
-// allocateGpu creates the cell bindings, allocates the preassigned cell (if necessary),
+// allocateDevice creates the cell bindings, allocates the preassigned cell (if necessary),
 // and sets the priority.
-func (h *HivedAlgorithm) allocateGpu(
-	pGpu *PhysicalCell,
-	vGpu *VirtualCell,
+func (h *HivedAlgorithm) allocateDevice(
+	pDevice *PhysicalCell,
+	vDevice *VirtualCell,
 	p CellPriority,
 	vcn api.VirtualClusterName) (safetyOk bool, reason string) {
 
 	safetyOk = true
-	if vGpu != nil {
-		setCellPriority(vGpu, p)
-		updateUsedSkuNumAtPriority(vGpu, p, true)
-		setCellPriority(pGpu, p)
-		updateUsedSkuNumAtPriority(pGpu, p, true)
-		pac := vGpu.GetPreassignedCell()
+	if vDevice != nil {
+		setCellPriority(vDevice, p)
+		updateUsedSkuNumAtPriority(vDevice, p, true)
+		setCellPriority(pDevice, p)
+		updateUsedSkuNumAtPriority(pDevice, p, true)
+		pac := vDevice.GetPreassignedCell()
 		preassignedNewlyBound := pac.GetPhysicalCell() == nil
-		if pGpu.GetVirtualCell() == nil {
+		if pDevice.GetVirtualCell() == nil {
 			// the binding could have been created before (when the cell is bad)
-			bindCell(pGpu, vGpu)
+			bindCell(pDevice, vDevice)
 		}
 		if preassignedNewlyBound {
 			safetyOk, reason = h.allocatePreassignedCell(pac.GetPhysicalCell(), vcn, false)
 		}
 	} else {
-		setCellPriority(pGpu, opportunisticPriority)
-		updateUsedSkuNumAtPriority(pGpu, opportunisticPriority, true)
-		pGpu.GetAPIStatus().VC = vcn
+		setCellPriority(pDevice, opportunisticPriority)
+		updateUsedSkuNumAtPriority(pDevice, opportunisticPriority, true)
+		pDevice.GetAPIStatus().VC = vcn
 		h.apiClusterStatus.VirtualClusters[vcn] = append(
-			h.apiClusterStatus.VirtualClusters[vcn], generateOTVirtualCell(pGpu.GetAPIStatus()))
+			h.apiClusterStatus.VirtualClusters[vcn], generateOTVirtualCell(pDevice.GetAPIStatus()))
 	}
 	return safetyOk, reason
 }
 
-// releaseGpu destroys the cell bindings, release the preassigned cell (if necessary),
+// releaseDevice destroys the cell bindings, release the preassigned cell (if necessary),
 // and resets the priority.
-func (h *HivedAlgorithm) releaseGpu(pGpu *PhysicalCell, vcn api.VirtualClusterName) {
-	if vGpu := pGpu.GetVirtualCell(); vGpu != nil {
-		updateUsedSkuNumAtPriority(vGpu, vGpu.GetPriority(), false)
-		setCellPriority(vGpu, freePriority)
-		preassignedPhysical := vGpu.GetPreassignedCell().GetPhysicalCell()
-		if pGpu.IsHealthy() {
+func (h *HivedAlgorithm) releaseDevice(pDevice *PhysicalCell, vcn api.VirtualClusterName) {
+	if vDevice := pDevice.GetVirtualCell(); vDevice != nil {
+		updateUsedSkuNumAtPriority(vDevice, vDevice.GetPriority(), false)
+		setCellPriority(vDevice, freePriority)
+		preassignedPhysical := vDevice.GetPreassignedCell().GetPhysicalCell()
+		if pDevice.IsHealthy() {
 			// we won't unbind the cell if it is bad
-			unbindCell(pGpu)
+			unbindCell(pDevice)
 		}
 		// To check if we should release the preassigned cell, we cannot simply check if the
 		// virtual cell is already unbound. It's possible that the cell is bad, then the binding
 		// won't be destroyed automatically (the cell is still bound only because it is bad).
 		// If the below condition is true, then the preassigned cell is not in real use and we can hence release it.
-		if !preassignedPhysical.IsPinned() && vGpu.GetPreassignedCell().GetPriority() < minGuaranteedPriority &&
+		if !preassignedPhysical.IsPinned() && vDevice.GetPreassignedCell().GetPriority() < minGuaranteedPriority &&
 			!h.vcDoomedBadCells[vcn][preassignedPhysical.GetChain()].contains(
 				preassignedPhysical, preassignedPhysical.GetLevel()) {
 			h.releasePreassignedCell(preassignedPhysical, vcn, false)
 		}
 	} else {
-		pGpu.GetAPIStatus().VC = ""
+		pDevice.GetAPIStatus().VC = ""
 		h.apiClusterStatus.VirtualClusters[vcn] = deleteOTVirtualCell(
-			h.apiClusterStatus.VirtualClusters[vcn], pGpu.GetAddress())
+			h.apiClusterStatus.VirtualClusters[vcn], pDevice.GetAddress())
 	}
-	updateUsedSkuNumAtPriority(pGpu, pGpu.GetPriority(), false)
-	setCellPriority(pGpu, freePriority)
+	updateUsedSkuNumAtPriority(pDevice, pDevice.GetPriority(), false)
+	setCellPriority(pDevice, freePriority)
 }
 
 // allocatePreassignedCell allocates a physical cell to a preassigned virtual cell, removes the physical cell

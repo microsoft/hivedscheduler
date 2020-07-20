@@ -24,11 +24,12 @@ package api
 
 import (
 	"fmt"
-	"github.com/microsoft/hivedscheduler/pkg/common"
 	"io/ioutil"
+	"os"
+
+	"github.com/microsoft/hivedscheduler/pkg/common"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	"os"
 )
 
 type Config struct {
@@ -72,7 +73,7 @@ type Config struct {
 	WaitingPodSchedulingBlockMilliSec *int64 `yaml:"waitingPodSchedulingBlockMilliSec"`
 
 	// Specify the whole physical cluster
-	// TODO: Automatically construct it based on node info from GPU and Network Device Plugins
+	// TODO: Automatically construct it based on node info from Device and Network Device Plugins
 	PhysicalCluster *PhysicalClusterSpec `yaml:"physicalCluster"`
 
 	// Specify all the virtual clusters belongs to the physical cluster
@@ -148,7 +149,7 @@ func inferPhysicalCellSpec(
 		return
 	}
 	if ct.IsNodeLevel {
-		// reset default address to 0 when found a node level cell, leaf cell will use it as gpu indices
+		// reset default address to 0 when found a node level cell, leaf cell will use it as device indices
 		defaultAddress = 0
 	}
 	if ct.ChildCellNumber > 0 && len(spec.CellChildren) == 0 {

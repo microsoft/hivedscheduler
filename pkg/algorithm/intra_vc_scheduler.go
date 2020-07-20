@@ -32,7 +32,7 @@ import (
 
 // intraVCScheduler is an interface for scheduling pods inside a VC.
 // It stores two maps of ChainCellList, one for pinned cells, the other for non-pinned ones.
-// It should be able to return a set of GPU placements in the VC for a scheduling request.
+// It should be able to return a set of device placements in the VC for a scheduling request.
 type intraVCScheduler interface {
 	getNonPinnedFullCellList() map[CellChain]ChainCellList
 	getNonPinnedPreassignedCells() map[CellChain]ChainCellList

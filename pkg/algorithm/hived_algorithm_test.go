@@ -559,36 +559,36 @@ var casesForStatefulPreemption = []string{
 }
 
 type result struct {
-	node         string
-	gpuIsolation []int32
+	node            string
+	deviceIsolation []int32
 }
 
 var expectedBindInfos = map[string]result{
-	"pod1":  {node: "0.0.1.0", gpuIsolation: []int32{0}},
-	"pod2":  {node: "0.0.1.0", gpuIsolation: []int32{1}},
-	"pod3":  {node: "0.0.1.0", gpuIsolation: []int32{8, 9, 10, 11, 12, 13, 14, 15}},
-	"pod4":  {node: "0.0.5.0", gpuIsolation: []int32{0}},
-	"pod5":  {node: "0.0.3.0", gpuIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
-	"pod6":  {node: "0.0.3.1", gpuIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
-	"pod8":  {node: "1.0.0.0", gpuIsolation: []int32{1, 3, 4, 7, 0, 2, 6}},
-	"pod9":  {node: "1.0.0.2", gpuIsolation: []int32{0, 1, 2, 3, 4}},
-	"pod18": {node: "0.0.3.2", gpuIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
-	"pod19": {node: "0.0.3.3", gpuIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
-	"pod20": {node: "0.0.4.0", gpuIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
-	"pod21": {node: "0.0.4.1", gpuIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
-	"pod22": {node: "0.0.4.2", gpuIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
-	"pod23": {node: "0.0.4.3", gpuIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
-	"pod24": {node: "0.0.0.1", gpuIsolation: []int32{0, 1}},
-	"pod25": {node: "0.0.0.0", gpuIsolation: []int32{0, 1}},
-	"pod28": {node: "0.0.3.0", gpuIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
-	"pod34": {node: "0.0.3.0", gpuIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
-	"pod36": {node: "0.0.1.0", gpuIsolation: []int32{0}},
-	"pod37": {node: "0.0.3.0", gpuIsolation: []int32{0}},
-	"pod38": {node: "0.0.3.1", gpuIsolation: []int32{0}},
-	"pod39": {node: "0.0.3.2", gpuIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
-	"pod40": {node: "0.0.4.3", gpuIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
-	"pod44": {node: "0.0.3.2", gpuIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
-	"pod45": {node: "0.0.4.2", gpuIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
+	"pod1":  {node: "0.0.1.0", deviceIsolation: []int32{0}},
+	"pod2":  {node: "0.0.1.0", deviceIsolation: []int32{1}},
+	"pod3":  {node: "0.0.1.0", deviceIsolation: []int32{8, 9, 10, 11, 12, 13, 14, 15}},
+	"pod4":  {node: "0.0.5.0", deviceIsolation: []int32{0}},
+	"pod5":  {node: "0.0.3.0", deviceIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
+	"pod6":  {node: "0.0.3.1", deviceIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
+	"pod8":  {node: "1.0.0.0", deviceIsolation: []int32{1, 3, 4, 7, 0, 2, 6}},
+	"pod9":  {node: "1.0.0.2", deviceIsolation: []int32{0, 1, 2, 3, 4}},
+	"pod18": {node: "0.0.3.2", deviceIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
+	"pod19": {node: "0.0.3.3", deviceIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
+	"pod20": {node: "0.0.4.0", deviceIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
+	"pod21": {node: "0.0.4.1", deviceIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
+	"pod22": {node: "0.0.4.2", deviceIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
+	"pod23": {node: "0.0.4.3", deviceIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
+	"pod24": {node: "0.0.0.1", deviceIsolation: []int32{0, 1}},
+	"pod25": {node: "0.0.0.0", deviceIsolation: []int32{0, 1}},
+	"pod28": {node: "0.0.3.0", deviceIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
+	"pod34": {node: "0.0.3.0", deviceIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
+	"pod36": {node: "0.0.1.0", deviceIsolation: []int32{0}},
+	"pod37": {node: "0.0.3.0", deviceIsolation: []int32{0}},
+	"pod38": {node: "0.0.3.1", deviceIsolation: []int32{0}},
+	"pod39": {node: "0.0.3.2", deviceIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
+	"pod40": {node: "0.0.4.3", deviceIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
+	"pod44": {node: "0.0.3.2", deviceIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
+	"pod45": {node: "0.0.4.2", deviceIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
 }
 
 var expectedPreemptInfos = map[string]common.Set{
@@ -876,21 +876,21 @@ func testStatefulPreemption(t *testing.T, configFilePath string) {
 		}
 		if podName == "pod35" {
 			p := &groupPhysicalPlacement{}
-			*p = h.affinityGroups[pss[pod.UID].AffinityGroup.Name].physicalGpuPlacement
+			*p = h.affinityGroups[pss[pod.UID].AffinityGroup.Name].physicalDevicePlacement
 			h.DeleteUnallocatedPod(pod)
 			// test correctness of preemption cancellation
 			for _, podPlacements := range *p {
-				for _, podGpus := range podPlacements {
-					for _, gpu := range podGpus {
-						pGpu := gpu.(*PhysicalCell)
-						if pGpu.GetState() == cellUsed {
-							if int32(pGpu.GetPriority()) != pss["pod34"].Priority {
+				for _, podDevices := range podPlacements {
+					for _, device := range podDevices {
+						pDevice := device.(*PhysicalCell)
+						if pDevice.GetState() == cellUsed {
+							if int32(pDevice.GetPriority()) != pss["pod34"].Priority {
 								t.Errorf("Cell %v's priority should be pod34's priority, but is %v",
-									pGpu.GetAddress(), pGpu.GetPriority())
+									pDevice.GetAddress(), pDevice.GetPriority())
 							}
-						} else if pGpu.GetState() != cellFree {
+						} else if pDevice.GetState() != cellFree {
 							t.Errorf("Cell %v should be in Free state, but is %v",
-								pGpu.GetAddress(), pGpu.GetState())
+								pDevice.GetAddress(), pDevice.GetState())
 						}
 					}
 				}
@@ -1084,7 +1084,7 @@ func testReconfiguration(t *testing.T, configFilePath string) {
 	for _, podName := range casesThatShouldBeLazyPreempted {
 		pod := allPods[podName]
 		g := h.affinityGroups[pss[pod.UID].AffinityGroup.Name]
-		if g.virtualGpuPlacement != nil {
+		if g.virtualDevicePlacement != nil {
 			t.Errorf("Group %v is expected to be lazy preempted, but not", g.name)
 		}
 	}
@@ -1105,7 +1105,7 @@ func testInvalidInitialAssignment(t *testing.T, sConfig *api.Config) {
 	NewHivedAlgorithm(sConfig)
 }
 
-func compareGpuIsolation(a []int32, b []int32) bool {
+func compareDeviceIsolation(a []int32, b []int32) bool {
 	if len(a) == len(b) {
 		for i := 0; i < len(a); i++ {
 			if a[i] != b[i] {
@@ -1130,15 +1130,15 @@ func compareSchedulingResult(t *testing.T, pod *core.Pod, psr internal.PodSchedu
 	if expected, ok := expectedBindInfos[pod.Name]; !ok {
 		if psr.PodBindInfo != nil {
 			t.Errorf("[%v]: wrong pod scheduling result: expected empty, but got %v:%v",
-				internal.Key(pod), psr.PodBindInfo.Node, psr.PodBindInfo.GpuIsolation)
+				internal.Key(pod), psr.PodBindInfo.Node, psr.PodBindInfo.DeviceIsolation)
 		}
 		if !expectedPreemptInfos[pod.Name].IsEmpty() && !containsPods(psr.PodPreemptInfo.VictimPods, expectedPreemptInfos[pod.Name]) {
 			t.Errorf("[%v]: wrong preempt victims: expected %v, but got %v",
 				internal.Key(pod), expectedPreemptInfos[pod.Name], psr.PodPreemptInfo.VictimPods)
 		}
 	} else if psr.PodBindInfo.Node != expected.node ||
-		!compareGpuIsolation(psr.PodBindInfo.GpuIsolation, expected.gpuIsolation) {
+		!compareDeviceIsolation(psr.PodBindInfo.DeviceIsolation, expected.deviceIsolation) {
 		t.Errorf("[%v]: wrong pod bind info: expected %v:%v, but got %v:%v",
-			internal.Key(pod), expected.node, expected.gpuIsolation, psr.PodBindInfo.Node, psr.PodBindInfo.GpuIsolation)
+			internal.Key(pod), expected.node, expected.deviceIsolation, psr.PodBindInfo.Node, psr.PodBindInfo.DeviceIsolation)
 	}
 }

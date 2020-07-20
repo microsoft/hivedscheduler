@@ -141,8 +141,8 @@ type AlgoAffinityGroup struct {
 	totalPodNums            map[int32]int32       // SkuNum -> PodNum
 	allocatedPods           map[int32][]*core.Pod // SkuNum -> a list of allocated pods
 	preemptingPods          map[types.UID]*core.Pod
-	physicalGpuPlacement    groupPhysicalPlacement
-	virtualGpuPlacement     groupVirtualPlacement
+	physicalDevicePlacement groupPhysicalPlacement
+	virtualDevicePlacement  groupVirtualPlacement
 	state                   AffinityGroupState
 	lazyPreemptionStatus    *api.LazyPreemptionStatus
 }
@@ -159,26 +159,26 @@ func newAlgoAffinityGroup(
 		podNums[m.SkuNumber] += m.PodNumber
 	}
 	group := &AlgoAffinityGroup{
-		name:                 g.Name,
-		vc:                   vc,
-		lazyPreemptionEnable: lazyPreemptionEnable,
-		priority:             priority,
-		totalPodNums:         podNums,
-		allocatedPods:        map[int32][]*core.Pod{},
-		physicalGpuPlacement: groupPhysicalPlacement{},
-		virtualGpuPlacement:  groupVirtualPlacement{},
-		state:                state,
+		name:                    g.Name,
+		vc:                      vc,
+		lazyPreemptionEnable:    lazyPreemptionEnable,
+		priority:                priority,
+		totalPodNums:            podNums,
+		allocatedPods:           map[int32][]*core.Pod{},
+		physicalDevicePlacement: groupPhysicalPlacement{},
+		virtualDevicePlacement:  groupVirtualPlacement{},
+		state:                   state,
 	}
 	if state == groupPreempting {
 		group.preemptingPods = map[types.UID]*core.Pod{}
 	}
 	for skuNum, podNum := range podNums {
-		group.physicalGpuPlacement[skuNum] = make([]CellList, podNum)
-		group.virtualGpuPlacement[skuNum] = make([]CellList, podNum)
+		group.physicalDevicePlacement[skuNum] = make([]CellList, podNum)
+		group.virtualDevicePlacement[skuNum] = make([]CellList, podNum)
 		group.allocatedPods[skuNum] = make([]*core.Pod, podNum)
 		for i := int32(0); i < podNum; i++ {
-			group.physicalGpuPlacement[skuNum][i] = make(CellList, skuNum)
-			group.virtualGpuPlacement[skuNum][i] = make(CellList, skuNum)
+			group.physicalDevicePlacement[skuNum][i] = make(CellList, skuNum)
+			group.virtualDevicePlacement[skuNum][i] = make(CellList, skuNum)
 		}
 	}
 	return group
@@ -194,11 +194,11 @@ func (aag *AlgoAffinityGroup) ToAffinityGroup() api.AffinityGroup {
 			LazyPreemptionStatus: aag.lazyPreemptionStatus,
 		},
 	}
-	if aag.physicalGpuPlacement != nil {
-		ag.Status.PhysicalPlacement = aag.physicalGpuPlacement.nodeToGpuIndices()
+	if aag.physicalDevicePlacement != nil {
+		ag.Status.PhysicalPlacement = aag.physicalDevicePlacement.nodeToDeviceIndices()
 	}
-	if aag.virtualGpuPlacement != nil {
-		ag.Status.VirtualPlacement = aag.virtualGpuPlacement.preassignedCellToLeafCells()
+	if aag.virtualDevicePlacement != nil {
+		ag.Status.VirtualPlacement = aag.virtualDevicePlacement.preassignedCellToLeafCells()
 	}
 	for _, pods := range aag.allocatedPods {
 		for _, p := range pods {
@@ -213,28 +213,28 @@ func (aag *AlgoAffinityGroup) ToAffinityGroup() api.AffinityGroup {
 	return ag
 }
 
-type groupPhysicalPlacement map[int32][]CellList // SkuNum -> a list of pods -> a list of physical GPU cells of each pod
-type groupVirtualPlacement map[int32][]CellList  // SkuNum -> a list of pods -> a list of virtual GPU cells of each pod
+type groupPhysicalPlacement map[int32][]CellList // SkuNum -> a list of pods -> a list of physical device cells of each pod
+type groupVirtualPlacement map[int32][]CellList  // SkuNum -> a list of pods -> a list of virtual device cells of each pod
 
 func (p groupPhysicalPlacement) String() string {
-	return common.ToJson(p.nodeToGpuIndices())
+	return common.ToJson(p.nodeToDeviceIndices())
 }
 
-func (p groupPhysicalPlacement) nodeToGpuIndices() map[string][]int32 {
-	nodeToGpuIndices := map[string][]int32{}
+func (p groupPhysicalPlacement) nodeToDeviceIndices() map[string][]int32 {
+	nodeToDeviceIndices := map[string][]int32{}
 	for _, podPlacements := range p {
 		for _, podPlacement := range podPlacements {
-			for _, gpu := range podPlacement {
-				pGpu := gpu.(*PhysicalCell)
-				nodes, gpuIndices := pGpu.GetPhysicalPlacement()
-				if _, ok := nodeToGpuIndices[nodes[0]]; !ok {
-					nodeToGpuIndices[nodes[0]] = []int32{}
+			for _, device := range podPlacement {
+				pDevice := device.(*PhysicalCell)
+				nodes, deviceIndices := pDevice.GetPhysicalPlacement()
+				if _, ok := nodeToDeviceIndices[nodes[0]]; !ok {
+					nodeToDeviceIndices[nodes[0]] = []int32{}
 				}
-				nodeToGpuIndices[nodes[0]] = append(nodeToGpuIndices[nodes[0]], gpuIndices[0])
+				nodeToDeviceIndices[nodes[0]] = append(nodeToDeviceIndices[nodes[0]], deviceIndices[0])
 			}
 		}
 	}
-	return nodeToGpuIndices
+	return nodeToDeviceIndices
 }
 
 func (p groupVirtualPlacement) String() string {
@@ -245,10 +245,10 @@ func (p groupVirtualPlacement) preassignedCellToLeafCells() map[api.CellAddress]
 	preassignedCellToLeafCells := map[api.CellAddress][]api.CellAddress{}
 	for _, podPlacements := range p {
 		for _, podPlacement := range podPlacements {
-			for _, gpu := range podPlacement {
-				vGpu := gpu.(*VirtualCell)
-				address := vGpu.GetAddress()
-				preassignedAddress := vGpu.GetPreassignedCell().GetAddress()
+			for _, device := range podPlacement {
+				vDevice := device.(*VirtualCell)
+				address := vDevice.GetAddress()
+				preassignedAddress := vDevice.GetPreassignedCell().GetAddress()
 				if _, ok := preassignedCellToLeafCells[preassignedAddress]; !ok {
 					preassignedCellToLeafCells[preassignedAddress] = []api.CellAddress{}
 				}
@@ -270,9 +270,9 @@ func (p groupVirtualPlacement) toPhysicalPlacement(
 		physicalPlacement[podSkuNum] = make([]CellList, len(podPlacements))
 		for i, podPlacement := range podPlacements {
 			physicalPlacement[podSkuNum][i] = make(CellList, len(podPlacement))
-			for j, gpu := range podPlacement {
-				pGpu := bindings[gpu.GetAddress()]
-				physicalPlacement[podSkuNum][i][j] = pGpu
+			for j, device := range podPlacement {
+				pDevice := bindings[device.GetAddress()]
+				physicalPlacement[podSkuNum][i][j] = pDevice
 			}
 		}
 	}
@@ -292,13 +292,13 @@ func (p groupVirtualPlacement) toBindingPaths(
 	for _, podSkuNum := range skuNums {
 		podPlacements := p[podSkuNum]
 		for _, podPlacement := range podPlacements {
-			for _, gpu := range podPlacement {
-				if pGpu := gpu.(*VirtualCell).GetPhysicalCell(); pGpu != nil {
-					bindings[gpu.GetAddress()] = pGpu
+			for _, device := range podPlacement {
+				if pDevice := device.(*VirtualCell).GetPhysicalCell(); pDevice != nil {
+					bindings[device.GetAddress()] = pDevice
 					continue
 				}
 				var bindingPath []*VirtualCell
-				for c := gpu; c != nil; c = c.GetParent() {
+				for c := device; c != nil; c = c.GetParent() {
 					vc := c.(*VirtualCell)
 					if vc.GetPhysicalCell() != nil || allBindingPathVertices[vc.GetAddress()] != nil {
 						break

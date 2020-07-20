@@ -176,8 +176,8 @@ func NewBindingPod(pod *core.Pod, podBindInfo *si.PodBindInfo) *core.Pod {
 	if bindingPod.Annotations == nil {
 		bindingPod.Annotations = map[string]string{}
 	}
-	bindingPod.Annotations[si.AnnotationKeyPodGpuIsolation] =
-		common.ToIndicesString(podBindInfo.GpuIsolation)
+	bindingPod.Annotations[si.AnnotationKeyPodDeviceIsolation] =
+		common.ToIndicesString(podBindInfo.DeviceIsolation)
 	bindingPod.Annotations[si.AnnotationKeyPodBindInfo] =
 		common.ToYaml(podBindInfo)
 
@@ -201,8 +201,8 @@ func ExtractPodBindInfo(allocatedPod *core.Pod) *si.PodBindInfo {
 
 func ExtractPodBindAnnotations(allocatedPod *core.Pod) map[string]string {
 	return map[string]string{
-		si.AnnotationKeyPodGpuIsolation: allocatedPod.Annotations[si.AnnotationKeyPodGpuIsolation],
-		si.AnnotationKeyPodBindInfo:     allocatedPod.Annotations[si.AnnotationKeyPodBindInfo],
+		si.AnnotationKeyPodDeviceIsolation: allocatedPod.Annotations[si.AnnotationKeyPodDeviceIsolation],
+		si.AnnotationKeyPodBindInfo:        allocatedPod.Annotations[si.AnnotationKeyPodBindInfo],
 	}
 }
 
@@ -288,10 +288,10 @@ func BindPod(kClient kubeClient.Interface, bindingPod *core.Pod) {
 		panic(fmt.Errorf("Failed to bind Pod: %v", err))
 	}
 
-	klog.Infof("[%v]: Succeeded to bind Pod on node %v, gpus %v",
+	klog.Infof("[%v]: Succeeded to bind Pod on node %v, devices %v",
 		Key(bindingPod),
 		bindingPod.Spec.NodeName,
-		bindingPod.Annotations[si.AnnotationKeyPodGpuIsolation])
+		bindingPod.Annotations[si.AnnotationKeyPodDeviceIsolation])
 }
 
 func NewBadRequestError(message string) *si.WebServerError {

@@ -64,14 +64,14 @@ func generatePodScheduleResult(
 	}
 	// we find the selected node after the preemption is done, otherwise the preemption victims
 	// may cause the selected node to be excluded from the suggested nodes
-	affinityGroupBindInfo, selectedNode, selectedGpuIndices, cellChain := generateAffinityGroupBindInfo(
+	affinityGroupBindInfo, selectedNode, selectedDeviceIndices, cellChain := generateAffinityGroupBindInfo(
 		groupPhysicalPlacement, groupVirtualPlacement, cellLevelToType, currentSkuNum, currentPodIndex, group, groupName)
-	klog.Infof("[%v]: pod is decided to be scheduled to node %v, GPUs %v",
-		internal.Key(pod), selectedNode, common.ToJson(selectedGpuIndices))
+	klog.Infof("[%v]: pod is decided to be scheduled to node %v, devices %v",
+		internal.Key(pod), selectedNode, common.ToJson(selectedDeviceIndices))
 	return internal.PodScheduleResult{
 		PodBindInfo: &api.PodBindInfo{
 			Node:                  selectedNode,
-			GpuIsolation:          selectedGpuIndices,
+			DeviceIsolation:       selectedDeviceIndices,
 			CellChain:             cellChain,
 			AffinityGroupBindInfo: affinityGroupBindInfo,
 		},
@@ -103,7 +103,7 @@ func generatePodPreemptInfo(preemptionVictims map[string]common.Set, pod *core.P
 }
 
 // generateAffinityGroupBindInfo translates the physical and virtual placements of an affinity group
-// into a a series of AffinityGroupMemberBindInfos, and also returns the allocated node and GPU addresses
+// into a a series of AffinityGroupMemberBindInfos, and also returns the allocated node and device addresses
 // of the current pod.
 func generateAffinityGroupBindInfo(
 	groupPhysicalPlacement groupPhysicalPlacement,
@@ -115,7 +115,7 @@ func generateAffinityGroupBindInfo(
 	groupName string) (
 	affinityGroupBindInfo []api.AffinityGroupMemberBindInfo,
 	selectedNode string,
-	selectedGpuIndices []int32,
+	selectedDeviceIndices []int32,
 	chain string) {
 
 	affinityGroupBindInfo = make([]api.AffinityGroupMemberBindInfo, len(groupPhysicalPlacement))
@@ -125,11 +125,11 @@ func generateAffinityGroupBindInfo(
 			PodPlacements: make([]api.PodPlacementInfo, len(podPhysicalPlacements)),
 		}
 		for podIndex := int32(0); podIndex < int32(len(podPhysicalPlacements)); podIndex++ {
-			mbi.PodPlacements[podIndex].PhysicalGpuIndices = make([]int32, podSkuNum)
+			mbi.PodPlacements[podIndex].PhysicalDeviceIndices = make([]int32, podSkuNum)
 			mbi.PodPlacements[podIndex].PreassignedCellTypes = make([]api.CellType, podSkuNum)
-			for gpuIndex := int32(0); gpuIndex < podSkuNum; gpuIndex++ {
-				pGpu := podPhysicalPlacements[podIndex][gpuIndex]
-				if pGpu == nil {
+			for deviceIndex := int32(0); deviceIndex < podSkuNum; deviceIndex++ {
+				pDevice := podPhysicalPlacements[podIndex][deviceIndex]
+				if pDevice == nil {
 					if group == nil || group.state == groupPreempting {
 						panic(fmt.Sprintf("The first pod in group %v was allocated invalid resource", groupName))
 					}
@@ -137,37 +137,37 @@ func generateAffinityGroupBindInfo(
 					// we will insist the decision by retrieving it from other pods
 					mbi.PodPlacements[podIndex], chain = retrieveMissingPodPlacement(group, podSkuNum, podIndex)
 					klog.Warningf(
-						"pod placement has been invalid and is retrieved from annotation of other pods: node %v, GPU %v",
-						mbi.PodPlacements[podIndex].PhysicalNode, mbi.PodPlacements[podIndex].PhysicalGpuIndices[gpuIndex])
+						"pod placement has been invalid and is retrieved from annotation of other pods: node %v, device %v",
+						mbi.PodPlacements[podIndex].PhysicalNode, mbi.PodPlacements[podIndex].PhysicalDeviceIndices[deviceIndex])
 				} else {
-					nodes, gpuIndices := pGpu.(*PhysicalCell).GetPhysicalPlacement()
-					// here each cell (i.e., pGpu) is only one GPU, hence we takes the first element
-					// in its "nodes" and "gpuIndices" as the node and GPU address
+					nodes, deviceIndices := pDevice.(*PhysicalCell).GetPhysicalPlacement()
+					// here each cell (i.e., pDevice) is only one device, hence we takes the first element
+					// in its "nodes" and "deviceIndices" as the node and device address
 					if mbi.PodPlacements[podIndex].PhysicalNode == "" {
 						mbi.PodPlacements[podIndex].PhysicalNode = nodes[0]
 					}
-					mbi.PodPlacements[podIndex].PhysicalGpuIndices[gpuIndex] = gpuIndices[0]
+					mbi.PodPlacements[podIndex].PhysicalDeviceIndices[deviceIndex] = deviceIndices[0]
 					if groupVirtualPlacement != nil {
-						vGpu := groupVirtualPlacement[podSkuNum][podIndex][gpuIndex].(*VirtualCell)
-						mbi.PodPlacements[podIndex].PreassignedCellTypes[gpuIndex] =
-							cellLevelToType[vGpu.GetChain()][vGpu.GetPreassignedCell().GetLevel()]
+						vDevice := groupVirtualPlacement[podSkuNum][podIndex][deviceIndex].(*VirtualCell)
+						mbi.PodPlacements[podIndex].PreassignedCellTypes[deviceIndex] =
+							cellLevelToType[vDevice.GetChain()][vDevice.GetPreassignedCell().GetLevel()]
 					} else {
-						mbi.PodPlacements[podIndex].PreassignedCellTypes[gpuIndex] = ""
+						mbi.PodPlacements[podIndex].PreassignedCellTypes[deviceIndex] = ""
 					}
 				}
 			}
 		}
 		if podSkuNum == currentSkuNum {
 			selectedNode = mbi.PodPlacements[currentPodIndex].PhysicalNode
-			selectedGpuIndices = mbi.PodPlacements[currentPodIndex].PhysicalGpuIndices
-			if pGpu := groupPhysicalPlacement[currentSkuNum][currentPodIndex][0]; pGpu != nil {
-				chain = string(pGpu.GetChain())
+			selectedDeviceIndices = mbi.PodPlacements[currentPodIndex].PhysicalDeviceIndices
+			if pDevice := groupPhysicalPlacement[currentSkuNum][currentPodIndex][0]; pDevice != nil {
+				chain = string(pDevice.GetChain())
 			}
 		}
 		affinityGroupBindInfo[groupMemberIndex] = mbi
 		groupMemberIndex++
 	}
-	return affinityGroupBindInfo, selectedNode, selectedGpuIndices, chain
+	return affinityGroupBindInfo, selectedNode, selectedDeviceIndices, chain
 }
 
 // collectBadOrNonSuggestedNodes collects all the nodes that are not within the suggested nodes
@@ -181,12 +181,12 @@ func collectBadOrNonSuggestedNodes(
 	badOrNonSuggestedNodes = common.NewSet()
 	for skuNum := range placement {
 		for podIndex := range placement[skuNum] {
-			for _, gpu := range placement[skuNum][podIndex] {
-				if gpu == nil {
+			for _, device := range placement[skuNum][podIndex] {
+				if device == nil {
 					continue
 				}
-				nodes, _ := gpu.(*PhysicalCell).GetPhysicalPlacement()
-				if !gpu.(*PhysicalCell).IsHealthy() ||
+				nodes, _ := device.(*PhysicalCell).GetPhysicalPlacement()
+				if !device.(*PhysicalCell).IsHealthy() ||
 					(!ignoreSuggestedNodes && !suggestedNodes.Contains(nodes[0])) {
 					badOrNonSuggestedNodes.Add(nodes[0])
 				}
@@ -197,7 +197,7 @@ func collectBadOrNonSuggestedNodes(
 }
 
 // collectPreemptionVictims collects preemption victims of an affinity group.
-// If any of the GPUs allocated for the whole group is still used by a pod,
+// If any of the devices allocated for the whole group is still used by a pod,
 // we will wait for the preemption, as a group is gang-scheduled.
 func collectPreemptionVictims(placement groupPhysicalPlacement) (
 	victimPods map[string]common.Set, overlappingPreemptorGroups common.Set) {
@@ -206,15 +206,15 @@ func collectPreemptionVictims(placement groupPhysicalPlacement) (
 	overlappingPreemptorGroups = common.NewSet()
 	for skuNum := range placement {
 		for podIndex := range placement[skuNum] {
-			for _, gpu := range placement[skuNum][podIndex] {
-				if gpu == nil {
+			for _, device := range placement[skuNum][podIndex] {
+				if device == nil {
 					continue
 				}
-				pGpu := gpu.(*PhysicalCell)
-				state := pGpu.GetState()
+				pDevice := device.(*PhysicalCell)
+				state := pDevice.GetState()
 				if state == cellUsed || state == cellReserving {
 					// for any victim pod, gang-preempt all the other pods from the same affinity group
-					for _, pods := range pGpu.GetUsingGroup().allocatedPods {
+					for _, pods := range pDevice.GetUsingGroup().allocatedPods {
 						for _, v := range pods {
 							if v != nil {
 								if _, ok := victimPods[v.Spec.NodeName]; !ok {
@@ -226,7 +226,7 @@ func collectPreemptionVictims(placement groupPhysicalPlacement) (
 					}
 				}
 				if state == cellReserving || state == cellReserved {
-					overlappingPreemptorGroups.Add(pGpu.GetReservingOrReservedGroup())
+					overlappingPreemptorGroups.Add(pDevice.GetReservingOrReservedGroup())
 				}
 			}
 		}
@@ -253,7 +253,7 @@ func retrieveMissingPodPlacement(g *AlgoAffinityGroup, skuNum int32, podIndex in
 			if p != nil {
 				info := internal.ExtractPodBindInfo(p)
 				for _, mbi := range info.AffinityGroupBindInfo {
-					if skuNum == int32(len(mbi.PodPlacements[0].PhysicalGpuIndices)) {
+					if skuNum == int32(len(mbi.PodPlacements[0].PhysicalDeviceIndices)) {
 						return mbi.PodPlacements[podIndex], info.CellChain
 					}
 				}
@@ -268,13 +268,13 @@ func retrieveMissingPodPlacement(g *AlgoAffinityGroup, skuNum int32, podIndex in
 func retrieveVirtualCell(
 	physicalPlacement groupPhysicalPlacement,
 	virtualPlacement groupVirtualPlacement,
-	pGpu *PhysicalCell) (vGpu *VirtualCell) {
+	pDevice *PhysicalCell) (vDevice *VirtualCell) {
 
 	for skuNum := range physicalPlacement {
 		for podIndex := range physicalPlacement[skuNum] {
-			for gpuIndex, gpu := range physicalPlacement[skuNum][podIndex] {
-				if gpu != nil && CellEqual(gpu, pGpu) {
-					return virtualPlacement[skuNum][podIndex][gpuIndex].(*VirtualCell)
+			for deviceIndex, device := range physicalPlacement[skuNum][podIndex] {
+				if device != nil && CellEqual(device, pDevice) {
+					return virtualPlacement[skuNum][podIndex][deviceIndex].(*VirtualCell)
 				}
 			}
 		}
@@ -297,10 +297,10 @@ func getNewPodIndex(pods []*core.Pod) int32 {
 // getAllocatedPodIndex finds the index of an allocated pod in its group according to its placement.
 func getAllocatedPodIndex(info *api.PodBindInfo, skuNum int32) int32 {
 	for _, gms := range info.AffinityGroupBindInfo {
-		if skuNumber := int32(len(gms.PodPlacements[0].PhysicalGpuIndices)); skuNumber == skuNum {
+		if skuNumber := int32(len(gms.PodPlacements[0].PhysicalDeviceIndices)); skuNumber == skuNum {
 			for podIndex, placement := range gms.PodPlacements {
 				if placement.PhysicalNode == info.Node && common.Int32SliceContains(
-					placement.PhysicalGpuIndices, info.GpuIsolation[0]) {
+					placement.PhysicalDeviceIndices, info.DeviceIsolation[0]) {
 					return int32(podIndex)
 				}
 			}
@@ -321,19 +321,19 @@ func allPodsReleased(allocatedPods map[int32][]*core.Pod) bool {
 	return true
 }
 
-// findPhysicalGpu finds a physical GPU cell in the full list. If the GPU is not found in the chain specified
+// findPhysicalDevice finds a physical device cell in the full list. If the device is not found in the chain specified
 // in the PodBindInfo (due to reconfiguration), we will try to search in the other chains.
-func findPhysicalGpu(
+func findPhysicalDevice(
 	fullCellList map[CellChain]ChainCellList,
 	chain CellChain,
 	node string,
-	gpuIndex int32) *PhysicalCell {
+	deviceIndex int32) *PhysicalCell {
 
-	if g := findPhysicalGpuInChain(fullCellList, chain, node, gpuIndex); g == nil {
+	if g := findPhysicalDeviceInChain(fullCellList, chain, node, deviceIndex); g == nil {
 		for c := range fullCellList {
 			if c != chain {
-				if g = findPhysicalGpuInChain(fullCellList, c, node, gpuIndex); g != nil {
-					klog.Warningf("GPU %v on node %v has been moved to chain %v", gpuIndex, node, c)
+				if g = findPhysicalDeviceInChain(fullCellList, c, node, deviceIndex); g != nil {
+					klog.Warningf("Device %v on node %v has been moved to chain %v", deviceIndex, node, c)
 					return g
 				}
 			}
@@ -344,18 +344,18 @@ func findPhysicalGpu(
 	}
 }
 
-// findPhysicalGpuInChain finds a physical GPU cell in the full list of a given chain. This search is based on
-// *one* node and *one* GPU index, assuming there is no resource overlapping among cells at the same level.
-func findPhysicalGpuInChain(
+// findPhysicalDeviceInChain finds a physical device cell in the full list of a given chain. This search is based on
+// *one* node and *one* device index, assuming there is no resource overlapping among cells at the same level.
+func findPhysicalDeviceInChain(
 	fullCellList map[CellChain]ChainCellList,
 	chain CellChain,
 	node string,
-	gpuIndex int32) *PhysicalCell {
+	deviceIndex int32) *PhysicalCell {
 
 	for _, c := range fullCellList[chain][1] {
 		success := false
 		cc := c.(*PhysicalCell)
-		nodes, gpuIndices := cc.GetPhysicalPlacement()
+		nodes, deviceIndices := cc.GetPhysicalPlacement()
 		for _, n := range nodes {
 			if n == node {
 				success = true
@@ -363,11 +363,11 @@ func findPhysicalGpuInChain(
 			}
 		}
 		if success {
-			if gpuIndex < 0 {
+			if deviceIndex < 0 {
 				return cc
 			} else {
-				for _, g := range gpuIndices {
-					if g == gpuIndex {
+				for _, g := range deviceIndices {
+					if g == deviceIndex {
 						return cc
 					}
 				}
@@ -393,7 +393,7 @@ func inFreeCellList(c *PhysicalCell) bool {
 // setCellState sets state for a cell and its parent recursively. A parent cell will be in Used state
 // if any of its children is in Used state. For the other states (Free, Reserving, Reserved),
 // a parent will be in the state if all of this children are in the state.
-// setCellState always starts from the lowest level, i.e., GPU-level cells.
+// setCellState always starts from the lowest level, i.e., device-level cells.
 func setCellState(c *PhysicalCell, s CellState) {
 	c.SetState(s)
 	if c.GetParent() != nil {

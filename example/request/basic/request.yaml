@@ -91,7 +91,7 @@ spec:
               - name: NVIDIA_VISIBLE_DEVICES
                 valueFrom:
                   fieldRef:
-                    fieldPath: metadata.annotations['hivedscheduler.microsoft.com/pod-gpu-isolation']
+                    fieldPath: metadata.annotations['hivedscheduler.microsoft.com/pod-device-isolation']
 ---
 apiVersion: frameworkcontroller.microsoft.com/v1
 kind: Framework
@@ -138,7 +138,7 @@ spec:
               - name: NVIDIA_VISIBLE_DEVICES
                 valueFrom:
                   fieldRef:
-                    fieldPath: metadata.annotations['hivedscheduler.microsoft.com/pod-gpu-isolation']
+                    fieldPath: metadata.annotations['hivedscheduler.microsoft.com/pod-device-isolation']
 ---
 apiVersion: frameworkcontroller.microsoft.com/v1
 kind: Framework
@@ -185,7 +185,7 @@ spec:
               - name: NVIDIA_VISIBLE_DEVICES
                 valueFrom:
                   fieldRef:
-                    fieldPath: metadata.annotations['hivedscheduler.microsoft.com/pod-gpu-isolation']
+                    fieldPath: metadata.annotations['hivedscheduler.microsoft.com/pod-device-isolation']
 
 ---
 ################################################################################
@@ -220,7 +220,7 @@ spec:
     - name: NVIDIA_VISIBLE_DEVICES
       valueFrom:
         fieldRef:
-          fieldPath: metadata.annotations['hivedscheduler.microsoft.com/pod-gpu-isolation']
+          fieldPath: metadata.annotations['hivedscheduler.microsoft.com/pod-device-isolation']
 ---
 apiVersion: v1
 kind: Pod
@@ -251,7 +251,7 @@ spec:
     - name: NVIDIA_VISIBLE_DEVICES
       valueFrom:
         fieldRef:
-          fieldPath: metadata.annotations['hivedscheduler.microsoft.com/pod-gpu-isolation']
+          fieldPath: metadata.annotations['hivedscheduler.microsoft.com/pod-device-isolation']
 ---
 apiVersion: v1
 kind: Pod
@@ -282,4 +282,4 @@ spec:
     - name: NVIDIA_VISIBLE_DEVICES
       valueFrom:
         fieldRef:
-          fieldPath: metadata.annotations['hivedscheduler.microsoft.com/pod-gpu-isolation']
+          fieldPath: metadata.annotations['hivedscheduler.microsoft.com/pod-device-isolation']

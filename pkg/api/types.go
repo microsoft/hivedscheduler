@@ -99,9 +99,9 @@ type AffinityGroupMemberSpec struct {
 
 // Used to recover scheduler allocated resource
 type PodBindInfo struct {
-	Node                  string                        `yaml:"node"`         // node to bind
-	GpuIsolation          []int32                       `yaml:"gpuIsolation"` // GPUs to bind
-	CellChain             string                        `yaml:"cellChain"`    // cell chain selected
+	Node                  string                        `yaml:"node"`            // node to bind
+	DeviceIsolation       []int32                       `yaml:"deviceIsolation"` // devices to bind
+	CellChain             string                        `yaml:"cellChain"`       // cell chain selected
 	AffinityGroupBindInfo []AffinityGroupMemberBindInfo `yaml:"affinityGroupBindInfo"`
 }
 
@@ -110,8 +110,8 @@ type AffinityGroupMemberBindInfo struct {
 }
 
 type PodPlacementInfo struct {
-	PhysicalNode       string  `yaml:"physicalNode"`
-	PhysicalGpuIndices []int32 `yaml:"physicalGpuIndices"`
+	PhysicalNode          string  `yaml:"physicalNode"`
+	PhysicalDeviceIndices []int32 `yaml:"physicalDeviceIndices"`
 	// preassigned cell types used by the pods. used to locate the virtual cells
 	// when adding an allocated pod
 	PreassignedCellTypes []CellType `yaml:"preassignedCellTypes"`
@@ -157,7 +157,7 @@ type AffinityGroupStatus struct {
 	VC                   VirtualClusterName            `json:"vc"`
 	Priority             int32                         `json:"priority"`
 	State                AffinityGroupState            `json:"state"`
-	PhysicalPlacement    map[string][]int32            `json:"physicalPlacement,omitempty"` // node -> GPU indices
+	PhysicalPlacement    map[string][]int32            `json:"physicalPlacement,omitempty"` // node -> device indices
 	VirtualPlacement     map[CellAddress][]CellAddress `json:"virtualPlacement,omitempty"`  // preassigned cell -> leaf cells
 	AllocatedPods        []types.UID                   `json:"allocatedPods,omitempty"`
 	PreemptingPods       []types.UID                   `json:"preemptingPods,omitempty"`

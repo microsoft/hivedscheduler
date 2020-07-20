@@ -32,7 +32,7 @@ This is similar to [K8S Taints and Tolerations](https://kubernetes.io/docs/conce
 
 ## SKU Type
 ### Description
-If `skuType` is specified in the job, only that type of GPU will be allocated to the job, otherwise, any type of GPU can be allocated.
+If `skuType` is specified in the job, only that type of device will be allocated to the job, otherwise, any type of device can be allocated.
 
 This is similar to [K8S Labels and Selectors](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels), but with [VC Safety](#VC-Safety) guaranteed.
 
@@ -135,7 +135,7 @@ One VC's [Guaranteed Job](#Guaranteed-Job) can preempt other VCs' [Opportunistic
 
 ## Topology-Aware Intra-VC Scheduling
 ### Description
-Within one VC, HiveD chooses nearest GPUs for one `AffinityGroup` in best effort.
+Within one VC, HiveD chooses nearest devices for one `AffinityGroup` in best effort.
 
 ### Reproduce Steps
 1. Use [hived-config-2](file/hived-config-2.yaml).
@@ -147,7 +147,7 @@ Within one VC, HiveD chooses nearest GPUs for one `AffinityGroup` in best effort
 
 ## Work-Preserving Reconfiguration
 ### Description
-HiveD can be reconfigured without unnecessary user impacts, such as add/update/delete physical/virtual clusters, GPU types/topologies, etc.
+HiveD can be reconfigured without unnecessary user impacts, such as add/update/delete physical/virtual clusters, device types/topologies, etc.
 
 ### Reproduce Steps
 #### PhysicalCluster Reconfig - Delete PhysicalCell

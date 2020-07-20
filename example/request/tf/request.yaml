@@ -58,7 +58,7 @@ spec:
             - name: NVIDIA_VISIBLE_DEVICES
               valueFrom:
                 fieldRef:
-                  fieldPath: metadata.annotations['hivedscheduler.microsoft.com/pod-gpu-isolation']
+                  fieldPath: metadata.annotations['hivedscheduler.microsoft.com/pod-device-isolation']
             volumeMounts:
             - name: frameworkbarrier-volume
               mountPath: "/mnt/frameworkbarrier"
@@ -127,7 +127,7 @@ spec:
             - name: NVIDIA_VISIBLE_DEVICES
               valueFrom:
                 fieldRef:
-                  fieldPath: metadata.annotations['hivedscheduler.microsoft.com/pod-gpu-isolation']
+                  fieldPath: metadata.annotations['hivedscheduler.microsoft.com/pod-device-isolation']
             volumeMounts:
             - name: frameworkbarrier-volume
               mountPath: "/mnt/frameworkbarrier"

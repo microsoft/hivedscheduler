@@ -11,7 +11,7 @@ kubeApiServerAddress: http://10.10.10.10:8080
 #
 # Constrains:
 # 1. All cellTypes should form a forest, i.e. a disjoint union of trees.
-# 2. All physicalCells should contain at most one physical specific GPU.
+# 2. All physicalCells should contain at most one physical specific device.
 # 3. Each physicalCell should contain exactly one node level cellType.
 # 4. Each physicalCell should specify full hierarchies defined by its cellType.
 # 5. A pinnedCellId should can be universally locate one physicalCell.
@@ -24,7 +24,7 @@ kubeApiServerAddress: http://10.10.10.10:8080
 ################################################################################
 physicalCluster:
   # Define the cell structures.
-  # Each leaf cellType contains a single GPU and also defines a skuType of the
+  # Each leaf cellType contains a single device and also defines a skuType of the
   # same name.
   cellTypes:
     #######################################
@@ -35,8 +35,8 @@ physicalCluster:
       childCellType: CT1
       # Specify how many child cells it contains.
       childCellNumber: 2
-      # Specify whether it is a node level cellType, i.e. contains all GPUs of
-      # its corresponding skuType within one node and only contains these GPUs.
+      # Specify whether it is a node level cellType, i.e. contains all devices of
+      # its corresponding skuType within one node and only contains these devices.
       # Defaults to false.
       isNodeLevel: true
 
@@ -139,7 +139,7 @@ physicalCluster:
   # User can specify an address for each cell. User MUST specify the addresses
   # for node-level cells (i.e., K8s node names).
   # For levels lower than node, if a cell is not specified with an address,
-  # we will assign it a default address using its relative index in this node (e.g., GPU index).
+  # we will assign it a default address using its relative index in this node (e.g., device index).
   # For levels higher than node, the default address is the relative index among the cells
   # at the same level within the same top-level cell.
   # For a top-level cell, its default address is its index among all the top-level cells
@@ -150,14 +150,14 @@ physicalCluster:
   - cellType: CT1-NODE
     cellAddress: 0.0.0.1
   # One node has multiple sku types and
-  # non-standard gpu indices (by explicitly specifying cell addresses)
+  # non-standard device indices (by explicitly specifying cell addresses)
   - cellType: CT1-NODE
     cellAddress: 1.0.0.2  # NODE Name
     cellChildren:
     - cellAddress: 8  # GPU Index
       pinnedCellId: VC1-YQW-CT1
     - cellAddress: 9  # GPU Index
-  # One cell has non-standard gpu indices
+  # One cell has non-standard device indices
   - cellType: 3-DGX1-P100-NODE
     cellChildren:
     # cellAddress can be omitted for non-node level cellType, which defaults to

@@ -29,7 +29,7 @@ import (
 	"k8s.io/klog"
 )
 
-// A Cell represents a set of GPUs affinitized by their interconnection topology.
+// A Cell represents a set of devices affinitized by their interconnection topology.
 // Cells are organized as a tree through pointers to their parents / children.
 type Cell interface {
 	GetChain() CellChain
@@ -130,7 +130,7 @@ func (c *GenericCell) IncreaseUsedSkuNumAtPriority(p CellPriority, delta int32) 
 type PhysicalCell struct {
 	GenericCell
 	nodes                    []string           // node names inside the cell
-	gpuIndices               []int32            // [-1] for cells at levels higher than node
+	deviceIndices            []int32            // [-1] for cells at levels higher than node
 	usingGroup               *AlgoAffinityGroup // affinity group using this cell
 	reservingOrReservedGroup *AlgoAffinityGroup // affinity group that is reserving, or has reserved the cell (e.g., waiting for preemption)
 	virtualCell              *VirtualCell       // points to the bound virtual cell
@@ -204,16 +204,16 @@ func (c *PhysicalCell) SetState(s CellState) {
 }
 
 func (c *PhysicalCell) GetPhysicalPlacement() ([]string, []int32) {
-	return c.nodes, c.gpuIndices
+	return c.nodes, c.deviceIndices
 }
 
 func (c *PhysicalCell) GetPhysicalPlacementString() string {
-	return fmt.Sprintf("%v:%v", c.nodes, c.gpuIndices)
+	return fmt.Sprintf("%v:%v", c.nodes, c.deviceIndices)
 }
 
-func (c *PhysicalCell) SetPhysicalResources(nodes []string, gpuIndices []int32) {
+func (c *PhysicalCell) SetPhysicalResources(nodes []string, deviceIndices []int32) {
 	c.nodes = nodes
-	c.gpuIndices = gpuIndices
+	c.deviceIndices = deviceIndices
 }
 
 func (c *PhysicalCell) AddUsingGroup(g *AlgoAffinityGroup) {
