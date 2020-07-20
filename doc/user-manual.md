@@ -15,6 +15,7 @@
     1. It is like the [Azure VM Series](https://docs.microsoft.com/en-us/azure/virtual-machines/windows/sizes-gpu) or [GCP Machine Types](https://cloud.google.com/compute/docs/machine-types).
     2. Currently, the `skuTypes` is not directly used by HivedScheduler, but it is used by [OpenPAI RestServer](https://github.com/microsoft/pai/tree/master/src/rest-server) to setup proportional Pod resource requests and limits. So, if you are not using with [OpenPAI RestServer](https://github.com/microsoft/pai/tree/master/src/rest-server), you can skip to config it.
     3. It is previously known as `gpuTypes`, as HiveD is only aware of the abstract `cell` concept instead of the concrete hardware that the `cell` represents.
+    4. It includes suppoerting resources (e.g. memory) and one main device, for example, one CPU core for CPU jobs, a certain type of GPU (e.g. K80, V100) for GPU jobs, one device (e.g. TPU) for other AI accelerators.
 
     **Example:**
 

@@ -32,6 +32,9 @@ This is similar to [K8S Taints and Tolerations](https://kubernetes.io/docs/conce
 
 ## SKU Type
 ### Description
+`skuType` defines a group of resources including suppoerting resources (e.g. memory) and one main device,
+for example, one CPU core for CPU jobs, a certain type of GPU (e.g. K80, V100) for GPU jobs, one device (e.g. TPU) for other AI accelerators.
+
 If `skuType` is specified in the job, only that type of device will be allocated to the job, otherwise, any type of device can be allocated.
 
 This is similar to [K8S Labels and Selectors](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels), but with [VC Safety](#VC-Safety) guaranteed.
