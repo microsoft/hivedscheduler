@@ -134,12 +134,12 @@ physicalCluster:
       childCellNumber: 2
     # Etc...
 
-  # Instantiate physical cell by mapping physical leaf cells to the cell structure
+  # Instantiate physical cell by mapping physical devices to the cell structure
   # defined by cellType.
   # User can specify an address for each cell. User MUST specify the addresses
   # for node-level cells (i.e., K8s node names).
   # For levels lower than node, if a cell is not specified with an address,
-  # we will assign it a default address using its relative index in this node (e.g., leaf cell index).
+  # we will assign it a default address using its relative index in this node (e.g., GPU index).
   # For levels higher than node, the default address is the relative index among the cells
   # at the same level within the same top-level cell.
   # For a top-level cell, its default address is its index among all the top-level cells

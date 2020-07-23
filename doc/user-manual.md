@@ -75,7 +75,7 @@
 
     **Description:**
 
-    A `physicalCell` defines a **resource instance**, i.e. a `cellType` instantiated by a specific set of physical leaf cells.
+    A `physicalCell` defines a **resource instance**, i.e. a `cellType` instantiated by a specific set of physical devices.
 
     **Example:**
 

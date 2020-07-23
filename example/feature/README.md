@@ -32,7 +32,7 @@ This is similar to [K8S Taints and Tolerations](https://kubernetes.io/docs/conce
 
 ## SKU Type
 ### Description
-`skuType` is the leaf `cellType` which do not has internal topology anymore.
+`skuType` is the leaf `cellType` which does not have internal topology anymore.
 
 If `skuType` is specified in the job, only that type of leaf cell will be allocated to the job, otherwise, any type of leaf cell can be allocated.
 
