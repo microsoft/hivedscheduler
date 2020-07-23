@@ -45,7 +45,7 @@ type schedulingRequest struct {
 	pinnedCellId         api.PinnedCellId
 	chain                CellChain
 	affinityGroupName    string
-	affinityGroupPodNums map[int32]int32 // sku number -> pod number
+	affinityGroupPodNums map[int32]int32 // leaf cell number -> pod number
 	priority             CellPriority
 	suggestedNodes       common.Set
 	ignoreSuggestedNodes bool
@@ -136,15 +136,15 @@ type AlgoAffinityGroup struct {
 	lazyPreemptionEnable bool
 	// Whether we should ignore K8s suggested nodes. If false, we will avoid binding cells to non-suggested nodes.
 	// Note that we always avoid using bad nodes; avoiding non-suggested nodes is optional and best-effort.
-	ignoreK8sSuggestedNodes bool
-	priority                int32
-	totalPodNums            map[int32]int32       // SkuNum -> PodNum
-	allocatedPods           map[int32][]*core.Pod // SkuNum -> a list of allocated pods
-	preemptingPods          map[types.UID]*core.Pod
-	physicalDevicePlacement groupPhysicalPlacement
-	virtualDevicePlacement  groupVirtualPlacement
-	state                   AffinityGroupState
-	lazyPreemptionStatus    *api.LazyPreemptionStatus
+	ignoreK8sSuggestedNodes   bool
+	priority                  int32
+	totalPodNums              map[int32]int32       // LeafCellNum -> PodNum
+	allocatedPods             map[int32][]*core.Pod // LeafCellNum -> a list of allocated pods
+	preemptingPods            map[types.UID]*core.Pod
+	physicalLeafCellPlacement groupPhysicalPlacement
+	virtualLeafCellPlacement  groupVirtualPlacement
+	state                     AffinityGroupState
+	lazyPreemptionStatus      *api.LazyPreemptionStatus
 }
 
 func newAlgoAffinityGroup(
@@ -156,29 +156,29 @@ func newAlgoAffinityGroup(
 
 	podNums := make(map[int32]int32)
 	for _, m := range g.Members {
-		podNums[m.SkuNumber] += m.PodNumber
+		podNums[m.LeafCellNumber] += m.PodNumber
 	}
 	group := &AlgoAffinityGroup{
-		name:                    g.Name,
-		vc:                      vc,
-		lazyPreemptionEnable:    lazyPreemptionEnable,
-		priority:                priority,
-		totalPodNums:            podNums,
-		allocatedPods:           map[int32][]*core.Pod{},
-		physicalDevicePlacement: groupPhysicalPlacement{},
-		virtualDevicePlacement:  groupVirtualPlacement{},
-		state:                   state,
+		name:                      g.Name,
+		vc:                        vc,
+		lazyPreemptionEnable:      lazyPreemptionEnable,
+		priority:                  priority,
+		totalPodNums:              podNums,
+		allocatedPods:             map[int32][]*core.Pod{},
+		physicalLeafCellPlacement: groupPhysicalPlacement{},
+		virtualLeafCellPlacement:  groupVirtualPlacement{},
+		state:                     state,
 	}
 	if state == groupPreempting {
 		group.preemptingPods = map[types.UID]*core.Pod{}
 	}
-	for skuNum, podNum := range podNums {
-		group.physicalDevicePlacement[skuNum] = make([]CellList, podNum)
-		group.virtualDevicePlacement[skuNum] = make([]CellList, podNum)
-		group.allocatedPods[skuNum] = make([]*core.Pod, podNum)
+	for leafCellNum, podNum := range podNums {
+		group.physicalLeafCellPlacement[leafCellNum] = make([]CellList, podNum)
+		group.virtualLeafCellPlacement[leafCellNum] = make([]CellList, podNum)
+		group.allocatedPods[leafCellNum] = make([]*core.Pod, podNum)
 		for i := int32(0); i < podNum; i++ {
-			group.physicalDevicePlacement[skuNum][i] = make(CellList, skuNum)
-			group.virtualDevicePlacement[skuNum][i] = make(CellList, skuNum)
+			group.physicalLeafCellPlacement[leafCellNum][i] = make(CellList, leafCellNum)
+			group.virtualLeafCellPlacement[leafCellNum][i] = make(CellList, leafCellNum)
 		}
 	}
 	return group
@@ -194,11 +194,11 @@ func (aag *AlgoAffinityGroup) ToAffinityGroup() api.AffinityGroup {
 			LazyPreemptionStatus: aag.lazyPreemptionStatus,
 		},
 	}
-	if aag.physicalDevicePlacement != nil {
-		ag.Status.PhysicalPlacement = aag.physicalDevicePlacement.nodeToDeviceIndices()
+	if aag.physicalLeafCellPlacement != nil {
+		ag.Status.PhysicalPlacement = aag.physicalLeafCellPlacement.nodeToLeafCellIndices()
 	}
-	if aag.virtualDevicePlacement != nil {
-		ag.Status.VirtualPlacement = aag.virtualDevicePlacement.preassignedCellToLeafCells()
+	if aag.virtualLeafCellPlacement != nil {
+		ag.Status.VirtualPlacement = aag.virtualLeafCellPlacement.preassignedCellToLeafCells()
 	}
 	for _, pods := range aag.allocatedPods {
 		for _, p := range pods {
@@ -213,28 +213,28 @@ func (aag *AlgoAffinityGroup) ToAffinityGroup() api.AffinityGroup {
 	return ag
 }
 
-type groupPhysicalPlacement map[int32][]CellList // SkuNum -> a list of pods -> a list of physical device cells of each pod
-type groupVirtualPlacement map[int32][]CellList  // SkuNum -> a list of pods -> a list of virtual device cells of each pod
+type groupPhysicalPlacement map[int32][]CellList // LeafCellNum -> a list of pods -> a list of physical leaf cells of each pod
+type groupVirtualPlacement map[int32][]CellList  // LeafCellNum -> a list of pods -> a list of virtual leaf cells of each pod
 
 func (p groupPhysicalPlacement) String() string {
-	return common.ToJson(p.nodeToDeviceIndices())
+	return common.ToJson(p.nodeToLeafCellIndices())
 }
 
-func (p groupPhysicalPlacement) nodeToDeviceIndices() map[string][]int32 {
-	nodeToDeviceIndices := map[string][]int32{}
+func (p groupPhysicalPlacement) nodeToLeafCellIndices() map[string][]int32 {
+	nodeToLeafCellIndices := map[string][]int32{}
 	for _, podPlacements := range p {
 		for _, podPlacement := range podPlacements {
-			for _, device := range podPlacement {
-				pDevice := device.(*PhysicalCell)
-				nodes, deviceIndices := pDevice.GetPhysicalPlacement()
-				if _, ok := nodeToDeviceIndices[nodes[0]]; !ok {
-					nodeToDeviceIndices[nodes[0]] = []int32{}
+			for _, leafCell := range podPlacement {
+				pLeafCell := leafCell.(*PhysicalCell)
+				nodes, leafCellIndices := pLeafCell.GetPhysicalPlacement()
+				if _, ok := nodeToLeafCellIndices[nodes[0]]; !ok {
+					nodeToLeafCellIndices[nodes[0]] = []int32{}
 				}
-				nodeToDeviceIndices[nodes[0]] = append(nodeToDeviceIndices[nodes[0]], deviceIndices[0])
+				nodeToLeafCellIndices[nodes[0]] = append(nodeToLeafCellIndices[nodes[0]], leafCellIndices[0])
 			}
 		}
 	}
-	return nodeToDeviceIndices
+	return nodeToLeafCellIndices
 }
 
 func (p groupVirtualPlacement) String() string {
@@ -245,10 +245,10 @@ func (p groupVirtualPlacement) preassignedCellToLeafCells() map[api.CellAddress]
 	preassignedCellToLeafCells := map[api.CellAddress][]api.CellAddress{}
 	for _, podPlacements := range p {
 		for _, podPlacement := range podPlacements {
-			for _, device := range podPlacement {
-				vDevice := device.(*VirtualCell)
-				address := vDevice.GetAddress()
-				preassignedAddress := vDevice.GetPreassignedCell().GetAddress()
+			for _, leafCell := range podPlacement {
+				vLeafCell := leafCell.(*VirtualCell)
+				address := vLeafCell.GetAddress()
+				preassignedAddress := vLeafCell.GetPreassignedCell().GetAddress()
 				if _, ok := preassignedCellToLeafCells[preassignedAddress]; !ok {
 					preassignedCellToLeafCells[preassignedAddress] = []api.CellAddress{}
 				}
@@ -262,17 +262,17 @@ func (p groupVirtualPlacement) preassignedCellToLeafCells() map[api.CellAddress]
 
 func (p groupVirtualPlacement) toPhysicalPlacement(
 	bindings map[api.CellAddress]*PhysicalCell,
-	skuNums []int32) groupPhysicalPlacement {
+	leafCellNums []int32) groupPhysicalPlacement {
 
 	physicalPlacement := groupPhysicalPlacement{}
-	for _, podSkuNum := range skuNums {
-		podPlacements := p[podSkuNum]
-		physicalPlacement[podSkuNum] = make([]CellList, len(podPlacements))
+	for _, podLeafCellNum := range leafCellNums {
+		podPlacements := p[podLeafCellNum]
+		physicalPlacement[podLeafCellNum] = make([]CellList, len(podPlacements))
 		for i, podPlacement := range podPlacements {
-			physicalPlacement[podSkuNum][i] = make(CellList, len(podPlacement))
-			for j, device := range podPlacement {
-				pDevice := bindings[device.GetAddress()]
-				physicalPlacement[podSkuNum][i][j] = pDevice
+			physicalPlacement[podLeafCellNum][i] = make(CellList, len(podPlacement))
+			for j, leafCell := range podPlacement {
+				pLeafCell := bindings[leafCell.GetAddress()]
+				physicalPlacement[podLeafCellNum][i][j] = pLeafCell
 			}
 		}
 	}
@@ -283,22 +283,22 @@ func (p groupVirtualPlacement) toPhysicalPlacement(
 // lowest-level cells in a physical placement. It is generated by collecting all the unbound
 // ancestors for these cells and group them in a tree.
 func (p groupVirtualPlacement) toBindingPaths(
-	skuNums []int32,
+	leafCellNums []int32,
 	bindings map[api.CellAddress]*PhysicalCell) (
 	preassignedCells []*cellBindingPathVertex,
 	nonPreassignedCells [][]*cellBindingPathVertex) {
 
 	allBindingPathVertices := map[api.CellAddress]*cellBindingPathVertex{}
-	for _, podSkuNum := range skuNums {
-		podPlacements := p[podSkuNum]
+	for _, podLeafCellNum := range leafCellNums {
+		podPlacements := p[podLeafCellNum]
 		for _, podPlacement := range podPlacements {
-			for _, device := range podPlacement {
-				if pDevice := device.(*VirtualCell).GetPhysicalCell(); pDevice != nil {
-					bindings[device.GetAddress()] = pDevice
+			for _, leafCell := range podPlacement {
+				if pLeafCell := leafCell.(*VirtualCell).GetPhysicalCell(); pLeafCell != nil {
+					bindings[leafCell.GetAddress()] = pLeafCell
 					continue
 				}
 				var bindingPath []*VirtualCell
-				for c := device; c != nil; c = c.GetParent() {
+				for c := leafCell; c != nil; c = c.GetParent() {
 					vc := c.(*VirtualCell)
 					if vc.GetPhysicalCell() != nil || allBindingPathVertices[vc.GetAddress()] != nil {
 						break

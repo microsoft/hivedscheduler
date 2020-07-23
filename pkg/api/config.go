@@ -149,7 +149,7 @@ func inferPhysicalCellSpec(
 		return
 	}
 	if ct.IsNodeLevel {
-		// reset default address to 0 when found a node level cell, leaf cell will use it as device indices
+		// reset default address to 0 when found a node level cell, leaf cell will use it as indices
 		defaultAddress = 0
 	}
 	if ct.ChildCellNumber > 0 && len(spec.CellChildren) == 0 {

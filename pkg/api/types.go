@@ -79,8 +79,8 @@ type PodSchedulingSpec struct {
 	VirtualCluster          VirtualClusterName `yaml:"virtualCluster"`
 	Priority                int32              `yaml:"priority"`
 	PinnedCellId            PinnedCellId       `yaml:"pinnedCellId"`
-	SkuType                 string             `yaml:"skuType"`
-	SkuNumber               int32              `yaml:"skuNumber"`
+	LeafCellType            string             `yaml:"leafCellType"`
+	LeafCellNumber          int32              `yaml:"leafCellNumber"`
 	GangReleaseEnable       bool               `yaml:"gangReleaseEnable"`
 	LazyPreemptionEnable    bool               `yaml:"lazyPreemptionEnable"`
 	IgnoreK8sSuggestedNodes bool               `yaml:"ignoreK8sSuggestedNodes"`
@@ -93,15 +93,15 @@ type AffinityGroupSpec struct {
 }
 
 type AffinityGroupMemberSpec struct {
-	PodNumber int32 `yaml:"podNumber"`
-	SkuNumber int32 `yaml:"skuNumber"`
+	PodNumber      int32 `yaml:"podNumber"`
+	LeafCellNumber int32 `yaml:"leafCellNumber"`
 }
 
 // Used to recover scheduler allocated resource
 type PodBindInfo struct {
-	Node                  string                        `yaml:"node"`            // node to bind
-	DeviceIsolation       []int32                       `yaml:"deviceIsolation"` // devices to bind
-	CellChain             string                        `yaml:"cellChain"`       // cell chain selected
+	Node                  string                        `yaml:"node"`              // node to bind
+	LeafCellIsolation     []int32                       `yaml:"leafCellIsolation"` // leaf cells to bind
+	CellChain             string                        `yaml:"cellChain"`         // cell chain selected
 	AffinityGroupBindInfo []AffinityGroupMemberBindInfo `yaml:"affinityGroupBindInfo"`
 }
 
@@ -110,8 +110,8 @@ type AffinityGroupMemberBindInfo struct {
 }
 
 type PodPlacementInfo struct {
-	PhysicalNode          string  `yaml:"physicalNode"`
-	PhysicalDeviceIndices []int32 `yaml:"physicalDeviceIndices"`
+	PhysicalNode            string  `yaml:"physicalNode"`
+	PhysicalLeafCellIndices []int32 `yaml:"physicalLeafCellIndices"`
 	// preassigned cell types used by the pods. used to locate the virtual cells
 	// when adding an allocated pod
 	PreassignedCellTypes []CellType `yaml:"preassignedCellTypes"`
@@ -157,7 +157,7 @@ type AffinityGroupStatus struct {
 	VC                   VirtualClusterName            `json:"vc"`
 	Priority             int32                         `json:"priority"`
 	State                AffinityGroupState            `json:"state"`
-	PhysicalPlacement    map[string][]int32            `json:"physicalPlacement,omitempty"` // node -> device indices
+	PhysicalPlacement    map[string][]int32            `json:"physicalPlacement,omitempty"` // node -> leaf cell indices
 	VirtualPlacement     map[CellAddress][]CellAddress `json:"virtualPlacement,omitempty"`  // preassigned cell -> leaf cells
 	AllocatedPods        []types.UID                   `json:"allocatedPods,omitempty"`
 	PreemptingPods       []types.UID                   `json:"preemptingPods,omitempty"`
@@ -182,9 +182,9 @@ const (
 )
 
 type CellStatus struct {
-	SkuType     string   `json:"skuType,omitempty"`
-	CellType    CellType `json:"cellType"`
-	IsNodeLevel bool     `json:"isNodeLevel,omitempty"`
+	LeafCellType string   `json:"leafCellType,omitempty"`
+	CellType     CellType `json:"cellType"`
+	IsNodeLevel  bool     `json:"isNodeLevel,omitempty"`
 	// Address of a physical cell consists of its address (or index) in each level
 	// (e.g., node0/0/0/0 may represent node0, CPU socket 0, PCIe switch 0, GPU 0.
 	// Address of a virtual cell consists of its VC name, index of the preassigned cell,

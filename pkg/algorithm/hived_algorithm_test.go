@@ -67,106 +67,106 @@ var group1, group2, group3, group4, group5, group6, group7, group8, group9, grou
 	group15, group16, group17, group18, group19, group20, group21, group22, group23, group24, group25, group26, group27,
 	group28, group29, group30, group31, group32, group33, group34 = &api.AffinityGroupSpec{
 	Name:    "group1",
-	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, SkuNumber: 1}},
+	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, LeafCellNumber: 1}},
 }, &api.AffinityGroupSpec{
 	Name:    "group2",
-	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, SkuNumber: 1}},
+	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, LeafCellNumber: 1}},
 }, &api.AffinityGroupSpec{
 	Name:    "group3",
-	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, SkuNumber: 8}},
+	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, LeafCellNumber: 8}},
 }, &api.AffinityGroupSpec{
 	Name:    "group4",
-	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, SkuNumber: 1}},
+	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, LeafCellNumber: 1}},
 }, &api.AffinityGroupSpec{
 	Name:    "group5",
-	Members: []api.AffinityGroupMemberSpec{{PodNumber: 2, SkuNumber: 16}},
+	Members: []api.AffinityGroupMemberSpec{{PodNumber: 2, LeafCellNumber: 16}},
 }, &api.AffinityGroupSpec{
 	Name:    "group6",
-	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, SkuNumber: 1}},
+	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, LeafCellNumber: 1}},
 }, &api.AffinityGroupSpec{
 	Name:    "group7",
-	Members: []api.AffinityGroupMemberSpec{{PodNumber: 3, SkuNumber: 8}},
+	Members: []api.AffinityGroupMemberSpec{{PodNumber: 3, LeafCellNumber: 8}},
 }, &api.AffinityGroupSpec{
 	Name:    "group8",
-	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, SkuNumber: 8}},
+	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, LeafCellNumber: 8}},
 }, &api.AffinityGroupSpec{
 	Name:    "group9",
-	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, SkuNumber: 7}, {PodNumber: 1, SkuNumber: 5}},
+	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, LeafCellNumber: 7}, {PodNumber: 1, LeafCellNumber: 5}},
 }, &api.AffinityGroupSpec{
 	Name:    "group10",
-	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, SkuNumber: 1}},
+	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, LeafCellNumber: 1}},
 }, &api.AffinityGroupSpec{
 	Name:    "group11",
-	Members: []api.AffinityGroupMemberSpec{{PodNumber: 2, SkuNumber: 16}},
+	Members: []api.AffinityGroupMemberSpec{{PodNumber: 2, LeafCellNumber: 16}},
 }, &api.AffinityGroupSpec{
 	Name:    "group12",
-	Members: []api.AffinityGroupMemberSpec{{PodNumber: 2, SkuNumber: 16}},
+	Members: []api.AffinityGroupMemberSpec{{PodNumber: 2, LeafCellNumber: 16}},
 }, &api.AffinityGroupSpec{
 	Name:    "group13",
-	Members: []api.AffinityGroupMemberSpec{{PodNumber: 2, SkuNumber: 16}},
+	Members: []api.AffinityGroupMemberSpec{{PodNumber: 2, LeafCellNumber: 16}},
 }, &api.AffinityGroupSpec{
 	Name:    "group14",
-	Members: []api.AffinityGroupMemberSpec{{PodNumber: 2, SkuNumber: 16}},
+	Members: []api.AffinityGroupMemberSpec{{PodNumber: 2, LeafCellNumber: 16}},
 }, &api.AffinityGroupSpec{
 	Name:    "group15",
-	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, SkuNumber: 2}},
+	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, LeafCellNumber: 2}},
 }, &api.AffinityGroupSpec{
 	Name:    "group16",
-	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, SkuNumber: 2}},
+	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, LeafCellNumber: 2}},
 }, &api.AffinityGroupSpec{
 	Name:    "group17",
-	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, SkuNumber: 2}},
+	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, LeafCellNumber: 2}},
 }, &api.AffinityGroupSpec{
 	Name:    "group18",
-	Members: []api.AffinityGroupMemberSpec{{PodNumber: 2, SkuNumber: 16}},
+	Members: []api.AffinityGroupMemberSpec{{PodNumber: 2, LeafCellNumber: 16}},
 }, &api.AffinityGroupSpec{
 	Name:    "group19",
-	Members: []api.AffinityGroupMemberSpec{{PodNumber: 2, SkuNumber: 16}},
+	Members: []api.AffinityGroupMemberSpec{{PodNumber: 2, LeafCellNumber: 16}},
 }, &api.AffinityGroupSpec{
 	Name:    "group20",
-	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, SkuNumber: 16}},
+	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, LeafCellNumber: 16}},
 }, &api.AffinityGroupSpec{
 	Name:    "group21",
-	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, SkuNumber: 16}},
+	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, LeafCellNumber: 16}},
 }, &api.AffinityGroupSpec{
 	Name:    "group22",
-	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, SkuNumber: 16}},
+	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, LeafCellNumber: 16}},
 }, &api.AffinityGroupSpec{
 	Name:    "group23",
-	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, SkuNumber: 16}},
+	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, LeafCellNumber: 16}},
 }, &api.AffinityGroupSpec{
 	Name:    "group24",
-	Members: []api.AffinityGroupMemberSpec{{PodNumber: 2, SkuNumber: 16}},
+	Members: []api.AffinityGroupMemberSpec{{PodNumber: 2, LeafCellNumber: 16}},
 }, &api.AffinityGroupSpec{
 	Name:    "group25",
-	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, SkuNumber: 16}},
+	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, LeafCellNumber: 16}},
 }, &api.AffinityGroupSpec{
 	Name:    "group26",
-	Members: []api.AffinityGroupMemberSpec{{PodNumber: 2, SkuNumber: 16}},
+	Members: []api.AffinityGroupMemberSpec{{PodNumber: 2, LeafCellNumber: 16}},
 }, &api.AffinityGroupSpec{
 	Name:    "group27",
-	Members: []api.AffinityGroupMemberSpec{{PodNumber: 2, SkuNumber: 16}},
+	Members: []api.AffinityGroupMemberSpec{{PodNumber: 2, LeafCellNumber: 16}},
 }, &api.AffinityGroupSpec{
 	Name:    "group28",
-	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, SkuNumber: 16}},
+	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, LeafCellNumber: 16}},
 }, &api.AffinityGroupSpec{
 	Name:    "group29",
-	Members: []api.AffinityGroupMemberSpec{{PodNumber: 4, SkuNumber: 16}},
+	Members: []api.AffinityGroupMemberSpec{{PodNumber: 4, LeafCellNumber: 16}},
 }, &api.AffinityGroupSpec{
 	Name:    "group30",
-	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, SkuNumber: 16}},
+	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, LeafCellNumber: 16}},
 }, &api.AffinityGroupSpec{
 	Name:    "group31",
-	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, SkuNumber: 16}},
+	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, LeafCellNumber: 16}},
 }, &api.AffinityGroupSpec{
 	Name:    "group32",
-	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, SkuNumber: 16}},
+	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, LeafCellNumber: 16}},
 }, &api.AffinityGroupSpec{
 	Name:    "group33",
-	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, SkuNumber: 16}},
+	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, LeafCellNumber: 16}},
 }, &api.AffinityGroupSpec{
 	Name:    "group34",
-	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, SkuNumber: 16}},
+	Members: []api.AffinityGroupMemberSpec{{PodNumber: 1, LeafCellNumber: 16}},
 }
 
 var pss = map[types.UID]api.PodSchedulingSpec{
@@ -175,368 +175,368 @@ var pss = map[types.UID]api.PodSchedulingSpec{
 		Priority:             0,
 		LazyPreemptionEnable: true,
 		PinnedCellId:         "",
-		SkuType:              "DGX2-V100",
-		SkuNumber:            1,
+		LeafCellType:         "DGX2-V100",
+		LeafCellNumber:       1,
 		AffinityGroup:        group1,
 	}, "pod2": { // buddy of pod1
 		VirtualCluster:       "VC1",
 		Priority:             1,
 		LazyPreemptionEnable: true,
 		PinnedCellId:         "",
-		SkuType:              "DGX2-V100",
-		SkuNumber:            1,
+		LeafCellType:         "DGX2-V100",
+		LeafCellNumber:       1,
 		AffinityGroup:        group2,
 	}, "pod3": { // non-buddy of pod 1 & 2 (avoidance of preemption)
 		VirtualCluster:       "VC1",
 		Priority:             2,
 		LazyPreemptionEnable: true,
 		PinnedCellId:         "",
-		SkuType:              "DGX2-V100",
-		SkuNumber:            8,
+		LeafCellType:         "DGX2-V100",
+		LeafCellNumber:       8,
 		AffinityGroup:        group3,
 	}, "pod4": { // opportunistic pod (will stay away from the guaranteed pods)
 		VirtualCluster:       "VC1",
 		Priority:             -1,
 		LazyPreemptionEnable: true,
 		PinnedCellId:         "",
-		SkuType:              "DGX2-V100",
-		SkuNumber:            1,
+		LeafCellType:         "DGX2-V100",
+		LeafCellNumber:       1,
 		AffinityGroup:        group4,
 	}, "pod5": { // use pinned cell
 		VirtualCluster:       "VC1",
 		Priority:             1,
 		LazyPreemptionEnable: true,
 		PinnedCellId:         "VC1-YQW-DGX2",
-		SkuType:              "DGX2-V100",
-		SkuNumber:            16,
+		LeafCellType:         "DGX2-V100",
+		LeafCellNumber:       16,
 		AffinityGroup:        group5,
 	}, "pod6": { // use pinned cell
 		VirtualCluster:       "VC1",
 		Priority:             1,
 		LazyPreemptionEnable: true,
 		PinnedCellId:         "VC1-YQW-DGX2",
-		SkuType:              "DGX2-V100",
-		SkuNumber:            16,
+		LeafCellType:         "DGX2-V100",
+		LeafCellNumber:       16,
 		AffinityGroup:        group5,
 	}, "pod7": { // insufficient VC cells; should return PodWaitInfo
 		VirtualCluster:       "VC2",
 		Priority:             1,
 		LazyPreemptionEnable: true,
 		PinnedCellId:         "",
-		SkuType:              "DGX1-P100",
-		SkuNumber:            8,
+		LeafCellType:         "DGX1-P100",
+		LeafCellNumber:       8,
 		AffinityGroup:        group7,
-	}, "pod8": { // any SKU type; heterogeneous affinity group
+	}, "pod8": { // any leaf cell type; heterogeneous affinity group
 		VirtualCluster:       "VC2",
 		Priority:             1,
 		LazyPreemptionEnable: true,
 		PinnedCellId:         "",
-		SkuType:              "",
-		SkuNumber:            7,
+		LeafCellType:         "",
+		LeafCellNumber:       7,
 		AffinityGroup:        group9,
-	}, "pod9": { // any SKU type; heterogeneous affinity group
+	}, "pod9": { // any leaf cell type; heterogeneous affinity group
 		VirtualCluster:       "VC2",
 		Priority:             1,
 		LazyPreemptionEnable: true,
 		PinnedCellId:         "",
-		SkuType:              "",
-		SkuNumber:            5,
+		LeafCellType:         "",
+		LeafCellNumber:       5,
 		AffinityGroup:        group9,
-	}, "pod10": { // use a SKU type that the VC does not have; should User Error Panic
+	}, "pod10": { // use a leaf cell type that the VC does not have; should User Error Panic
 		VirtualCluster:       "VC2",
 		Priority:             1,
 		LazyPreemptionEnable: true,
 		PinnedCellId:         "",
-		SkuType:              "DGX2-V100",
-		SkuNumber:            1,
+		LeafCellType:         "DGX2-V100",
+		LeafCellNumber:       1,
 		AffinityGroup:        group6,
 	}, "pod11": { // invalid affinity group configuration
 		VirtualCluster:       "VC2",
 		Priority:             1,
 		LazyPreemptionEnable: true,
 		PinnedCellId:         "",
-		SkuType:              "DGX1-P100",
-		SkuNumber:            2,
+		LeafCellType:         "DGX1-P100",
+		LeafCellNumber:       2,
 		AffinityGroup:        group8,
 	}, "pod12": { // invalid affinity group configuration
 		VirtualCluster:       "VC2",
 		Priority:             1,
 		LazyPreemptionEnable: true,
 		PinnedCellId:         "",
-		SkuType:              "DGX1-P100",
-		SkuNumber:            2,
+		LeafCellType:         "DGX1-P100",
+		LeafCellNumber:       2,
 		AffinityGroup:        group8,
 	}, "pod13": { // invalid VC
 		VirtualCluster:       "surprise!",
 		Priority:             1,
 		LazyPreemptionEnable: true,
 		PinnedCellId:         "",
-		SkuType:              "DGX1-P100",
-		SkuNumber:            1,
+		LeafCellType:         "DGX1-P100",
+		LeafCellNumber:       1,
 		AffinityGroup:        group10,
 	}, "pod14": { // invalid pinned cell
 		VirtualCluster:       "VC2",
 		Priority:             1,
 		LazyPreemptionEnable: true,
 		PinnedCellId:         "surprise!",
-		SkuType:              "DGX1-P100",
-		SkuNumber:            1,
+		LeafCellType:         "DGX1-P100",
+		LeafCellNumber:       1,
 		AffinityGroup:        group10,
 	}, "pod15": { // invalid priority
 		VirtualCluster:       "VC2",
 		Priority:             1001,
 		LazyPreemptionEnable: true,
 		PinnedCellId:         "",
-		SkuType:              "DGX1-P100",
-		SkuNumber:            1,
+		LeafCellType:         "DGX1-P100",
+		LeafCellNumber:       1,
 		AffinityGroup:        group10,
 	}, "pod16": { // trigger preemption
 		VirtualCluster:       "VC1",
 		Priority:             2,
 		LazyPreemptionEnable: true,
 		PinnedCellId:         "VC1-YQW-DGX2",
-		SkuType:              "DGX2-V100",
-		SkuNumber:            16,
+		LeafCellType:         "DGX2-V100",
+		LeafCellNumber:       16,
 		AffinityGroup:        group11,
 	}, "pod17": { // trigger preemption
 		VirtualCluster:       "VC1",
 		Priority:             2,
 		LazyPreemptionEnable: true,
 		PinnedCellId:         "VC1-YQW-DGX2",
-		SkuType:              "DGX2-V100",
-		SkuNumber:            16,
+		LeafCellType:         "DGX2-V100",
+		LeafCellNumber:       16,
 		AffinityGroup:        group11,
 	}, "pod18": { // used for test splitting physical cell hierarchies in reconfiguration
 		VirtualCluster:       "VC1",
 		Priority:             1,
 		LazyPreemptionEnable: true,
 		PinnedCellId:         "",
-		SkuType:              "DGX2-V100",
-		SkuNumber:            16,
+		LeafCellType:         "DGX2-V100",
+		LeafCellNumber:       16,
 		AffinityGroup:        group12,
 	}, "pod19": { // used for test splitting physical cell hierarchies in reconfiguration
 		VirtualCluster:       "VC1",
 		Priority:             1,
 		LazyPreemptionEnable: true,
 		PinnedCellId:         "",
-		SkuType:              "DGX2-V100",
-		SkuNumber:            16,
+		LeafCellType:         "DGX2-V100",
+		LeafCellNumber:       16,
 		AffinityGroup:        group12,
 	}, "pod20": { // guaranteed pod in splitting physical cell hierarchies
 		VirtualCluster:       "VC1",
 		Priority:             1,
 		LazyPreemptionEnable: true,
 		PinnedCellId:         "",
-		SkuType:              "DGX2-V100",
-		SkuNumber:            16,
+		LeafCellType:         "DGX2-V100",
+		LeafCellNumber:       16,
 		AffinityGroup:        group13,
 	}, "pod21": { // guaranteed pod in splitting physical cell hierarchies
 		VirtualCluster:       "VC1",
 		Priority:             1,
 		LazyPreemptionEnable: true,
 		PinnedCellId:         "",
-		SkuType:              "DGX2-V100",
-		SkuNumber:            16,
+		LeafCellType:         "DGX2-V100",
+		LeafCellNumber:       16,
 		AffinityGroup:        group13,
 	}, "pod22": { // opportunistic pod in splitting physical cell hierarchies
 		VirtualCluster:       "VC1",
 		Priority:             -1,
 		LazyPreemptionEnable: true,
 		PinnedCellId:         "",
-		SkuType:              "DGX2-V100",
-		SkuNumber:            16,
+		LeafCellType:         "DGX2-V100",
+		LeafCellNumber:       16,
 		AffinityGroup:        group14,
 	}, "pod23": { // opportunistic pod in splitting physical cell hierarchies
 		VirtualCluster:       "VC1",
 		Priority:             -1,
 		LazyPreemptionEnable: true,
 		PinnedCellId:         "",
-		SkuType:              "DGX2-V100",
-		SkuNumber:            16,
+		LeafCellType:         "DGX2-V100",
+		LeafCellNumber:       16,
 		AffinityGroup:        group14,
 	}, "pod24": { // used for triggering intra-VC preemption
 		VirtualCluster:       "VC2",
 		Priority:             0,
 		LazyPreemptionEnable: true,
 		PinnedCellId:         "",
-		SkuType:              "CT1",
-		SkuNumber:            2,
+		LeafCellType:         "CT1",
+		LeafCellNumber:       2,
 		AffinityGroup:        group15,
 	}, "pod25": { // trigger intra-VC preemption
 		VirtualCluster:       "VC2",
 		Priority:             1,
 		LazyPreemptionEnable: false,
 		PinnedCellId:         "",
-		SkuType:              "CT1",
-		SkuNumber:            2,
+		LeafCellType:         "CT1",
+		LeafCellNumber:       2,
 		AffinityGroup:        group16,
 	}, "pod26": { // will preempt pod25 immediately (as lazy preemption is not enabled)
 		VirtualCluster:       "VC2",
 		Priority:             2,
 		LazyPreemptionEnable: false,
 		PinnedCellId:         "",
-		SkuType:              "CT1",
-		SkuNumber:            2,
+		LeafCellType:         "CT1",
+		LeafCellNumber:       2,
 		AffinityGroup:        group17,
 	}, "pod27": { // will be rejected because one of the pod in this group is allocated a non-suggested node
 		VirtualCluster:       "VC1",
 		Priority:             1,
 		LazyPreemptionEnable: false,
 		PinnedCellId:         "VC1-YQW-DGX2",
-		SkuType:              "DGX2-V100",
-		SkuNumber:            16,
+		LeafCellType:         "DGX2-V100",
+		LeafCellNumber:       16,
 		AffinityGroup:        group18,
 	}, "pod28": { // used for stateful preemption test
 		VirtualCluster:       "VC1",
 		Priority:             1,
 		LazyPreemptionEnable: false,
 		PinnedCellId:         "VC1-YQW-DGX2",
-		SkuType:              "DGX2-V100",
-		SkuNumber:            16,
+		LeafCellType:         "DGX2-V100",
+		LeafCellNumber:       16,
 		AffinityGroup:        group19,
 	}, "pod29": { // will try to preempt pod28
 		VirtualCluster:       "VC1",
 		Priority:             2,
 		LazyPreemptionEnable: true,
 		PinnedCellId:         "VC1-YQW-DGX2",
-		SkuType:              "DGX2-V100",
-		SkuNumber:            16,
+		LeafCellType:         "DGX2-V100",
+		LeafCellNumber:       16,
 		AffinityGroup:        group20,
 	}, "pod30": { // cannot get scheduled because pod28's still holding the resource
 		VirtualCluster:       "VC1",
 		Priority:             1,
 		LazyPreemptionEnable: true,
 		PinnedCellId:         "VC1-YQW-DGX2",
-		SkuType:              "DGX2-V100",
-		SkuNumber:            16,
+		LeafCellType:         "DGX2-V100",
+		LeafCellNumber:       16,
 		AffinityGroup:        group21,
 	}, "pod31": { // will try to preempt pod28, and will be scheduled to a different node from pod29
 		VirtualCluster:       "VC1",
 		Priority:             2,
 		LazyPreemptionEnable: true,
 		PinnedCellId:         "VC1-YQW-DGX2",
-		SkuType:              "DGX2-V100",
-		SkuNumber:            16,
+		LeafCellType:         "DGX2-V100",
+		LeafCellNumber:       16,
 		AffinityGroup:        group22,
 	}, "pod32": { // cannot get scheduled because VC1-YQW-DGX2 has been used up by pod29 and pod31
 		VirtualCluster:       "VC1",
 		Priority:             2,
 		LazyPreemptionEnable: true,
 		PinnedCellId:         "VC1-YQW-DGX2",
-		SkuType:              "DGX2-V100",
-		SkuNumber:            16,
+		LeafCellType:         "DGX2-V100",
+		LeafCellNumber:       16,
 		AffinityGroup:        group23,
 	}, "pod33": { // will cancel pod29 and pod31's preemption, and continue to preempt pod28
 		VirtualCluster:       "VC1",
 		Priority:             3,
 		LazyPreemptionEnable: true,
 		PinnedCellId:         "VC1-YQW-DGX2",
-		SkuType:              "DGX2-V100",
-		SkuNumber:            16,
+		LeafCellType:         "DGX2-V100",
+		LeafCellNumber:       16,
 		AffinityGroup:        group24,
 	}, "pod34": { // will cancel pod33's preemption, and get scheduled immediately (because pod28 has been deleted)
 		VirtualCluster:       "VC1",
 		Priority:             4,
 		LazyPreemptionEnable: false,
 		PinnedCellId:         "VC1-YQW-DGX2",
-		SkuType:              "DGX2-V100",
-		SkuNumber:            16,
+		LeafCellType:         "DGX2-V100",
+		LeafCellNumber:       16,
 		AffinityGroup:        group25,
 	}, "pod35": { // will preempt pod34, and will be deleted before the preemption is done (so the preemption will be canceled)
 		VirtualCluster:       "VC1",
 		Priority:             5,
 		LazyPreemptionEnable: true,
 		PinnedCellId:         "VC1-YQW-DGX2",
-		SkuType:              "DGX2-V100",
-		SkuNumber:            16,
+		LeafCellType:         "DGX2-V100",
+		LeafCellNumber:       16,
 		AffinityGroup:        group26,
-	}, "pod36": { // will iterate the SKU types until find a placement within suggested nodes
+	}, "pod36": { // will iterate the leaf cell types until find a placement within suggested nodes
 		VirtualCluster:       "VC1",
 		Priority:             -1,
 		LazyPreemptionEnable: true,
 		PinnedCellId:         "",
-		SkuType:              "",
-		SkuNumber:            1,
+		LeafCellType:         "",
+		LeafCellNumber:       1,
 		AffinityGroup:        group1,
 	}, "pod37": { // used for test aware of suggested nodes in VC
 		VirtualCluster:       "VC1",
 		Priority:             1,
 		LazyPreemptionEnable: true,
 		PinnedCellId:         "VC1-YQW-DGX2",
-		SkuType:              "DGX2-V100",
-		SkuNumber:            1,
+		LeafCellType:         "DGX2-V100",
+		LeafCellNumber:       1,
 		AffinityGroup:        group1,
 	}, "pod38": { // used for test aware of suggested nodes in VC
 		VirtualCluster:       "VC1",
 		Priority:             1,
 		LazyPreemptionEnable: true,
 		PinnedCellId:         "VC1-YQW-DGX2",
-		SkuType:              "DGX2-V100",
-		SkuNumber:            1,
+		LeafCellType:         "DGX2-V100",
+		LeafCellNumber:       1,
 		AffinityGroup:        group2,
 	}, "pod39": { // used for triggering backtrack cell search
 		VirtualCluster:       "VC1",
 		Priority:             1,
 		LazyPreemptionEnable: true,
 		PinnedCellId:         "",
-		SkuType:              "DGX2-V100",
-		SkuNumber:            16,
+		LeafCellType:         "DGX2-V100",
+		LeafCellNumber:       16,
 		AffinityGroup:        group27,
 	}, "pod40": { // backtrack cell search
 		VirtualCluster:       "VC1",
 		Priority:             1,
 		LazyPreemptionEnable: true,
 		PinnedCellId:         "",
-		SkuType:              "DGX2-V100",
-		SkuNumber:            16,
+		LeafCellType:         "DGX2-V100",
+		LeafCellNumber:       16,
 		AffinityGroup:        group28,
 	}, "pod41": { // revert lazy preemption in backtrack cell search
 		VirtualCluster:       "VC1",
 		Priority:             2,
 		LazyPreemptionEnable: true,
 		PinnedCellId:         "",
-		SkuType:              "DGX2-V100",
-		SkuNumber:            16,
+		LeafCellType:         "DGX2-V100",
+		LeafCellNumber:       16,
 		AffinityGroup:        group29,
 	}, "pod42": { // doomed bad cell test
 		VirtualCluster:       "VC1",
 		Priority:             0,
 		LazyPreemptionEnable: true,
 		PinnedCellId:         "",
-		SkuType:              "DGX2-V100",
-		SkuNumber:            16,
+		LeafCellType:         "DGX2-V100",
+		LeafCellNumber:       16,
 		AffinityGroup:        group30,
 	}, "pod43": { // doomed bad cell test
 		VirtualCluster:       "VC2",
 		Priority:             0,
 		LazyPreemptionEnable: true,
 		PinnedCellId:         "",
-		SkuType:              "DGX2-V100",
-		SkuNumber:            16,
+		LeafCellType:         "DGX2-V100",
+		LeafCellNumber:       16,
 		AffinityGroup:        group31,
 	}, "pod44": { // safe relaxed buddy allocate for bad node test
 		VirtualCluster:       "VC1",
 		Priority:             0,
 		LazyPreemptionEnable: true,
 		PinnedCellId:         "",
-		SkuType:              "DGX2-V100",
-		SkuNumber:            16,
+		LeafCellType:         "DGX2-V100",
+		LeafCellNumber:       16,
 		AffinityGroup:        group32,
 	}, "pod45": { // safe relaxed buddy allocate for bad node test
 		VirtualCluster:       "VC1",
 		Priority:             0,
 		LazyPreemptionEnable: true,
 		PinnedCellId:         "",
-		SkuType:              "DGX2-V100",
-		SkuNumber:            16,
+		LeafCellType:         "DGX2-V100",
+		LeafCellNumber:       16,
 		AffinityGroup:        group33,
 	}, "pod46": { // safe relaxed buddy allocate safety test
 		VirtualCluster:       "VC1",
 		Priority:             0,
 		LazyPreemptionEnable: true,
 		PinnedCellId:         "",
-		SkuType:              "DGX2-V100",
-		SkuNumber:            16,
+		LeafCellType:         "DGX2-V100",
+		LeafCellNumber:       16,
 		AffinityGroup:        group34,
 	},
 }
@@ -559,36 +559,36 @@ var casesForStatefulPreemption = []string{
 }
 
 type result struct {
-	node            string
-	deviceIsolation []int32
+	node              string
+	leafCellIsolation []int32
 }
 
 var expectedBindInfos = map[string]result{
-	"pod1":  {node: "0.0.1.0", deviceIsolation: []int32{0}},
-	"pod2":  {node: "0.0.1.0", deviceIsolation: []int32{1}},
-	"pod3":  {node: "0.0.1.0", deviceIsolation: []int32{8, 9, 10, 11, 12, 13, 14, 15}},
-	"pod4":  {node: "0.0.5.0", deviceIsolation: []int32{0}},
-	"pod5":  {node: "0.0.3.0", deviceIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
-	"pod6":  {node: "0.0.3.1", deviceIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
-	"pod8":  {node: "1.0.0.0", deviceIsolation: []int32{1, 3, 4, 7, 0, 2, 6}},
-	"pod9":  {node: "1.0.0.2", deviceIsolation: []int32{0, 1, 2, 3, 4}},
-	"pod18": {node: "0.0.3.2", deviceIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
-	"pod19": {node: "0.0.3.3", deviceIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
-	"pod20": {node: "0.0.4.0", deviceIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
-	"pod21": {node: "0.0.4.1", deviceIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
-	"pod22": {node: "0.0.4.2", deviceIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
-	"pod23": {node: "0.0.4.3", deviceIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
-	"pod24": {node: "0.0.0.1", deviceIsolation: []int32{0, 1}},
-	"pod25": {node: "0.0.0.0", deviceIsolation: []int32{0, 1}},
-	"pod28": {node: "0.0.3.0", deviceIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
-	"pod34": {node: "0.0.3.0", deviceIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
-	"pod36": {node: "0.0.1.0", deviceIsolation: []int32{0}},
-	"pod37": {node: "0.0.3.0", deviceIsolation: []int32{0}},
-	"pod38": {node: "0.0.3.1", deviceIsolation: []int32{0}},
-	"pod39": {node: "0.0.3.2", deviceIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
-	"pod40": {node: "0.0.4.3", deviceIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
-	"pod44": {node: "0.0.3.2", deviceIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
-	"pod45": {node: "0.0.4.2", deviceIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
+	"pod1":  {node: "0.0.1.0", leafCellIsolation: []int32{0}},
+	"pod2":  {node: "0.0.1.0", leafCellIsolation: []int32{1}},
+	"pod3":  {node: "0.0.1.0", leafCellIsolation: []int32{8, 9, 10, 11, 12, 13, 14, 15}},
+	"pod4":  {node: "0.0.5.0", leafCellIsolation: []int32{0}},
+	"pod5":  {node: "0.0.3.0", leafCellIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
+	"pod6":  {node: "0.0.3.1", leafCellIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
+	"pod8":  {node: "1.0.0.0", leafCellIsolation: []int32{1, 3, 4, 7, 0, 2, 6}},
+	"pod9":  {node: "1.0.0.2", leafCellIsolation: []int32{0, 1, 2, 3, 4}},
+	"pod18": {node: "0.0.3.2", leafCellIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
+	"pod19": {node: "0.0.3.3", leafCellIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
+	"pod20": {node: "0.0.4.0", leafCellIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
+	"pod21": {node: "0.0.4.1", leafCellIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
+	"pod22": {node: "0.0.4.2", leafCellIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
+	"pod23": {node: "0.0.4.3", leafCellIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
+	"pod24": {node: "0.0.0.1", leafCellIsolation: []int32{0, 1}},
+	"pod25": {node: "0.0.0.0", leafCellIsolation: []int32{0, 1}},
+	"pod28": {node: "0.0.3.0", leafCellIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
+	"pod34": {node: "0.0.3.0", leafCellIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
+	"pod36": {node: "0.0.1.0", leafCellIsolation: []int32{0}},
+	"pod37": {node: "0.0.3.0", leafCellIsolation: []int32{0}},
+	"pod38": {node: "0.0.3.1", leafCellIsolation: []int32{0}},
+	"pod39": {node: "0.0.3.2", leafCellIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
+	"pod40": {node: "0.0.4.3", leafCellIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
+	"pod44": {node: "0.0.3.2", leafCellIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
+	"pod45": {node: "0.0.4.2", leafCellIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
 }
 
 var expectedPreemptInfos = map[string]common.Set{
@@ -615,7 +615,7 @@ func TestHivedAlgorithm(t *testing.T) {
 	sConfig := api.NewConfig(api.InitRawConfig(&configFilePath))
 	h := NewHivedAlgorithm(sConfig)
 	initNodes(h)
-	// sort chains of each SKU type for stability of the test
+	// sort chains of each leaf cell type for stability of the test
 	for _, chains := range h.cellChains {
 		sortChains(chains)
 	}
@@ -670,8 +670,8 @@ func printConfig(t *testing.T, h *HivedAlgorithm) {
 			t.Logf("%v", ccl)
 		}
 	}
-	for skuType, chains := range h.cellChains {
-		t.Logf("%v: %v", skuType, chains)
+	for leafCellType, chains := range h.cellChains {
+		t.Logf("%v: %v", leafCellType, chains)
 	}
 }
 
@@ -876,21 +876,21 @@ func testStatefulPreemption(t *testing.T, configFilePath string) {
 		}
 		if podName == "pod35" {
 			p := &groupPhysicalPlacement{}
-			*p = h.affinityGroups[pss[pod.UID].AffinityGroup.Name].physicalDevicePlacement
+			*p = h.affinityGroups[pss[pod.UID].AffinityGroup.Name].physicalLeafCellPlacement
 			h.DeleteUnallocatedPod(pod)
 			// test correctness of preemption cancellation
 			for _, podPlacements := range *p {
-				for _, podDevices := range podPlacements {
-					for _, device := range podDevices {
-						pDevice := device.(*PhysicalCell)
-						if pDevice.GetState() == cellUsed {
-							if int32(pDevice.GetPriority()) != pss["pod34"].Priority {
+				for _, podLeafCells := range podPlacements {
+					for _, leafCell := range podLeafCells {
+						pLeafCell := leafCell.(*PhysicalCell)
+						if pLeafCell.GetState() == cellUsed {
+							if int32(pLeafCell.GetPriority()) != pss["pod34"].Priority {
 								t.Errorf("Cell %v's priority should be pod34's priority, but is %v",
-									pDevice.GetAddress(), pDevice.GetPriority())
+									pLeafCell.GetAddress(), pLeafCell.GetPriority())
 							}
-						} else if pDevice.GetState() != cellFree {
+						} else if pLeafCell.GetState() != cellFree {
 							t.Errorf("Cell %v should be in Free state, but is %v",
-								pDevice.GetAddress(), pDevice.GetState())
+								pLeafCell.GetAddress(), pLeafCell.GetState())
 						}
 					}
 				}
@@ -1084,7 +1084,7 @@ func testReconfiguration(t *testing.T, configFilePath string) {
 	for _, podName := range casesThatShouldBeLazyPreempted {
 		pod := allPods[podName]
 		g := h.affinityGroups[pss[pod.UID].AffinityGroup.Name]
-		if g.virtualDevicePlacement != nil {
+		if g.virtualLeafCellPlacement != nil {
 			t.Errorf("Group %v is expected to be lazy preempted, but not", g.name)
 		}
 	}
@@ -1105,7 +1105,7 @@ func testInvalidInitialAssignment(t *testing.T, sConfig *api.Config) {
 	NewHivedAlgorithm(sConfig)
 }
 
-func compareDeviceIsolation(a []int32, b []int32) bool {
+func compareLeafCellIsolation(a []int32, b []int32) bool {
 	if len(a) == len(b) {
 		for i := 0; i < len(a); i++ {
 			if a[i] != b[i] {
@@ -1130,15 +1130,15 @@ func compareSchedulingResult(t *testing.T, pod *core.Pod, psr internal.PodSchedu
 	if expected, ok := expectedBindInfos[pod.Name]; !ok {
 		if psr.PodBindInfo != nil {
 			t.Errorf("[%v]: wrong pod scheduling result: expected empty, but got %v:%v",
-				internal.Key(pod), psr.PodBindInfo.Node, psr.PodBindInfo.DeviceIsolation)
+				internal.Key(pod), psr.PodBindInfo.Node, psr.PodBindInfo.LeafCellIsolation)
 		}
 		if !expectedPreemptInfos[pod.Name].IsEmpty() && !containsPods(psr.PodPreemptInfo.VictimPods, expectedPreemptInfos[pod.Name]) {
 			t.Errorf("[%v]: wrong preempt victims: expected %v, but got %v",
 				internal.Key(pod), expectedPreemptInfos[pod.Name], psr.PodPreemptInfo.VictimPods)
 		}
 	} else if psr.PodBindInfo.Node != expected.node ||
-		!compareDeviceIsolation(psr.PodBindInfo.DeviceIsolation, expected.deviceIsolation) {
+		!compareLeafCellIsolation(psr.PodBindInfo.LeafCellIsolation, expected.leafCellIsolation) {
 		t.Errorf("[%v]: wrong pod bind info: expected %v:%v, but got %v:%v",
-			internal.Key(pod), expected.node, expected.deviceIsolation, psr.PodBindInfo.Node, psr.PodBindInfo.DeviceIsolation)
+			internal.Key(pod), expected.node, expected.leafCellIsolation, psr.PodBindInfo.Node, psr.PodBindInfo.LeafCellIsolation)
 	}
 }

@@ -176,8 +176,8 @@ func NewBindingPod(pod *core.Pod, podBindInfo *si.PodBindInfo) *core.Pod {
 	if bindingPod.Annotations == nil {
 		bindingPod.Annotations = map[string]string{}
 	}
-	bindingPod.Annotations[si.AnnotationKeyPodDeviceIsolation] =
-		common.ToIndicesString(podBindInfo.DeviceIsolation)
+	bindingPod.Annotations[si.AnnotationKeyPodLeafCellIsolation] =
+		common.ToIndicesString(podBindInfo.LeafCellIsolation)
 	bindingPod.Annotations[si.AnnotationKeyPodBindInfo] =
 		common.ToYaml(podBindInfo)
 
@@ -201,8 +201,8 @@ func ExtractPodBindInfo(allocatedPod *core.Pod) *si.PodBindInfo {
 
 func ExtractPodBindAnnotations(allocatedPod *core.Pod) map[string]string {
 	return map[string]string{
-		si.AnnotationKeyPodDeviceIsolation: allocatedPod.Annotations[si.AnnotationKeyPodDeviceIsolation],
-		si.AnnotationKeyPodBindInfo:        allocatedPod.Annotations[si.AnnotationKeyPodBindInfo],
+		si.AnnotationKeyPodLeafCellIsolation: allocatedPod.Annotations[si.AnnotationKeyPodLeafCellIsolation],
+		si.AnnotationKeyPodBindInfo:          allocatedPod.Annotations[si.AnnotationKeyPodBindInfo],
 	}
 }
 
@@ -227,8 +227,8 @@ func ExtractPodSchedulingSpec(pod *core.Pod) *si.PodSchedulingSpec {
 		podSchedulingSpec.AffinityGroup = &si.AffinityGroupSpec{
 			Name: fmt.Sprintf("%v/%v", pod.Namespace, pod.Name),
 			Members: []si.AffinityGroupMemberSpec{{
-				PodNumber: 1,
-				SkuNumber: podSchedulingSpec.SkuNumber},
+				PodNumber:      1,
+				LeafCellNumber: podSchedulingSpec.LeafCellNumber},
 			},
 		}
 	}
@@ -243,8 +243,8 @@ func ExtractPodSchedulingSpec(pod *core.Pod) *si.PodSchedulingSpec {
 	if podSchedulingSpec.Priority > si.MaxGuaranteedPriority {
 		panic(fmt.Errorf(errPfx+"Priority is greater than %v", si.MaxGuaranteedPriority))
 	}
-	if podSchedulingSpec.SkuNumber <= 0 {
-		panic(fmt.Errorf(errPfx + "SkuNumber is non-positive"))
+	if podSchedulingSpec.LeafCellNumber <= 0 {
+		panic(fmt.Errorf(errPfx + "LeafCellNumber is non-positive"))
 	}
 	if podSchedulingSpec.AffinityGroup.Name == "" {
 		panic(fmt.Errorf(errPfx + "AffinityGroup.Name is empty"))
@@ -255,10 +255,10 @@ func ExtractPodSchedulingSpec(pod *core.Pod) *si.PodSchedulingSpec {
 		if member.PodNumber <= 0 {
 			panic(fmt.Errorf(errPfx + "AffinityGroup.Members has non-positive PodNumber"))
 		}
-		if member.SkuNumber <= 0 {
-			panic(fmt.Errorf(errPfx + "AffinityGroup.Members has non-positive SkuNumber"))
+		if member.LeafCellNumber <= 0 {
+			panic(fmt.Errorf(errPfx + "AffinityGroup.Members has non-positive LeafCellNumber"))
 		}
-		if member.SkuNumber == podSchedulingSpec.SkuNumber {
+		if member.LeafCellNumber == podSchedulingSpec.LeafCellNumber {
 			isPodInGroup = true
 		}
 	}
@@ -288,10 +288,10 @@ func BindPod(kClient kubeClient.Interface, bindingPod *core.Pod) {
 		panic(fmt.Errorf("Failed to bind Pod: %v", err))
 	}
 
-	klog.Infof("[%v]: Succeeded to bind Pod on node %v, devices %v",
+	klog.Infof("[%v]: Succeeded to bind Pod on node %v, leaf cells %v",
 		Key(bindingPod),
 		bindingPod.Spec.NodeName,
-		bindingPod.Annotations[si.AnnotationKeyPodDeviceIsolation])
+		bindingPod.Annotations[si.AnnotationKeyPodLeafCellIsolation])
 }
 
 func NewBadRequestError(message string) *si.WebServerError {

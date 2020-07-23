@@ -132,7 +132,7 @@ Operation: none.
 
 ## Cell State Machine
 
-Cell is the resource unit in HiveD. The figure below shows the state machine of cell. Note that here cells are _lowest-level physical cells_, e.g., single-device cells in typical configs (we record states only in these cells).
+Cell is the resource unit in HiveD. The figure below shows the state machine of cell. Note that here cells are _lowest-level physical cells_, e.g., leaf cells in typical configs (we record states only in these cells).
 
 <p style="text-align: center;">
   <img src="img/cell-state-machine.png" title="cell" alt="cell" width="70%"/>

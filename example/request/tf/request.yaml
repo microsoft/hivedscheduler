@@ -26,8 +26,8 @@ spec:
             hivedscheduler.microsoft.com/pod-scheduling-spec: |-
               virtualCluster: VC2
               priority: 1000
-              skuType: K80
-              skuNumber: 1
+              leafCellType: K80
+              leafCellNumber: 1
               affinityGroup: null
         spec:
           schedulerName: hivedscheduler
@@ -58,7 +58,7 @@ spec:
             - name: NVIDIA_VISIBLE_DEVICES
               valueFrom:
                 fieldRef:
-                  fieldPath: metadata.annotations['hivedscheduler.microsoft.com/pod-device-isolation']
+                  fieldPath: metadata.annotations['hivedscheduler.microsoft.com/pod-leaf-cell-isolation']
             volumeMounts:
             - name: frameworkbarrier-volume
               mountPath: "/mnt/frameworkbarrier"
@@ -95,8 +95,8 @@ spec:
             hivedscheduler.microsoft.com/pod-scheduling-spec: |-
               virtualCluster: VC2
               priority: 1000
-              skuType: K80
-              skuNumber: 1
+              leafCellType: K80
+              leafCellNumber: 1
               affinityGroup: null
         spec:
           schedulerName: hivedscheduler
@@ -127,7 +127,7 @@ spec:
             - name: NVIDIA_VISIBLE_DEVICES
               valueFrom:
                 fieldRef:
-                  fieldPath: metadata.annotations['hivedscheduler.microsoft.com/pod-device-isolation']
+                  fieldPath: metadata.annotations['hivedscheduler.microsoft.com/pod-leaf-cell-isolation']
             volumeMounts:
             - name: frameworkbarrier-volume
               mountPath: "/mnt/frameworkbarrier"

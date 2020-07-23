@@ -32,7 +32,7 @@ import (
 
 // intraVCScheduler is an interface for scheduling pods inside a VC.
 // It stores two maps of ChainCellList, one for pinned cells, the other for non-pinned ones.
-// It should be able to return a set of device placements in the VC for a scheduling request.
+// It should be able to return a set of leaf cell placements in the VC for a scheduling request.
 type intraVCScheduler interface {
 	getNonPinnedFullCellList() map[CellChain]ChainCellList
 	getNonPinnedPreassignedCells() map[CellChain]ChainCellList
@@ -58,15 +58,15 @@ func newDefaultIntraVCScheduler(
 	nonPinnedFullList map[CellChain]ChainCellList,
 	nonPinnedFreeList map[CellChain]ChainCellList,
 	pinnedList map[api.PinnedCellId]ChainCellList,
-	skuNums map[CellChain]map[CellLevel]int32) *defaultIntraVCScheduler {
+	leafCellNums map[CellChain]map[CellLevel]int32) *defaultIntraVCScheduler {
 
 	snr := map[CellChain]*topologyAwareScheduler{}
 	sr := map[api.PinnedCellId]*topologyAwareScheduler{}
 	for chain, ccl := range nonPinnedFullList {
-		snr[chain] = NewTopologyAwareScheduler(ccl, skuNums[chain], true)
+		snr[chain] = NewTopologyAwareScheduler(ccl, leafCellNums[chain], true)
 	}
 	for pid, ccl := range pinnedList {
-		sr[pid] = NewTopologyAwareScheduler(ccl, skuNums[ccl[CellLevel(1)][0].GetChain()], true)
+		sr[pid] = NewTopologyAwareScheduler(ccl, leafCellNums[ccl[CellLevel(1)][0].GetChain()], true)
 	}
 	return &defaultIntraVCScheduler{
 		nonPinnedFullCellList:     nonPinnedFullList,
@@ -100,7 +100,7 @@ func (s *defaultIntraVCScheduler) schedule(
 		scheduler = s.pinnedCellSchedulers[sr.pinnedCellId]
 		str = fmt.Sprintf("pinned cell %v", sr.pinnedCellId)
 	}
-	klog.Infof("Processing scheduling request in VC %v: %v, SKU numbers %v, priority %v",
+	klog.Infof("Processing scheduling request in VC %v: %v, leaf cell numbers %v, priority %v",
 		sr.vc, str, common.ToJson(sr.affinityGroupPodNums), sr.priority)
 	if scheduler != nil {
 		placement, failedReason = scheduler.Schedule(

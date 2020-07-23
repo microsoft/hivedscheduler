@@ -24,7 +24,7 @@ kubeApiServerAddress: http://10.10.10.10:8080
 ################################################################################
 physicalCluster:
   # Define the cell structures.
-  # Each leaf cellType contains a single device and also defines a skuType of the
+  # Each leaf cellType contains a single device and also defines a leafCellType of the
   # same name.
   cellTypes:
     #######################################
@@ -35,8 +35,8 @@ physicalCluster:
       childCellType: CT1
       # Specify how many child cells it contains.
       childCellNumber: 2
-      # Specify whether it is a node level cellType, i.e. contains all devices of
-      # its corresponding skuType within one node and only contains these devices.
+      # Specify whether it is a node level cellType, i.e. contains all leaf cells of
+      # its corresponding leafCellType within one node and only contains these leaf cells.
       # Defaults to false.
       isNodeLevel: true
 
@@ -134,12 +134,12 @@ physicalCluster:
       childCellNumber: 2
     # Etc...
 
-  # Instantiate physical cell by mapping physical devices to the cell structure
+  # Instantiate physical cell by mapping physical leaf cells to the cell structure
   # defined by cellType.
   # User can specify an address for each cell. User MUST specify the addresses
   # for node-level cells (i.e., K8s node names).
   # For levels lower than node, if a cell is not specified with an address,
-  # we will assign it a default address using its relative index in this node (e.g., device index).
+  # we will assign it a default address using its relative index in this node (e.g., leaf cell index).
   # For levels higher than node, the default address is the relative index among the cells
   # at the same level within the same top-level cell.
   # For a top-level cell, its default address is its index among all the top-level cells
@@ -149,15 +149,15 @@ physicalCluster:
     cellAddress: 0.0.0.0
   - cellType: CT1-NODE
     cellAddress: 0.0.0.1
-  # One node has multiple sku types and
-  # non-standard device indices (by explicitly specifying cell addresses)
+  # One node has multiple leaf cell types and
+  # non-standard leaf cell indices (by explicitly specifying cell addresses)
   - cellType: CT1-NODE
     cellAddress: 1.0.0.2  # NODE Name
     cellChildren:
     - cellAddress: 8  # GPU Index
       pinnedCellId: VC1-YQW-CT1
     - cellAddress: 9  # GPU Index
-  # One cell has non-standard device indices
+  # One cell has non-standard leaf cell indices
   - cellType: 3-DGX1-P100-NODE
     cellChildren:
     # cellAddress can be omitted for non-node level cellType, which defaults to

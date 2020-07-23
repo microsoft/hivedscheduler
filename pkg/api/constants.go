@@ -45,22 +45,22 @@ const (
 	AnnotationKeyPodSchedulingSpec = GroupName + "/pod-scheduling-spec"
 
 	// To leverage this scheduler, if one container in the Pod want to use the
-	// allocated devices for the whole Pod, it should contain below env.
+	// allocated leaf cells for the whole Pod, it should contain below env.
 	//   env:
 	//   - name: NVIDIA_VISIBLE_DEVICES
 	//     valueFrom:
 	//       fieldRef:
-	//         fieldPath: metadata.annotations['hivedscheduler.microsoft.com/pod-device-isolation']
+	//         fieldPath: metadata.annotations['hivedscheduler.microsoft.com/pod-leaf-cell-isolation']
 	// The annotation referred by the env will be populated by scheduler when bind the pod.
 	//
 	// Notes:
-	// 1. The scheduler directly delivers device isolation decision to
+	// 1. The scheduler directly delivers leaf cell isolation decision to
 	//    nvidia-container-runtime through Pod Env: NVIDIA_VISIBLE_DEVICES.
-	// 2. If multiple containers in the Pod contain the env, the allocated devices are
+	// 2. If multiple containers in the Pod contain the env, the allocated leaf cells are
 	//    all visible to them, so it is these containers' freedom to control how
-	//    to share these devices.
-	EnvNameNvidiaVisibleDevices     = "NVIDIA_VISIBLE_DEVICES"
-	AnnotationKeyPodDeviceIsolation = GroupName + "/pod-device-isolation"
+	//    to share these leaf cells.
+	EnvNameNvidiaVisibleDevices       = "NVIDIA_VISIBLE_DEVICES"
+	AnnotationKeyPodLeafCellIsolation = GroupName + "/pod-leaf-cell-isolation"
 
 	// Populated by this scheduler, used to track and recover allocated placement.
 	// It is in PodBindInfo YAML format.

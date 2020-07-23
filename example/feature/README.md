@@ -32,10 +32,9 @@ This is similar to [K8S Taints and Tolerations](https://kubernetes.io/docs/conce
 
 ## SKU Type
 ### Description
-`skuType` defines a group of resources including suppoerting resources (e.g. memory) and one main device,
-for example, one CPU core for CPU jobs, a certain type of GPU (e.g. K80, V100) for GPU jobs, one device (e.g. TPU) for other AI accelerators.
+`skuType` is the leaf `cellType` which do not has internal topology anymore.
 
-If `skuType` is specified in the job, only that type of device will be allocated to the job, otherwise, any type of device can be allocated.
+If `skuType` is specified in the job, only that type of leaf cell will be allocated to the job, otherwise, any type of leaf cell can be allocated.
 
 This is similar to [K8S Labels and Selectors](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels), but with [VC Safety](#VC-Safety) guaranteed.
 
@@ -138,7 +137,7 @@ One VC's [Guaranteed Job](#Guaranteed-Job) can preempt other VCs' [Opportunistic
 
 ## Topology-Aware Intra-VC Scheduling
 ### Description
-Within one VC, HiveD chooses nearest devices for one `AffinityGroup` in best effort.
+Within one VC, HiveD chooses nearest leaf cells for one `AffinityGroup` in best effort.
 
 ### Reproduce Steps
 1. Use [hived-config-2](file/hived-config-2.yaml).
@@ -150,7 +149,7 @@ Within one VC, HiveD chooses nearest devices for one `AffinityGroup` in best eff
 
 ## Work-Preserving Reconfiguration
 ### Description
-HiveD can be reconfigured without unnecessary user impacts, such as add/update/delete physical/virtual clusters, device types/topologies, etc.
+HiveD can be reconfigured without unnecessary user impacts, such as add/update/delete physical/virtual clusters, different device types/topologies, etc.
 
 ### Reproduce Steps
 #### PhysicalCluster Reconfig - Delete PhysicalCell

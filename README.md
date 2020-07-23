@@ -20,7 +20,7 @@ The killer feature that distinguishes HiveD is that it provides resource guarant
 
 HiveD protects VCs' resources in terms of **cell**, a user-defined resource type that encodes both the quantity and other kinds of information, such as topology and hardware type. In the above example, a user can define a cell type of 8-GPU node, and the VC can be assigned one of such cell. Then, HiveD will ensure that *there is always one 8-GPU node available for the VC*, regardless of the other workloads in the cluster.
 
-HiveD allows flexible cell definitions for fine-grained resource guarantees. For example, users can define cells at multiple topology levels (e.g., PCI-e switch), for different device models, or networking configurations (e.g., InfiniBand domain). A VC can have various types of cells, and HiveD will guarantee all of them.
+HiveD allows flexible cell definitions for fine-grained resource guarantees. For example, users can define cells at multiple topology levels (e.g., PCI-e switch), for different device (e.g. GPU, TPU) models, or networking configurations (e.g., InfiniBand domain). A VC can have various types of cells, and HiveD will guarantee all of them.
 
 ### [Gang Scheduling](example/feature/README.md#Gang-Scheduling)
 

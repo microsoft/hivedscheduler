@@ -29,7 +29,7 @@ import (
 	"k8s.io/klog"
 )
 
-// A Cell represents a set of devices affinitized by their interconnection topology.
+// A Cell represents a set of leaf cells affinitized by their interconnection topology.
 // Cells are organized as a tree through pointers to their parents / children.
 type Cell interface {
 	GetChain() CellChain
@@ -42,9 +42,9 @@ type Cell interface {
 	AtOrHigherThanNode() bool
 	GetPriority() CellPriority
 	SetPriority(CellPriority)
-	GetTotalSkuNum() int32
-	GetUsedSkuNumAtPriorities() map[CellPriority]int32
-	IncreaseUsedSkuNumAtPriority(CellPriority, int32)
+	GetTotalLeafCellNum() int32
+	GetUsedLeafCellNumAtPriorities() map[CellPriority]int32
+	IncreaseUsedLeafCellNumAtPriority(CellPriority, int32)
 }
 
 func CellEqual(c1 Cell, c2 Cell) bool {
@@ -66,9 +66,9 @@ type GenericCell struct {
 	state              CellState
 	// A cell is healthy if all of the cell's children are healthy (bad if any child is bad).
 	// The healthy field is orthogonal to priority and state.
-	healthy                bool
-	totalSkuNum            int32                  // total SKU number of a cell
-	usedSkuNumAtPriorities map[CellPriority]int32 // SKU number used by each priority
+	healthy                     bool
+	totalLeafCellNum            int32                  // total leaf cell number of a cell
+	usedLeafCellNumAtPriorities map[CellPriority]int32 // leaf cell number used by each priority
 }
 
 func (c *GenericCell) GetChain() CellChain {
@@ -111,18 +111,18 @@ func (c *GenericCell) IsHealthy() bool {
 	return c.healthy
 }
 
-func (c *GenericCell) GetTotalSkuNum() int32 {
-	return c.totalSkuNum
+func (c *GenericCell) GetTotalLeafCellNum() int32 {
+	return c.totalLeafCellNum
 }
 
-func (c *GenericCell) GetUsedSkuNumAtPriorities() map[CellPriority]int32 {
-	return c.usedSkuNumAtPriorities
+func (c *GenericCell) GetUsedLeafCellNumAtPriorities() map[CellPriority]int32 {
+	return c.usedLeafCellNumAtPriorities
 }
 
-func (c *GenericCell) IncreaseUsedSkuNumAtPriority(p CellPriority, delta int32) {
-	c.usedSkuNumAtPriorities[p] += delta
-	if c.usedSkuNumAtPriorities[p] == 0 {
-		delete(c.usedSkuNumAtPriorities, p)
+func (c *GenericCell) IncreaseUsedLeafCellNumAtPriority(p CellPriority, delta int32) {
+	c.usedLeafCellNumAtPriorities[p] += delta
+	if c.usedLeafCellNumAtPriorities[p] == 0 {
+		delete(c.usedLeafCellNumAtPriorities, p)
 	}
 }
 
@@ -130,7 +130,7 @@ func (c *GenericCell) IncreaseUsedSkuNumAtPriority(p CellPriority, delta int32) 
 type PhysicalCell struct {
 	GenericCell
 	nodes                    []string           // node names inside the cell
-	deviceIndices            []int32            // [-1] for cells at levels higher than node
+	leafCellIndices          []int32            // [-1] for cells at levels higher than node
 	usingGroup               *AlgoAffinityGroup // affinity group using this cell
 	reservingOrReservedGroup *AlgoAffinityGroup // affinity group that is reserving, or has reserved the cell (e.g., waiting for preemption)
 	virtualCell              *VirtualCell       // points to the bound virtual cell
@@ -152,14 +152,14 @@ func NewPhysicalCell(
 
 	return &PhysicalCell{
 		GenericCell: GenericCell{
-			chain:                  c,
-			level:                  l,
-			priority:               freePriority,
-			address:                address,
-			atOrHigherThanNode:     g,
-			totalSkuNum:            n,
-			usedSkuNumAtPriorities: map[CellPriority]int32{},
-			state:                  cellFree,
+			chain:                       c,
+			level:                       l,
+			priority:                    freePriority,
+			address:                     address,
+			atOrHigherThanNode:          g,
+			totalLeafCellNum:            n,
+			usedLeafCellNumAtPriorities: map[CellPriority]int32{},
+			state:                       cellFree,
 			// cells are set to healthy initially, and will be all set to bad in HivedAlgorithm.initBadNodes
 			healthy: true,
 		},
@@ -204,16 +204,16 @@ func (c *PhysicalCell) SetState(s CellState) {
 }
 
 func (c *PhysicalCell) GetPhysicalPlacement() ([]string, []int32) {
-	return c.nodes, c.deviceIndices
+	return c.nodes, c.leafCellIndices
 }
 
 func (c *PhysicalCell) GetPhysicalPlacementString() string {
-	return fmt.Sprintf("%v:%v", c.nodes, c.deviceIndices)
+	return fmt.Sprintf("%v:%v", c.nodes, c.leafCellIndices)
 }
 
-func (c *PhysicalCell) SetPhysicalResources(nodes []string, deviceIndices []int32) {
+func (c *PhysicalCell) SetPhysicalResources(nodes []string, leafCellIndices []int32) {
 	c.nodes = nodes
-	c.deviceIndices = deviceIndices
+	c.leafCellIndices = leafCellIndices
 }
 
 func (c *PhysicalCell) AddUsingGroup(g *AlgoAffinityGroup) {
@@ -336,14 +336,14 @@ func NewVirtualCell(
 
 	return &VirtualCell{
 		GenericCell: GenericCell{
-			chain:                  c,
-			level:                  l,
-			priority:               freePriority,
-			address:                address,
-			atOrHigherThanNode:     g,
-			totalSkuNum:            n,
-			usedSkuNumAtPriorities: map[CellPriority]int32{},
-			state:                  cellFree,
+			chain:                       c,
+			level:                       l,
+			priority:                    freePriority,
+			address:                     address,
+			atOrHigherThanNode:          g,
+			totalLeafCellNum:            n,
+			usedLeafCellNumAtPriorities: map[CellPriority]int32{},
+			state:                       cellFree,
 			// cells are set to healthy initially, and will be all set to bad in HivedAlgorithm.initBadNodes
 			healthy: true,
 		},
