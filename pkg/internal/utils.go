@@ -25,6 +25,7 @@ package internal
 import (
 	"fmt"
 	"net/http"
+	"strings"
 
 	si "github.com/microsoft/hivedscheduler/pkg/api"
 	"github.com/microsoft/hivedscheduler/pkg/common"
@@ -184,11 +185,22 @@ func NewBindingPod(pod *core.Pod, podBindInfo *si.PodBindInfo) *core.Pod {
 	return bindingPod
 }
 
+// ConvertOldAnnotation converts old spec annotations for backward compatibility
+func ConvertOldAnnotation(annotation string) string {
+	r := strings.NewReplacer(
+		"gpuType", "leafCellType",
+		"gpuNumber", "leafCellNumber",
+		"gpuIsolation", "leafCellIsolation",
+		"physicalGpuIndices", "physicalLeafCellIndices",
+	)
+	return r.Replace(annotation)
+}
+
 // PodBindInfo comes from internal, so just need to assert when deserialization.
 func ExtractPodBindInfo(allocatedPod *core.Pod) *si.PodBindInfo {
 	podBindInfo := si.PodBindInfo{}
 
-	annotation := allocatedPod.Annotations[si.AnnotationKeyPodBindInfo]
+	annotation := ConvertOldAnnotation(allocatedPod.Annotations[si.AnnotationKeyPodBindInfo])
 	if annotation == "" {
 		panic(fmt.Errorf(
 			"Pod does not contain or contains empty annotation: %v",
@@ -200,9 +212,16 @@ func ExtractPodBindInfo(allocatedPod *core.Pod) *si.PodBindInfo {
 }
 
 func ExtractPodBindAnnotations(allocatedPod *core.Pod) map[string]string {
-	return map[string]string{
-		si.AnnotationKeyPodLeafCellIsolation: allocatedPod.Annotations[si.AnnotationKeyPodLeafCellIsolation],
-		si.AnnotationKeyPodBindInfo:          allocatedPod.Annotations[si.AnnotationKeyPodBindInfo],
+	if _, ok := allocatedPod.Annotations[si.AnnotationKeyPodLeafCellIsolation]; ok {
+		return map[string]string{
+			si.AnnotationKeyPodLeafCellIsolation: allocatedPod.Annotations[si.AnnotationKeyPodLeafCellIsolation],
+			si.AnnotationKeyPodBindInfo:          allocatedPod.Annotations[si.AnnotationKeyPodBindInfo],
+		}
+	} else {
+		return map[string]string{
+			si.AnnotationKeyPodLeafCellIsolation: allocatedPod.Annotations[strings.Replace(si.AnnotationKeyPodLeafCellIsolation, "leaf-cell", "gpu", -1)],
+			si.AnnotationKeyPodBindInfo:          ConvertOldAnnotation(allocatedPod.Annotations[si.AnnotationKeyPodBindInfo]),
+		}
 	}
 }
 
@@ -215,7 +234,7 @@ func ExtractPodSchedulingSpec(pod *core.Pod) *si.PodSchedulingSpec {
 
 	podSchedulingSpec := si.PodSchedulingSpec{}
 
-	annotation := pod.Annotations[si.AnnotationKeyPodSchedulingSpec]
+	annotation := ConvertOldAnnotation(pod.Annotations[si.AnnotationKeyPodSchedulingSpec])
 	if annotation == "" {
 		panic(fmt.Errorf(errPfx + "Annotation does not exist or is empty"))
 	}
