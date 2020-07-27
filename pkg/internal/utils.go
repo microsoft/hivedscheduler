@@ -24,6 +24,9 @@ package internal
 
 import (
 	"fmt"
+	"net/http"
+	"strings"
+
 	si "github.com/microsoft/hivedscheduler/pkg/api"
 	"github.com/microsoft/hivedscheduler/pkg/common"
 	core "k8s.io/api/core/v1"
@@ -32,7 +35,6 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog"
-	"net/http"
 )
 
 func CreateClient(kConfig *rest.Config) kubeClient.Interface {
@@ -175,19 +177,30 @@ func NewBindingPod(pod *core.Pod, podBindInfo *si.PodBindInfo) *core.Pod {
 	if bindingPod.Annotations == nil {
 		bindingPod.Annotations = map[string]string{}
 	}
-	bindingPod.Annotations[si.AnnotationKeyPodGpuIsolation] =
-		common.ToIndicesString(podBindInfo.GpuIsolation)
+	bindingPod.Annotations[si.AnnotationKeyPodLeafCellIsolation] =
+		common.ToIndicesString(podBindInfo.LeafCellIsolation)
 	bindingPod.Annotations[si.AnnotationKeyPodBindInfo] =
 		common.ToYaml(podBindInfo)
 
 	return bindingPod
 }
 
+// converts old spec annotations for backward compatibility
+func convertOldAnnotation(annotation string) string {
+	r := strings.NewReplacer(
+		"gpuType", "leafCellType",
+		"gpuNumber", "leafCellNumber",
+		"gpuIsolation", "leafCellIsolation",
+		"physicalGpuIndices", "physicalLeafCellIndices",
+	)
+	return r.Replace(annotation)
+}
+
 // PodBindInfo comes from internal, so just need to assert when deserialization.
 func ExtractPodBindInfo(allocatedPod *core.Pod) *si.PodBindInfo {
 	podBindInfo := si.PodBindInfo{}
 
-	annotation := allocatedPod.Annotations[si.AnnotationKeyPodBindInfo]
+	annotation := convertOldAnnotation(allocatedPod.Annotations[si.AnnotationKeyPodBindInfo])
 	if annotation == "" {
 		panic(fmt.Errorf(
 			"Pod does not contain or contains empty annotation: %v",
@@ -199,9 +212,16 @@ func ExtractPodBindInfo(allocatedPod *core.Pod) *si.PodBindInfo {
 }
 
 func ExtractPodBindAnnotations(allocatedPod *core.Pod) map[string]string {
-	return map[string]string{
-		si.AnnotationKeyPodGpuIsolation: allocatedPod.Annotations[si.AnnotationKeyPodGpuIsolation],
-		si.AnnotationKeyPodBindInfo:     allocatedPod.Annotations[si.AnnotationKeyPodBindInfo],
+	if _, ok := allocatedPod.Annotations[si.AnnotationKeyPodLeafCellIsolation]; ok {
+		return map[string]string{
+			si.AnnotationKeyPodLeafCellIsolation: allocatedPod.Annotations[si.AnnotationKeyPodLeafCellIsolation],
+			si.AnnotationKeyPodBindInfo:          allocatedPod.Annotations[si.AnnotationKeyPodBindInfo],
+		}
+	} else {
+		return map[string]string{
+			si.AnnotationKeyPodLeafCellIsolation: allocatedPod.Annotations[si.DeprecatedAnnotationKeyPodGpuIsolation],
+			si.AnnotationKeyPodBindInfo:          convertOldAnnotation(allocatedPod.Annotations[si.AnnotationKeyPodBindInfo]),
+		}
 	}
 }
 
@@ -214,7 +234,7 @@ func ExtractPodSchedulingSpec(pod *core.Pod) *si.PodSchedulingSpec {
 
 	podSchedulingSpec := si.PodSchedulingSpec{}
 
-	annotation := pod.Annotations[si.AnnotationKeyPodSchedulingSpec]
+	annotation := convertOldAnnotation(pod.Annotations[si.AnnotationKeyPodSchedulingSpec])
 	if annotation == "" {
 		panic(fmt.Errorf(errPfx + "Annotation does not exist or is empty"))
 	}
@@ -226,8 +246,8 @@ func ExtractPodSchedulingSpec(pod *core.Pod) *si.PodSchedulingSpec {
 		podSchedulingSpec.AffinityGroup = &si.AffinityGroupSpec{
 			Name: fmt.Sprintf("%v/%v", pod.Namespace, pod.Name),
 			Members: []si.AffinityGroupMemberSpec{{
-				PodNumber: 1,
-				GpuNumber: podSchedulingSpec.GpuNumber},
+				PodNumber:      1,
+				LeafCellNumber: podSchedulingSpec.LeafCellNumber},
 			},
 		}
 	}
@@ -242,8 +262,8 @@ func ExtractPodSchedulingSpec(pod *core.Pod) *si.PodSchedulingSpec {
 	if podSchedulingSpec.Priority > si.MaxGuaranteedPriority {
 		panic(fmt.Errorf(errPfx+"Priority is greater than %v", si.MaxGuaranteedPriority))
 	}
-	if podSchedulingSpec.GpuNumber <= 0 {
-		panic(fmt.Errorf(errPfx + "GpuNumber is non-positive"))
+	if podSchedulingSpec.LeafCellNumber <= 0 {
+		panic(fmt.Errorf(errPfx + "LeafCellNumber is non-positive"))
 	}
 	if podSchedulingSpec.AffinityGroup.Name == "" {
 		panic(fmt.Errorf(errPfx + "AffinityGroup.Name is empty"))
@@ -254,10 +274,10 @@ func ExtractPodSchedulingSpec(pod *core.Pod) *si.PodSchedulingSpec {
 		if member.PodNumber <= 0 {
 			panic(fmt.Errorf(errPfx + "AffinityGroup.Members has non-positive PodNumber"))
 		}
-		if member.GpuNumber <= 0 {
-			panic(fmt.Errorf(errPfx + "AffinityGroup.Members has non-positive GpuNumber"))
+		if member.LeafCellNumber <= 0 {
+			panic(fmt.Errorf(errPfx + "AffinityGroup.Members has non-positive LeafCellNumber"))
 		}
-		if member.GpuNumber == podSchedulingSpec.GpuNumber {
+		if member.LeafCellNumber == podSchedulingSpec.LeafCellNumber {
 			isPodInGroup = true
 		}
 	}
@@ -287,10 +307,10 @@ func BindPod(kClient kubeClient.Interface, bindingPod *core.Pod) {
 		panic(fmt.Errorf("Failed to bind Pod: %v", err))
 	}
 
-	klog.Infof("[%v]: Succeeded to bind Pod on node %v, gpus %v",
+	klog.Infof("[%v]: Succeeded to bind Pod on node %v, leaf cells %v",
 		Key(bindingPod),
 		bindingPod.Spec.NodeName,
-		bindingPod.Annotations[si.AnnotationKeyPodGpuIsolation])
+		bindingPod.Annotations[si.AnnotationKeyPodLeafCellIsolation])
 }
 
 func NewBadRequestError(message string) *si.WebServerError {

@@ -9,7 +9,7 @@
 
 HiveD guarantees **quota safety for all VCs**, in the sense that the requests to cells defined in each VC can always be satisfied.
 
-VC's cells can be described by Hardware Quantity, [Topology](#VC-Safety), [Type](#GPU-Type), [Pinned Cells](#Pinned-Cells), etc. To guarantee safety, HiveD never allows a VC to "invade" other VCs' cells. For example, to guarantee all VCs' topology, one VC's [guaranteed jobs](#Guaranteed-Job) should never make fragmentation inside other VCs:
+VC's cells can be described by Hardware Quantity, [Topology](#VC-Safety), [Type](#SKU-Type), [Pinned Cells](#Pinned-Cells), etc. To guarantee safety, HiveD never allows a VC to "invade" other VCs' cells. For example, to guarantee all VCs' topology, one VC's [guaranteed jobs](#Guaranteed-Job) should never make fragmentation inside other VCs:
 
 Two DGX-2s, two VCs each owns one DGX-2 node. For a traditional scheduler, this will translate into two VCs each owning 16 GPUs. When a user submits 16 1-GPU jobs to VC1, the user in VC2 might not be able to run a 16-GPU job, due to possible fragmentation issue caused by VC1. While HiveD can guarantee each VC always has one entire node available for its dedicated use.
 
@@ -30,19 +30,21 @@ This is similar to [K8S Taints and Tolerations](https://kubernetes.io/docs/conce
 2. Submit job [itc-pin](file/itc-pin.yaml) to VC1, all tasks in task role vc1pinned will be on node 10.151.41.25 (which is pinned), all tasks in task role vc1nopinned will NOT be on node 10.151.41.25.
    <img src="file/itc-pin.png" width="900"/>
 
-## GPU Type
+## SKU Type
 ### Description
-If `gpuType` is specified in the job, only that type of GPU will be allocated to the job, otherwise, any type of GPU can be allocated.
+`skuType` is the leaf `cellType` which does not have internal topology anymore.
+
+If `skuType` is specified in the job, only that type of leaf cell will be allocated to the job, otherwise, any type of leaf cell can be allocated.
 
 This is similar to [K8S Labels and Selectors](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels), but with [VC Safety](#VC-Safety) guaranteed.
 
 ### Reproduce Steps
-#### `gpuType` specified
+#### `skuType` specified
 1. Use [hived-config-2](file/hived-config-2.yaml).
 2. Submit job [itc-k80-type](file/itc-k80-type.yaml), it will be partially running (some tasks waiting because all the specified K80 GPUs are used).
    <img src="file/itc-k80-type.png" width="900"/>
 
-#### `gpuType` not specified
+#### `skuType` not specified
 1. Use [hived-config-2](file/hived-config-2.yaml).
 2. Submit job [itc-no-type](file/itc-no-type.yaml), it will be fully running, and some tasks are using K80 (10.151.41.18) while others are using M60 (10.151.41.26).
    <img src="file/itc-no-type.png" width="900"/>
@@ -135,7 +137,7 @@ One VC's [Guaranteed Job](#Guaranteed-Job) can preempt other VCs' [Opportunistic
 
 ## Topology-Aware Intra-VC Scheduling
 ### Description
-Within one VC, HiveD chooses nearest GPUs for one `AffinityGroup` in best effort.
+Within one VC, HiveD chooses nearest leaf cells for one `AffinityGroup` in best effort.
 
 ### Reproduce Steps
 1. Use [hived-config-2](file/hived-config-2.yaml).
@@ -147,40 +149,40 @@ Within one VC, HiveD chooses nearest GPUs for one `AffinityGroup` in best effort
 
 ## Work-Preserving Reconfiguration
 ### Description
-HiveD can be reconfigured without unnecessary user impacts, such as add/update/delete physical/virtual clusters, GPU types/topologies, etc.
+HiveD can be reconfigured without unnecessary user impacts, such as add/update/delete physical/virtual clusters, different device types/topologies, etc.
 
 ### Reproduce Steps
 #### PhysicalCluster Reconfig - Delete PhysicalCell
 1. Use [hived-config-2](file/hived-config-2.yaml).
-2. Submit job [itc-reconfig-1](file/itc-reconfig-1.yaml) which requests M60 `gpuType`. Wait until it is running.
-3. Delete all M60 `gpuType` related PhysicalCells and VirtualCells from [hived-config-2](file/hived-config-2.yaml), i.e. becomes [hived-config-33](file/hived-config-33.yaml).
-4. Use [hived-config-33](file/hived-config-33.yaml), and restart HiveD. 
+2. Submit job [itc-reconfig-1](file/itc-reconfig-1.yaml) which requests M60 `skuType`. Wait until it is running.
+3. Delete all M60 `skuType` related PhysicalCells and VirtualCells from [hived-config-2](file/hived-config-2.yaml), i.e. becomes [hived-config-33](file/hived-config-33.yaml).
+4. Use [hived-config-33](file/hived-config-33.yaml), and restart HiveD.
 5. The job will still run without any impact, but its M60 usage is ignored by HiveD.
    *However, normally, the job will still fail if the corresponding physical node is later deleted from K8S or unhealthy.*
    <img src="file/itc-reconfig-1.png" width="900"/>
 
 #### PhysicalCluster Reconfig - Add PhysicalCell
 1. Use [hived-config-33](file/hived-config-33.yaml).
-2. Submit job [itc-k80-type](file/itc-k80-type.yaml) which requests K80 `gpuType`. Wait until it is running.
-3. Add all M60 `gpuType` related PhysicalCells and VirtualCells into [hived-config-33](file/hived-config-33.yaml), i.e. becomes [hived-config-2](file/hived-config-2.yaml).
-4. Use [hived-config-2](file/hived-config-2.yaml), and restart HiveD. 
+2. Submit job [itc-k80-type](file/itc-k80-type.yaml) which requests K80 `skuType`. Wait until it is running.
+3. Add all M60 `skuType` related PhysicalCells and VirtualCells into [hived-config-33](file/hived-config-33.yaml), i.e. becomes [hived-config-2](file/hived-config-2.yaml).
+4. Use [hived-config-2](file/hived-config-2.yaml), and restart HiveD.
 5. The job will still run without any impact, and its K80 usage is still accounted by HiveD.
    <img src="file/itc-k80-type.png" width="900"/>
 
 #### PhysicalCluster Reconfig - Update PhysicalCell - Add Node
 1. Use [hived-config-2](file/hived-config-2.yaml).
-2. Submit job [itc-reconfig-1](file/itc-reconfig-1.yaml) which requests M60 `gpuType`. Wait until it is running.
+2. Submit job [itc-reconfig-1](file/itc-reconfig-1.yaml) which requests M60 `skuType`. Wait until it is running.
 3. Add one M60 node into a PhysicalCell, then becomes [hived-config-4](file/hived-config-4.yaml).
-4. Use [hived-config-4](file/hived-config-4.yaml), and restart HiveD. 
+4. Use [hived-config-4](file/hived-config-4.yaml), and restart HiveD.
 5. The job will still run without any impact, and its M60 usage is still accounted by HiveD.
 6. To confirm the job is not impacted, such as [lazy preempted](#Lazy-Preemption). Submit job [itc-reconfig-2](file/itc-reconfig-2.yaml) which requests all M60 nodes and has the same priority as [itc-reconfig-1](file/itc-reconfig-1.yaml). The job will be waiting instead of preempting [itc-reconfig-1](file/itc-reconfig-1.yaml).
    <img src="file/itc-reconfig-2.png" width="900"/>
 
 #### PhysicalCluster Reconfig - Update PhysicalCell - Delete Node
 1. Use [hived-config-2](file/hived-config-2.yaml).
-2. Submit job [itc-reconfig-3](file/itc-reconfig-3.yaml) which requests K80 `gpuType`. Wait until it is running.
+2. Submit job [itc-reconfig-3](file/itc-reconfig-3.yaml) which requests K80 `skuType`. Wait until it is running.
 3. Delete one K80 node used by [itc-reconfig-3](file/itc-reconfig-3.yaml) from a PhysicalCell, then becomes [hived-config-7](file/hived-config-7.yaml).
-4. Use [hived-config-7](file/hived-config-7.yaml), and restart HiveD. 
+4. Use [hived-config-7](file/hived-config-7.yaml), and restart HiveD.
 5. The job will still run without any impact, but its deleted node usage is ignored by HiveD.
    *However, normally, the job will still fail if the corresponding physical node is later deleted from K8S or unhealthy.*
    <img src="file/itc-reconfig-3-1.png" width="900"/>
@@ -189,7 +191,7 @@ HiveD can be reconfigured without unnecessary user impacts, such as add/update/d
 1. Use [hived-config-2](file/hived-config-2.yaml).
 2. Submit job [itc-reconfig-3](file/itc-reconfig-3.yaml) to default VC. Wait until it is running.
 3. Delete the default VC and move its quota to VC1, then becomes [hived-config-5](file/hived-config-5.yaml).
-4. Use [hived-config-5](file/hived-config-5.yaml), and restart HiveD. 
+4. Use [hived-config-5](file/hived-config-5.yaml), and restart HiveD.
 5. The job will still run without any interruption but [lazy preempted](#Lazy-Preemption) by HiveD.
    <img src="file/itc-reconfig-3.png" width="900"/>
 6. To confirm it is [lazy preempted](#Lazy-Preemption), submit job [itc-reconfig-4](file/itc-reconfig-4.yaml) to VC1 which requests all K80 nodes. The job will immediately preempt [itc-reconfig-3](file/itc-reconfig-3.yaml).
@@ -199,7 +201,7 @@ HiveD can be reconfigured without unnecessary user impacts, such as add/update/d
 1. Use [hived-config-2](file/hived-config-2.yaml).
 2. Submit job [itc-reconfig-3](file/itc-reconfig-3.yaml) to default VC. Wait until it is running.
 3. Move one K80-NODE cell from default VC to VC1, then becomes [hived-config-6](file/hived-config-6.yaml).
-4. Use [hived-config-6](file/hived-config-6.yaml), and restart HiveD. 
+4. Use [hived-config-6](file/hived-config-6.yaml), and restart HiveD.
 5. The job will still run without any interruption but [lazy preempted](#Lazy-Preemption) by HiveD.
 6. To confirm it is [lazy preempted](#Lazy-Preemption), submit job [itc-reconfig-5](file/itc-reconfig-5.yaml) to VC1 which requests all K80 nodes. The job will immediately preempt [itc-reconfig-3](file/itc-reconfig-3.yaml).
    <img src="file/itc-reconfig-5.png" width="900"/>

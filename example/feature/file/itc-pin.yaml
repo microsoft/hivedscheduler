@@ -42,7 +42,7 @@ extras:
     jobPriorityClass: prod
     taskRoles:
       vc1nopinned:
-        gpuType: K80
+        skuType: K80
         affinityGroupName: vc1nopinned
       vc1pinned:
         pinnedCellId: VC1-K80

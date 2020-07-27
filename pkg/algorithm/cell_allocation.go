@@ -236,8 +236,8 @@ func getUsablePhysicalCells(
 	}
 	// prioritize the cells with fewer opportunistic pods (to reduce preemption)
 	sort.SliceStable(candidates, func(i, j int) bool {
-		return candidates[i].GetUsedGpuNumAtPriorities()[opportunisticPriority] <
-			candidates[j].GetUsedGpuNumAtPriorities()[opportunisticPriority]
+		return candidates[i].GetUsedLeafCellNumAtPriorities()[opportunisticPriority] <
+			candidates[j].GetUsedLeafCellNumAtPriorities()[opportunisticPriority]
 	})
 	return usableCandidates
 }
@@ -382,7 +382,7 @@ func getUnboundVirtualCell(cl CellList) *VirtualCell {
 }
 
 // bindCell binds a virtual cell to a physical cell and its parent recursively.
-// bindCell always starts from the lowest level, i.e., GPU-level cells.
+// bindCell always starts from the lowest level, i.e., leaf-level cells.
 func bindCell(pc *PhysicalCell, vc *VirtualCell) {
 	for vc.GetPhysicalCell() == nil {
 		pc.SetVirtualCell(vc)
@@ -397,7 +397,7 @@ func bindCell(pc *PhysicalCell, vc *VirtualCell) {
 }
 
 // unbindCell unbinds a virtual cell with a physical cell and its parent recursively.
-// unbindCell always starts from the lowest level, i.e., GPU-level cells.
+// unbindCell always starts from the lowest level, i.e., leaf-level cells.
 func unbindCell(c *PhysicalCell) {
 	boundVirtual := c.GetVirtualCell()
 	for !boundVirtual.GetPhysicalCell().IsPinned() {
@@ -421,7 +421,7 @@ func unbindCell(c *PhysicalCell) {
 
 // setCellPriority sets priority for a cell and its parent recursively, guaranteeing that
 // the priority of a cell is the max of those of its children.
-// setCellPriority always starts from the lowest level, i.e., GPU-level cells.
+// setCellPriority always starts from the lowest level, i.e., leaf-level cells.
 func setCellPriority(c Cell, p CellPriority) {
 	originalPriority := c.GetPriority()
 	c.SetPriority(p)
@@ -440,15 +440,15 @@ func setCellPriority(c Cell, p CellPriority) {
 	}
 }
 
-// updateUsedGpuNumAtPriority updates the number of used GPUs at a priority for a cell
+// updateUsedLeafCellNumAtPriority updates the number of used leaf cells at a priority for a cell
 // and its parent recursively.
-func updateUsedGpuNumAtPriority(c Cell, p CellPriority, increase bool) {
+func updateUsedLeafCellNumAtPriority(c Cell, p CellPriority, increase bool) {
 	for c != nil {
 		delta := int32(-1)
 		if increase {
 			delta = 1
 		}
-		c.IncreaseUsedGpuNumAtPriority(p, delta)
+		c.IncreaseUsedLeafCellNumAtPriority(p, delta)
 		c = c.GetParent()
 	}
 }

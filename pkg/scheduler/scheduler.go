@@ -24,6 +24,9 @@ package scheduler
 
 import (
 	"fmt"
+	"sync"
+	"time"
+
 	"github.com/microsoft/hivedscheduler/pkg/algorithm"
 	si "github.com/microsoft/hivedscheduler/pkg/api"
 	"github.com/microsoft/hivedscheduler/pkg/common"
@@ -39,8 +42,6 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog"
 	ei "k8s.io/kubernetes/pkg/scheduler/api"
-	"sync"
-	"time"
 )
 
 // HivedScheduler is the scheduling framework which serves as the bridge between
@@ -437,9 +438,9 @@ func (s *HivedScheduler) shouldForceBind(
 	// based on current status, the retried Pod should can be scheduled on suitable
 	// placement decision eventually.
 	// Thus, the problematic decision can only be stale decision, i.e. only newly
-	// bad GPUs or newly deleted Nodes will lead Pod retried.
-	// For newly bad GPUs, it is like the normal behaviour that a pod will fail
-	// after the GPUs it runs on become unhealthy.
+	// bad devices or newly deleted Nodes will lead Pod retried.
+	// For newly bad devices, it is like the normal behaviour that a pod will fail
+	// after the devices it runs on become unhealthy.
 	// For newly deleted Nodes, it is like the normal behaviour that a pod will
 	// be deleted by the GarbageCollectionController after the node it runs on is
 	// deleted.

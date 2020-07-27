@@ -24,21 +24,22 @@ package algorithm
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/microsoft/hivedscheduler/pkg/api"
 	"github.com/microsoft/hivedscheduler/pkg/common"
-	"strings"
 )
 
 // internal wrapper for spec cellTypes
 type cellChainElement struct {
-	cellType      api.CellType // current cell type
-	level         CellLevel    // current cell level, leaf cell is 1
-	childCellType api.CellType // child cell type
-	childNumber   int32        // child number
-	hasNode       bool         // current cell type is a node or above cell
-	isMultiNodes  bool         // current cell type is a multiple node cell
-	gpuType       string       // current cell gpu type
-	gpuNumber     int32        // how many gpu in current cell
+	cellType       api.CellType // current cell type
+	level          CellLevel    // current cell level, leaf cell is 1
+	childCellType  api.CellType // child cell type
+	childNumber    int32        // child number
+	hasNode        bool         // current cell type is a node or above cell
+	isMultiNodes   bool         // current cell type is a multiple node cell
+	leafCellType   string       // current cell leaf cell type
+	leafCellNumber int32        // how many leaf cell in current cell
 }
 
 type cellTypeConstructor struct {
@@ -66,14 +67,14 @@ func (c *cellTypeConstructor) addCellChain(ct api.CellType) {
 	if !ok {
 		// not found in raw spec, it's leaf cell
 		c.cellChainElements[ct] = &cellChainElement{
-			cellType:      ct,
-			level:         lowestLevel,
-			childCellType: "",
-			childNumber:   0,
-			hasNode:       false,
-			isMultiNodes:  false,
-			gpuType:       string(ct),
-			gpuNumber:     1,
+			cellType:       ct,
+			level:          lowestLevel,
+			childCellType:  "",
+			childNumber:    0,
+			hasNode:        false,
+			isMultiNodes:   false,
+			leafCellType:   string(ct),
+			leafCellNumber: 1,
 		}
 		return
 	}
@@ -87,14 +88,14 @@ func (c *cellTypeConstructor) addCellChain(ct api.CellType) {
 	// child cell type has been added, added current element,
 	cct := c.cellChainElements[child]
 	c.cellChainElements[ct] = &cellChainElement{
-		cellType:      ct,
-		level:         cct.level + 1,
-		childCellType: cct.cellType,
-		childNumber:   ctSpec.ChildCellNumber,
-		hasNode:       cct.hasNode || ctSpec.IsNodeLevel,
-		isMultiNodes:  cct.hasNode,
-		gpuType:       cct.gpuType,
-		gpuNumber:     cct.gpuNumber * ctSpec.ChildCellNumber,
+		cellType:       ct,
+		level:          cct.level + 1,
+		childCellType:  cct.cellType,
+		childNumber:    ctSpec.ChildCellNumber,
+		hasNode:        cct.hasNode || ctSpec.IsNodeLevel,
+		isMultiNodes:   cct.hasNode,
+		leafCellType:   cct.leafCellType,
+		leafCellNumber: cct.leafCellNumber * ctSpec.ChildCellNumber,
 	}
 	return
 }
@@ -155,7 +156,7 @@ func (c *physicalCellConstructor) buildChildCell(
 		return cellInstance
 	}
 	var currentCellNodes []string
-	var currentCellGpuIndices []int32
+	var currentCellLeafCellIndices []int32
 	var currentCellChildren CellList
 	for _, childSpec := range spec.CellChildren {
 		childCellInstance := c.buildChildCell(childSpec, ce.childCellType, currentNode)
@@ -165,18 +166,18 @@ func (c *physicalCellConstructor) buildChildCell(
 			// super-node cell merge child nodes
 			currentCellNodes = append(currentCellNodes, childCellInstance.nodes...)
 		} else {
-			// sub-node cell merge child node gpu indices
-			currentCellGpuIndices = append(currentCellGpuIndices, childCellInstance.gpuIndices...)
+			// sub-node cell merge child node leaf cell indices
+			currentCellLeafCellIndices = append(currentCellLeafCellIndices, childCellInstance.leafCellIndices...)
 		}
 	}
 	// update current cell children and resource
 	cellInstance.SetChildren(currentCellChildren)
 	if ce.isMultiNodes {
-		currentCellGpuIndices = []int32{-1}
+		currentCellLeafCellIndices = []int32{-1}
 	} else {
 		currentCellNodes = []string{currentNode}
 	}
-	cellInstance.SetPhysicalResources(currentCellNodes, currentCellGpuIndices)
+	cellInstance.SetPhysicalResources(currentCellNodes, currentCellLeafCellIndices)
 
 	return cellInstance
 }
@@ -188,7 +189,7 @@ func (c *physicalCellConstructor) addCell(
 	address api.CellAddress) *PhysicalCell {
 
 	cellInstance := NewPhysicalCell(
-		c.buildingChain, ce.level, ce.hasNode, ce.gpuNumber, ce.cellType, address, ce.hasNode && !ce.isMultiNodes)
+		c.buildingChain, ce.level, ce.hasNode, ce.leafCellNumber, ce.cellType, address, ce.hasNode && !ce.isMultiNodes)
 	if _, ok := c.fullCellList[chain]; !ok {
 		c.fullCellList[chain] = ChainCellList{}
 	}
@@ -211,8 +212,8 @@ func (c *physicalCellConstructor) buildFullTree() *PhysicalCell {
 		panic(fmt.Sprintf("top cell must be node-level or above: %v", cc))
 	}
 	cellInstance := c.buildChildCell(c.buildingSpec, api.CellType(cc), "")
-	// set GPU type only for top-level cells (as a chain shares the same GPU type)
-	cellInstance.GetAPIStatus().GpuType = ce.gpuType
+	// set leaf cell type only for top-level cells (as a chain shares the same leaf cell type)
+	cellInstance.GetAPIStatus().LeafCellType = ce.leafCellType
 	return cellInstance
 }
 
@@ -289,7 +290,7 @@ func (c *virtualCellConstructor) addCell(
 		c.buildingChain,
 		ce.level,
 		ce.hasNode,
-		ce.gpuNumber,
+		ce.leafCellNumber,
 		nil,
 		ce.cellType,
 		address,
@@ -345,8 +346,8 @@ func (c *virtualCellConstructor) buildFullTree(address api.CellAddress) *Virtual
 		panic(fmt.Sprintf("cellType %v in VirtualCells is not found in cell types definition", c.buildingChild))
 	}
 	cellInstance := c.buildChildCell(c.buildingChild, address)
-	// set GPU type only for top-level cells (as a chain shares the same GPU type)
-	cellInstance.GetAPIStatus().GpuType = ce.gpuType
+	// set leaf cell type only for top-level cells (as a chain shares the same leaf cell type)
+	cellInstance.GetAPIStatus().LeafCellType = ce.leafCellType
 	return cellInstance
 }
 
@@ -418,23 +419,23 @@ func parseCellChainInfo(
 	map[CellChain]map[CellLevel]api.CellType,
 	map[string][]CellChain) {
 
-	cellLevelToGpuNum := map[CellChain]map[CellLevel]int32{}
+	cellLevelToLeafCellNum := map[CellChain]map[CellLevel]int32{}
 	cellLevelToType := map[CellChain]map[CellLevel]api.CellType{}
-	gpuTypeToChain := map[string][]CellChain{}
+	leafCellTypeToChain := map[string][]CellChain{}
 	for _, chain := range chains {
 		ce := cellChainElements[api.CellType(chain)]
-		gpuTypeToChain[ce.gpuType] = append(gpuTypeToChain[ce.gpuType], chain)
+		leafCellTypeToChain[ce.leafCellType] = append(leafCellTypeToChain[ce.leafCellType], chain)
 
-		cellLevelToGpuNum[chain] = map[CellLevel]int32{}
+		cellLevelToLeafCellNum[chain] = map[CellLevel]int32{}
 		cellLevelToType[chain] = map[CellLevel]api.CellType{}
 		ce, ok := cellChainElements[api.CellType(chain)]
 		for ok {
-			cellLevelToGpuNum[chain][ce.level] = ce.gpuNumber
+			cellLevelToLeafCellNum[chain][ce.level] = ce.leafCellNumber
 			cellLevelToType[chain][ce.level] = ce.cellType
 			ce, ok = cellChainElements[ce.childCellType]
 		}
 	}
-	return cellLevelToGpuNum, cellLevelToType, gpuTypeToChain
+	return cellLevelToLeafCellNum, cellLevelToType, leafCellTypeToChain
 
 }
 
@@ -446,8 +447,8 @@ func ParseConfig(sConfig *api.Config) (
 	virtualNonPinnedFreeList map[api.VirtualClusterName]map[CellChain]ChainCellList, // vc:chain:level:[]virtualCell
 	virtualPinnedCells map[api.VirtualClusterName]map[api.PinnedCellId]ChainCellList, // vc:pinnedCellId:level:[]virtualCell
 	physicalPinnedCells map[api.VirtualClusterName]map[api.PinnedCellId]*PhysicalCell, // vc:pinnedCellId:PhysicalCell
-	cellLevelToGpuNum map[CellChain]map[CellLevel]int32, // chain:level:gpuNumber
-	gpuTypeToChain map[string][]CellChain, // gpuType:[]chain
+	cellLevelToLeafCellNum map[CellChain]map[CellLevel]int32, // chain:level:leafCellNumber
+	leafCellTypeToChain map[string][]CellChain, // leafCellType:[]chain
 	cellLevelToType map[CellChain]map[CellLevel]api.CellType, // chain:level:cellType
 ) {
 
@@ -470,7 +471,7 @@ func ParseConfig(sConfig *api.Config) (
 	for k := range physicalFullList {
 		cellChains = append(cellChains, k)
 	}
-	cellLevelToGpuNum, cellLevelToType, gpuTypeToChain = parseCellChainInfo(cellChainElements, cellChains)
+	cellLevelToLeafCellNum, cellLevelToType, leafCellTypeToChain = parseCellChainInfo(cellChainElements, cellChains)
 
 	return
 }

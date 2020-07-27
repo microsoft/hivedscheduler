@@ -44,23 +44,10 @@ const (
 	// PodSchedulingSpec YAML format.
 	AnnotationKeyPodSchedulingSpec = GroupName + "/pod-scheduling-spec"
 
-	// To leverage this scheduler, if one container in the Pod want to use the
-	// allocated GPUs for the whole Pod, it should contain below env.
-	//   env:
-	//   - name: NVIDIA_VISIBLE_DEVICES
-	//     valueFrom:
-	//       fieldRef:
-	//         fieldPath: metadata.annotations['hivedscheduler.microsoft.com/pod-gpu-isolation']
-	// The annotation referred by the env will be populated by scheduler when bind the pod.
-	//
-	// Notes:
-	// 1. The scheduler directly delivers GPU isolation decision to
-	//    nvidia-container-runtime through Pod Env: NVIDIA_VISIBLE_DEVICES.
-	// 2. If multiple containers in the Pod contain the env, the allocated GPUs are
-	//    all visible to them, so it is these containers' freedom to control how
-	//    to share these GPUs.
-	EnvNameNvidiaVisibleDevices  = "NVIDIA_VISIBLE_DEVICES"
-	AnnotationKeyPodGpuIsolation = GroupName + "/pod-gpu-isolation"
+	// To leverage this scheduler, the Pod could reference below annotation to
+	// use the allocated leaf cells for the whole Pod.
+	AnnotationKeyPodLeafCellIsolation      = GroupName + "/pod-leaf-cell-isolation"
+	DeprecatedAnnotationKeyPodGpuIsolation = GroupName + "/pod-gpu-isolation"
 
 	// Populated by this scheduler, used to track and recover allocated placement.
 	// It is in PodBindInfo YAML format.

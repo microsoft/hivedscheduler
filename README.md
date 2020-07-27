@@ -20,7 +20,7 @@ The killer feature that distinguishes HiveD is that it provides resource guarant
 
 HiveD protects VCs' resources in terms of **cell**, a user-defined resource type that encodes both the quantity and other kinds of information, such as topology and hardware type. In the above example, a user can define a cell type of 8-GPU node, and the VC can be assigned one of such cell. Then, HiveD will ensure that *there is always one 8-GPU node available for the VC*, regardless of the other workloads in the cluster.
 
-HiveD allows flexible cell definitions for fine-grained resource guarantees. For example, users can define cells at multiple topology levels (e.g., PCI-e switch), for different GPU models, or networking configurations (e.g., InfiniBand domain). A VC can have various types of cells, and HiveD will guarantee all of them.
+HiveD allows flexible cell definitions for fine-grained resource guarantees. For example, users can define cells at multiple topology levels (e.g., PCI-e switch), for different device models (e.g., NVIDIA V100 GPU, AMD Radeon MI100 GPU, Cloud TPU v3), or networking configurations (e.g., InfiniBand domain). A VC can have various types of cells, and HiveD will guarantee all of them.
 
 ### [Gang Scheduling](example/feature/README.md#Gang-Scheduling)
 
@@ -34,8 +34,8 @@ HiveD supports multiple job **priorities**. Higher-priority jobs can **[preempt]
 
 ## Feature
 1. [Multi-Tenancy: Virtual Cluster (VC)](example/feature/README.md#VC-Safety)
-2. [Fine-Grained VC Resource Guarantee](example/feature/README.md#VC-Safety): Quantity, [Topology](example/feature/README.md#VC-Safety), [Type](example/feature/README.md#GPU-Type), [Pinned VC Resource](example/feature/README.md#Pinned-Cells), etc.
-3. Flexible Intra-VC Scheduling: [Topology-Awareness](example/feature/README.md#Topology-Aware-Intra-VC-Scheduling), [Flexible GPU Types](example/feature/README.md#GPU-Type), [Pinned VC Resource](example/feature/README.md#Pinned-Cells), Scheduling Policy Customization, etc.
+2. [Fine-Grained VC Resource Guarantee](example/feature/README.md#VC-Safety): Quantity, [Topology](example/feature/README.md#VC-Safety), [Type](example/feature/README.md#SKU-Type), [Pinned VC Resource](example/feature/README.md#Pinned-Cells), etc.
+3. Flexible Intra-VC Scheduling: [Topology-Awareness](example/feature/README.md#Topology-Aware-Intra-VC-Scheduling), [Flexible Hardware Types](example/feature/README.md#SKU-Type), [Pinned VC Resource](example/feature/README.md#Pinned-Cells), Scheduling Policy Customization, etc.
 4. Optimized Resource Fragmentation and Less Starvation
 5. [Priorities](example/feature/README.md#Guaranteed-Job), [Overuse with Low Priority](example/feature/README.md#Opportunistic-Job), and [Inter-](example/feature/README.md#Inter-VC-Preemption)/[Intra-VC Preemption](example/feature/README.md#Intra-VC-Preemption)
 6. [Job (Full/Partial) Gang Scheduling/Preemption](example/feature/README.md#Gang-Scheduling)

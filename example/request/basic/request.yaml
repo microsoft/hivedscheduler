@@ -7,8 +7,8 @@ jobPriorityClass: PROD
 taskRoles:
   a:
     taskNumber: 5
-    gpuType: K80
-    gpuNumber: 1
+    leafCellType: K80
+    leafCellNumber: 1
     affinityGroupName: null
 ---
 jobVC: VC2
@@ -17,8 +17,8 @@ jobPriorityClass: PROD
 taskRoles:
   a:
     taskNumber: 5
-    gpuType: K80
-    gpuNumber: 1
+    leafCellType: K80
+    leafCellNumber: 1
     affinityGroupName: null
 ---
 jobVC: VC2
@@ -28,7 +28,7 @@ taskRoles:
   a:
     taskNumber: 5
     pinnedCellId: VC2-K80
-    gpuNumber: 1
+    leafCellNumber: 1
     affinityGroupName: null
 
 ---
@@ -36,7 +36,7 @@ taskRoles:
 # [Optional]: Cluster Admin -> RestServer Config -> PC
 ################################################################################
 physicalCluster:
-  gpuTypes:
+  leafCellTypes:
     K80:
       gpu: 1
       cpu: 4
@@ -71,8 +71,8 @@ spec:
               hivedscheduler.microsoft.com/pod-scheduling-spec: |-
                 virtualCluster: VC1
                 priority: 1000
-                gpuType: K80
-                gpuNumber: 1
+                leafCellType: K80
+                leafCellNumber: 1
                 affinityGroup: null
           spec:
             schedulerName: hivedscheduler
@@ -91,7 +91,7 @@ spec:
               - name: NVIDIA_VISIBLE_DEVICES
                 valueFrom:
                   fieldRef:
-                    fieldPath: metadata.annotations['hivedscheduler.microsoft.com/pod-gpu-isolation']
+                    fieldPath: metadata.annotations['hivedscheduler.microsoft.com/pod-leaf-cell-isolation']
 ---
 apiVersion: frameworkcontroller.microsoft.com/v1
 kind: Framework
@@ -118,8 +118,8 @@ spec:
               hivedscheduler.microsoft.com/pod-scheduling-spec: |-
                 virtualCluster: VC2
                 priority: 1000
-                gpuType: K80
-                gpuNumber: 1
+                leafCellType: K80
+                leafCellNumber: 1
                 affinityGroup: null
           spec:
             schedulerName: hivedscheduler
@@ -138,7 +138,7 @@ spec:
               - name: NVIDIA_VISIBLE_DEVICES
                 valueFrom:
                   fieldRef:
-                    fieldPath: metadata.annotations['hivedscheduler.microsoft.com/pod-gpu-isolation']
+                    fieldPath: metadata.annotations['hivedscheduler.microsoft.com/pod-leaf-cell-isolation']
 ---
 apiVersion: frameworkcontroller.microsoft.com/v1
 kind: Framework
@@ -166,7 +166,7 @@ spec:
                 virtualCluster: VC2
                 priority: 1000
                 pinnedCellId: VC2-K80
-                gpuNumber: 1
+                leafCellNumber: 1
                 affinityGroup: null
           spec:
             schedulerName: hivedscheduler
@@ -185,7 +185,7 @@ spec:
               - name: NVIDIA_VISIBLE_DEVICES
                 valueFrom:
                   fieldRef:
-                    fieldPath: metadata.annotations['hivedscheduler.microsoft.com/pod-gpu-isolation']
+                    fieldPath: metadata.annotations['hivedscheduler.microsoft.com/pod-leaf-cell-isolation']
 
 ---
 ################################################################################
@@ -200,8 +200,8 @@ metadata:
     hivedscheduler.microsoft.com/pod-scheduling-spec: |-
       virtualCluster: VC1
       priority: 1000
-      gpuType: K80
-      gpuNumber: 1
+      leafCellType: K80
+      leafCellNumber: 1
       affinityGroup: null
 spec:
   schedulerName: hivedscheduler
@@ -220,7 +220,7 @@ spec:
     - name: NVIDIA_VISIBLE_DEVICES
       valueFrom:
         fieldRef:
-          fieldPath: metadata.annotations['hivedscheduler.microsoft.com/pod-gpu-isolation']
+          fieldPath: metadata.annotations['hivedscheduler.microsoft.com/pod-leaf-cell-isolation']
 ---
 apiVersion: v1
 kind: Pod
@@ -231,8 +231,8 @@ metadata:
     hivedscheduler.microsoft.com/pod-scheduling-spec: |-
       virtualCluster: VC2
       priority: 1000
-      gpuType: K80
-      gpuNumber: 1
+      leafCellType: K80
+      leafCellNumber: 1
       affinityGroup: null
 spec:
   schedulerName: hivedscheduler
@@ -251,7 +251,7 @@ spec:
     - name: NVIDIA_VISIBLE_DEVICES
       valueFrom:
         fieldRef:
-          fieldPath: metadata.annotations['hivedscheduler.microsoft.com/pod-gpu-isolation']
+          fieldPath: metadata.annotations['hivedscheduler.microsoft.com/pod-leaf-cell-isolation']
 ---
 apiVersion: v1
 kind: Pod
@@ -263,7 +263,7 @@ metadata:
       virtualCluster: VC2
       priority: 1000
       pinnedCellId: VC2-K80
-      gpuNumber: 1
+      leafCellNumber: 1
       affinityGroup: null
 spec:
   schedulerName: hivedscheduler
@@ -282,4 +282,4 @@ spec:
     - name: NVIDIA_VISIBLE_DEVICES
       valueFrom:
         fieldRef:
-          fieldPath: metadata.annotations['hivedscheduler.microsoft.com/pod-gpu-isolation']
+          fieldPath: metadata.annotations['hivedscheduler.microsoft.com/pod-leaf-cell-isolation']
