@@ -158,7 +158,7 @@
 
 ## <a name="Scheduling-GPUs">Scheduling GPUs</a>
 
-To leverage this scheduler, if one container in the Pod want to use the allocated GPUs for the whole Pod,
+To leverage this scheduler to schedule GPUs, if one container in the Pod want to use the allocated GPUs for the whole Pod,
 it could contain below environment variables:
 
 * NVIDIA GPUs
