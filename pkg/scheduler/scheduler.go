@@ -438,9 +438,9 @@ func (s *HivedScheduler) shouldForceBind(
 	// based on current status, the retried Pod should can be scheduled on suitable
 	// placement decision eventually.
 	// Thus, the problematic decision can only be stale decision, i.e. only newly
-	// bad leaf cells or newly deleted Nodes will lead Pod retried.
-	// For newly bad leaf cells, it is like the normal behaviour that a pod will fail
-	// after the leaf cells it runs on become unhealthy.
+	// bad devices or newly deleted Nodes will lead Pod retried.
+	// For newly bad devices, it is like the normal behaviour that a pod will fail
+	// after the devices it runs on become unhealthy.
 	// For newly deleted Nodes, it is like the normal behaviour that a pod will
 	// be deleted by the GarbageCollectionController after the node it runs on is
 	// deleted.

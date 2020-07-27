@@ -2,6 +2,7 @@
 
 ## <a name="Index">Index</a>
    - [Config](#Config)
+   - [Scheduling GPUs](#Scheduling-GPUs)
 
 ## <a name="Config">Config</a>
 ### <a name="ConfigQuickStart">Config QuickStart</a>
@@ -14,7 +15,6 @@
     Notes:
     1. It is like the [Azure VM Series](https://docs.microsoft.com/en-us/azure/virtual-machines/windows/sizes-gpu) or [GCP Machine Types](https://cloud.google.com/compute/docs/machine-types).
     2. Currently, the `skuTypes` is not directly used by HivedScheduler, but it is used by [OpenPAI RestServer](https://github.com/microsoft/pai/tree/master/src/rest-server) to setup proportional Pod resource requests and limits. So, if you are not using with [OpenPAI RestServer](https://github.com/microsoft/pai/tree/master/src/rest-server), you can skip to config it.
-    3. It is previously known as `gpuTypes`, as HiveD is only aware of the abstract `cell` concept instead of the concrete hardware that the `cell` represents.
 
     **Example:**
 
@@ -155,3 +155,37 @@
 
 ### <a name="ConfigDetail">Config Detail</a>
 [Detail Example](../example/config)
+
+## <a name="Scheduling-GPUs">Scheduling GPUs</a>
+
+To leverage this scheduler, if one container in the Pod want to use the allocated GPUs for the whole Pod,
+it could contain below environment variables:
+
+* NVIDIA GPUs
+
+  ```yaml
+  env:
+  - name: NVIDIA_VISIBLE_DEVICES
+    valueFrom:
+      fieldRef:
+        fieldPath: metadata.annotations['hivedscheduler.microsoft.com/pod-leaf-cell-isolation']
+  ```
+  The scheduler directly delivers GPU isolation decision to [nvidia-container-runtime](https://github.com/NVIDIA/nvidia-container-runtime)
+  through Pod Env `NVIDIA_VISIBLE_DEVICES`.
+
+* AMD GPUs
+
+  ```yaml
+  env:
+  - name: AMD_VISIBLE_DEVICES
+    valueFrom:
+      fieldRef:
+        fieldPath: metadata.annotations['hivedscheduler.microsoft.com/pod-leaf-cell-isolation']
+  ```
+  The scheduler directly delivers GPU isolation decision to [rocm-container-runtime](https://github.com/abuccts/rocm-container-runtime)
+  through Pod Env `AMD_VISIBLE_DEVICES`.
+
+The annotation referred by the env will be populated by scheduler when bind the pod.
+
+If multiple containers in the Pod contain the env, the allocated GPUs are all visible to them,
+so it is these containers' freedom to control how to share these GPUs.

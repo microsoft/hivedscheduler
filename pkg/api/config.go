@@ -73,7 +73,7 @@ type Config struct {
 	WaitingPodSchedulingBlockMilliSec *int64 `yaml:"waitingPodSchedulingBlockMilliSec"`
 
 	// Specify the whole physical cluster
-	// TODO: Automatically construct it based on node info from Device and Network Device Plugins
+	// TODO: Automatically construct it based on node info from Device Plugins
 	PhysicalCluster *PhysicalClusterSpec `yaml:"physicalCluster"`
 
 	// Specify all the virtual clusters belongs to the physical cluster

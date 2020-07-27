@@ -185,8 +185,8 @@ func NewBindingPod(pod *core.Pod, podBindInfo *si.PodBindInfo) *core.Pod {
 	return bindingPod
 }
 
-// ConvertOldAnnotation converts old spec annotations for backward compatibility
-func ConvertOldAnnotation(annotation string) string {
+// converts old spec annotations for backward compatibility
+func convertOldAnnotation(annotation string) string {
 	r := strings.NewReplacer(
 		"gpuType", "leafCellType",
 		"gpuNumber", "leafCellNumber",
@@ -200,7 +200,7 @@ func ConvertOldAnnotation(annotation string) string {
 func ExtractPodBindInfo(allocatedPod *core.Pod) *si.PodBindInfo {
 	podBindInfo := si.PodBindInfo{}
 
-	annotation := ConvertOldAnnotation(allocatedPod.Annotations[si.AnnotationKeyPodBindInfo])
+	annotation := convertOldAnnotation(allocatedPod.Annotations[si.AnnotationKeyPodBindInfo])
 	if annotation == "" {
 		panic(fmt.Errorf(
 			"Pod does not contain or contains empty annotation: %v",
@@ -219,8 +219,8 @@ func ExtractPodBindAnnotations(allocatedPod *core.Pod) map[string]string {
 		}
 	} else {
 		return map[string]string{
-			si.AnnotationKeyPodLeafCellIsolation: allocatedPod.Annotations[strings.Replace(si.AnnotationKeyPodLeafCellIsolation, "leaf-cell", "gpu", -1)],
-			si.AnnotationKeyPodBindInfo:          ConvertOldAnnotation(allocatedPod.Annotations[si.AnnotationKeyPodBindInfo]),
+			si.AnnotationKeyPodLeafCellIsolation: allocatedPod.Annotations[si.DeprecatedAnnotationKeyPodGpuIsolation],
+			si.AnnotationKeyPodBindInfo:          convertOldAnnotation(allocatedPod.Annotations[si.AnnotationKeyPodBindInfo]),
 		}
 	}
 }
@@ -234,7 +234,7 @@ func ExtractPodSchedulingSpec(pod *core.Pod) *si.PodSchedulingSpec {
 
 	podSchedulingSpec := si.PodSchedulingSpec{}
 
-	annotation := ConvertOldAnnotation(pod.Annotations[si.AnnotationKeyPodSchedulingSpec])
+	annotation := convertOldAnnotation(pod.Annotations[si.AnnotationKeyPodSchedulingSpec])
 	if annotation == "" {
 		panic(fmt.Errorf(errPfx + "Annotation does not exist or is empty"))
 	}
