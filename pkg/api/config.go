@@ -226,7 +226,7 @@ func WatchConfig(configPath *string, c *Config) {
 	v.OnConfigChange(func(e fsnotify.Event) {
 		klog.Infof("Watched config file changed: %v", e.Name)
 		if ok := reflect.DeepEqual(*c, *NewConfig(InitRawConfig(configPath))); !ok {
-			klog.Error("Config file content changed, exiting...")
+			klog.Error("Config file content changed, exiting ...")
 			os.Exit(0)
 		}
 	})

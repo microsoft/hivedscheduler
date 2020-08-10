@@ -120,8 +120,8 @@ spec:
       - name: hivedscheduler
         image: hivedscheduler/hivedscheduler
         env:
-          - name: CONFIG
-            value: /hivedscheduler-config/hivedscheduler.yaml
+        - name: CONFIG
+          value: /hivedscheduler-config/hivedscheduler.yaml
         command: [
           "bash", "-c",
           "./start.sh"]
