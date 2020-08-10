@@ -122,9 +122,9 @@ type HivedScheduler struct {
 func NewHivedScheduler() *HivedScheduler {
 	klog.Infof("Initializing " + si.ComponentName)
 
-	sConfig := si.NewConfig(si.InitRawConfig(nil))
+	sConfig := si.NewConfig(si.InitRawConfig(&si.EnvConfigFilePath))
 	klog.Infof("With Config: \n%v", common.ToYaml(sConfig))
-	si.WatchConfig(nil, sConfig)
+	si.WatchConfig(&si.EnvConfigFilePath, sConfig)
 	kConfig := si.BuildKubeConfig(sConfig)
 
 	kClient := internal.CreateClient(kConfig)

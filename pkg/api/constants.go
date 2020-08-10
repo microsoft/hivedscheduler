@@ -61,6 +61,7 @@ const (
 	OpportunisticPriority = int32(-1)
 )
 
+var EnvConfigFilePath = os.Getenv("CONFIG")
 var EnvValueKubeApiServerAddress = os.Getenv("KUBE_APISERVER_ADDRESS")
 var EnvValueKubeConfigFilePath = os.Getenv("KUBECONFIG")
 var DefaultKubeConfigFilePath = os.Getenv("HOME") + "/.kube/config"
