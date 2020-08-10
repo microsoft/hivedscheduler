@@ -10,14 +10,6 @@
   version = "v1.1.1"
 
 [[projects]]
-  digest = "1:0914bf7efc3e3052163e92b859a89f3b407ad353d7c3b7f59a1bbb4fd05bb25d"
-  name = "github.com/fsnotify/fsnotify"
-  packages = ["."]
-  pruneopts = "NUT"
-  revision = "45d7d09e39ef4ac08d493309fa031790c15bfe8a"
-  version = "v1.4.9"
-
-[[projects]]
   digest = "1:a1b2a5e38f79688ee8250942d5fa960525fceb1024c855c7bc76fa77b0f3cca2"
   name = "github.com/gogo/protobuf"
   packages = [
@@ -74,25 +66,6 @@
   version = "v0.5.1"
 
 [[projects]]
-  digest = "1:11c6c696067d3127ecf332b10f89394d386d9083f82baf71f40f2da31841a009"
-  name = "github.com/hashicorp/hcl"
-  packages = [
-    ".",
-    "hcl/ast",
-    "hcl/parser",
-    "hcl/printer",
-    "hcl/scanner",
-    "hcl/strconv",
-    "hcl/token",
-    "json/parser",
-    "json/scanner",
-    "json/token",
-  ]
-  pruneopts = "NUT"
-  revision = "8cb6e5b959231cc1119e43259c4a608f9c51a241"
-  version = "v1.0.0"
-
-[[projects]]
   digest = "1:aaa38889f11896ee3644d77e17dc7764cc47f5f3d3b488268df2af2b52541c5f"
   name = "github.com/imdario/mergo"
   packages = ["."]
@@ -107,22 +80,6 @@
   pruneopts = "NUT"
   revision = "0ff49de124c6f76f8494e194af75bde0f1a49a29"
   version = "v1.1.6"
-
-[[projects]]
-  digest = "1:802689c84994b7f2e41ffe7e39d29a8d8227f2121938dc025db44dfaa9633b15"
-  name = "github.com/magiconair/properties"
-  packages = ["."]
-  pruneopts = "NUT"
-  revision = "de8848e004dd33dc07a2947b3d76f618a7fc7ef1"
-  version = "v1.8.1"
-
-[[projects]]
-  digest = "1:40709da827caf66d1421f7e7251ed840c1c04423597041332d01797403280e49"
-  name = "github.com/mitchellh/mapstructure"
-  packages = ["."]
-  pruneopts = "NUT"
-  revision = "9e1e4717f8567d7ead72d070d064ad17d444a67e"
-  version = "v1.3.3"
 
 [[projects]]
   digest = "1:2f42fa12d6911c7b7659738758631bec870b7e9b4c6be5444f963cdcfccc191f"
@@ -141,63 +98,12 @@
   version = "1.0.1"
 
 [[projects]]
-  digest = "1:f0e1b2622f6f3e16a7f333cc0d24ed4993dc8672603c49da256499eb65f88790"
-  name = "github.com/pelletier/go-toml"
-  packages = ["."]
-  pruneopts = "NUT"
-  revision = "16c9a8bdc086a2130a88eff98df4088e4c359bb2"
-  version = "v1.8.0"
-
-[[projects]]
-  digest = "1:95b134401c142d9dc442ac40c4513fb9ae76ef37799b39446e4bcc978d058110"
-  name = "github.com/spf13/afero"
-  packages = [
-    ".",
-    "mem",
-  ]
-  pruneopts = "NUT"
-  revision = "799ff74c0fd7e7df974e6ffa1c94e3d206f5673b"
-  version = "v1.3.4"
-
-[[projects]]
-  digest = "1:58dae2a64f88329debe1daed979ccd2fd9b5a1b4b1867c2bc7ed96acb0ff00d0"
-  name = "github.com/spf13/cast"
-  packages = ["."]
-  pruneopts = "NUT"
-  revision = "1ffadf551085444af981432dd0f6d1160c11ec64"
-  version = "v1.3.1"
-
-[[projects]]
-  digest = "1:3d72352adb74e79d6d5a43d6f51bfd2d0bd0c9b5f3c00cf5a4b1636d8d3b9d92"
-  name = "github.com/spf13/jwalterweatherman"
-  packages = ["."]
-  pruneopts = "NUT"
-  revision = "94f6ae3ed3bceceafa716478c5fbf8d29ca601a1"
-  version = "v1.1.0"
-
-[[projects]]
   digest = "1:9d8420bbf131d1618bde6530af37c3799340d3762cc47210c1d9532a4c3a2779"
   name = "github.com/spf13/pflag"
   packages = ["."]
   pruneopts = "NUT"
   revision = "298182f68c66c05229eb03ac171abe6e309ee79a"
   version = "v1.0.3"
-
-[[projects]]
-  digest = "1:fec0368c130b82ac6044d7460c860798b0333a0761e4c3244ec5364201db2777"
-  name = "github.com/spf13/viper"
-  packages = ["."]
-  pruneopts = "NUT"
-  revision = "3826be313591f83193f048520482a7b3cf17d506"
-  version = "v1.7.1"
-
-[[projects]]
-  digest = "1:f60e4a8af6b6f3940cbdd28b1262221d28b4eb4d31b87bdb7b219f5fc0f278bf"
-  name = "github.com/subosito/gotenv"
-  packages = ["."]
-  pruneopts = "NUT"
-  revision = "2ef7124db659d49edac6aa459693a15ae36c671a"
-  version = "v1.2.0"
 
 [[projects]]
   branch = "master"
@@ -300,14 +206,6 @@
   pruneopts = "NUT"
   revision = "d2d2541c53f18d2a059457998ce2876cc8e67cbf"
   version = "v0.9.1"
-
-[[projects]]
-  digest = "1:336265cce27aa915bdc88cf49f345664303b3b3a73fa65b2d56ef5ec6b8c80e9"
-  name = "gopkg.in/ini.v1"
-  packages = ["."]
-  pruneopts = "NUT"
-  revision = "1fc6efb6f20ef065ae00baf7f4fa7722cad0ec34"
-  version = "v1.57.0"
 
 [[projects]]
   digest = "1:18108594151654e9e696b27b181b953f9a90b16bf14d253dd1b397b025a1487f"
@@ -573,7 +471,7 @@
   version = "v0.3.3"
 
 [[projects]]
-  digest = "1:c2e5d59856e627a7e21c55b8f5db09112d8dd4aafb64f853f787bb0d92baaa70"
+  digest = "1:aca527def4827b7e635958b49ae2682a6d33e69080c61740276cc3ce6f093f06"
   name = "k8s.io/kubernetes"
   packages = [
     "pkg/apis/core",
@@ -607,8 +505,6 @@
   analyzer-name = "dep"
   analyzer-version = 1
   input-imports = [
-    "github.com/fsnotify/fsnotify",
-    "github.com/spf13/viper",
     "gopkg.in/yaml.v2",
     "k8s.io/api/core/v1",
     "k8s.io/apimachinery/pkg/api/errors",
