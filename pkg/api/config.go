@@ -173,12 +173,6 @@ func defaultKubeConfigFilePath() *string {
 		return &configPath
 	}
 
-	configPath = DefaultKubeConfigFilePath
-	_, err = os.Stat(configPath)
-	if err == nil {
-		return &configPath
-	}
-
 	configPath = ""
 	return &configPath
 }
@@ -193,13 +187,8 @@ func defaultVirtualClusters() *map[VirtualClusterName]VirtualClusterSpec {
 
 func InitRawConfig(configPath *string) *Config {
 	c := Config{}
-	var configFilePath string
+	configFilePath := *configPath
 
-	if configPath == nil {
-		configFilePath = DefaultConfigFilePath
-	} else {
-		configFilePath = *configPath
-	}
 	yamlBytes, err := ioutil.ReadFile(configFilePath)
 	if err != nil {
 		panic(fmt.Errorf(
@@ -212,13 +201,8 @@ func InitRawConfig(configPath *string) *Config {
 
 func WatchConfig(configPath *string, c *Config) {
 	v := viper.New()
-	var configFilePath string
+	configFilePath := *configPath
 
-	if configPath == nil {
-		configFilePath = DefaultConfigFilePath
-	} else {
-		configFilePath = *configPath
-	}
 	v.SetConfigFile(configFilePath)
 	v.WatchConfig()
 	klog.Infof("Watching config file: %v", configFilePath)
