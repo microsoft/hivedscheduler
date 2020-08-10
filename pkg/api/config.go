@@ -26,10 +26,14 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"reflect"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/microsoft/hivedscheduler/pkg/common"
+	"github.com/spf13/viper"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/klog"
 )
 
 type Config struct {
@@ -204,6 +208,28 @@ func InitRawConfig(configPath *string) *Config {
 
 	common.FromYaml(string(yamlBytes), &c)
 	return &c
+}
+
+func WatchConfig(configPath *string, c *Config) {
+	v := viper.New()
+	var configFilePath string
+
+	if configPath == nil {
+		configFilePath = DefaultConfigFilePath
+	} else {
+		configFilePath = *configPath
+	}
+	v.SetConfigFile(configFilePath)
+	v.WatchConfig()
+	klog.Infof("Watching config file: %v", configFilePath)
+
+	v.OnConfigChange(func(e fsnotify.Event) {
+		klog.Infof("Watched config file changed: %v", e.Name)
+		if ok := reflect.DeepEqual(*c, *NewConfig(InitRawConfig(configPath))); !ok {
+			klog.Error("Config file content changed, exiting...")
+			os.Exit(0)
+		}
+	})
 }
 
 func BuildKubeConfig(sConfig *Config) *rest.Config {

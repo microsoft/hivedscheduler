@@ -124,6 +124,7 @@ func NewHivedScheduler() *HivedScheduler {
 
 	sConfig := si.NewConfig(si.InitRawConfig(nil))
 	klog.Infof("With Config: \n%v", common.ToYaml(sConfig))
+	si.WatchConfig(nil, sConfig)
 	kConfig := si.BuildKubeConfig(sConfig)
 
 	kClient := internal.CreateClient(kConfig)
