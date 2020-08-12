@@ -24,6 +24,8 @@ package api
 
 import (
 	"os"
+
+	"github.com/microsoft/hivedscheduler/pkg/common"
 )
 
 ///////////////////////////////////////////////////////////////////////////////////////
@@ -33,8 +35,7 @@ const (
 	ComponentName = "hivedscheduler"
 	GroupName     = "hivedscheduler.microsoft.com"
 
-	DefaultConfigFilePath = "./hivedscheduler.yaml"
-	UnlimitedValue        = -1
+	UnlimitedValue = -1
 
 	// To leverage this scheduler, at least one container in the Pod should contain
 	// below resource limit with any positive int16 value.
@@ -61,9 +62,9 @@ const (
 	OpportunisticPriority = int32(-1)
 )
 
-var EnvValueKubeApiServerAddress = os.Getenv("KUBE_APISERVER_ADDRESS")
-var EnvValueKubeConfigFilePath = os.Getenv("KUBECONFIG")
-var DefaultKubeConfigFilePath = os.Getenv("HOME") + "/.kube/config"
+var EnvValueConfigFilePath = common.GetEnv("CONFIG", "./hivedscheduler.yaml")
+var EnvValueKubeApiServerAddress = common.GetEnv("KUBE_APISERVER_ADDRESS", "")
+var EnvValueKubeConfigFilePath = common.GetEnv("KUBECONFIG", os.Getenv("HOME")+"/.kube/config")
 
 ///////////////////////////////////////////////////////////////////////////////////////
 // WebServer Constants

@@ -119,10 +119,12 @@ spec:
       containers:
       - name: hivedscheduler
         image: hivedscheduler/hivedscheduler
+        env:
+        - name: CONFIG
+          value: /hivedscheduler-config/hivedscheduler.yaml
         command: [
           "bash", "-c",
-          "cp /hivedscheduler-config/hivedscheduler.yaml . &&
-          ./start.sh"]
+          "./start.sh"]
         volumeMounts:
         - name: hivedscheduler-config
           mountPath: /hivedscheduler-config
