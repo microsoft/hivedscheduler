@@ -28,4 +28,3 @@ extras:
     taskRoles:
       train:
         skuType: K80
-  submitFrom: submit-job-v2

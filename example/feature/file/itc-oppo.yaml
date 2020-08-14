@@ -21,7 +21,7 @@ taskRoles:
       - rm /usr/local/cuda/lib64/stubs/libcuda.so.1
       - python mnist_cnn.py
 defaults:
-  virtualCluster: VC1
+  virtualCluster: vc1
 extras:
   gangAllocation: false
   hivedScheduler:
@@ -29,4 +29,3 @@ extras:
     taskRoles:
       train:
         skuType: K80
-  submitFrom: submit-job-v2

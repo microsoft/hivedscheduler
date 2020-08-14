@@ -100,5 +100,3 @@ deployments:
           - echo "Uploading data ..."
 defaults:
   deployment: tf_example
-extras:
-  submitFrom: submit-job-v2

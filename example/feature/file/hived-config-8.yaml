@@ -34,13 +34,13 @@ physicalCluster:
         - cellAddress: 10.151.41.24
 
 virtualClusters:
-  VC1:
+  vc1:
     virtualCells:
       - cellType: 3-K80-NODE.K80-NODE
         cellNumber: 1
     pinnedCells:
       - pinnedCellId: VC1-K80
-  VC2:
+  vc2:
     virtualCells:
       - cellType: 3-K80-NODE.K80-NODE
         cellNumber: 1

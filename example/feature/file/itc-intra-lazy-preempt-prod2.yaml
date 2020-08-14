@@ -20,7 +20,7 @@ taskRoles:
     commands:
       - rm /usr/local/cuda/lib64/stubs/libcuda.so.1
       - python mnist_cnn.py
-      - sleep 10000
+      - sleep 10m
 defaults:
   virtualCluster: default
 extras:
@@ -29,4 +29,3 @@ extras:
     taskRoles:
       train:
         skuType: K80
-  submitFrom: submit-job-v2
