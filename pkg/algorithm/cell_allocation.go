@@ -235,7 +235,7 @@ func getUsablePhysicalCells(
 		return nil
 	}
 	// prioritize the cells with fewer opportunistic pods (to reduce preemption)
-	sort.SliceStable(candidates, func(i, j int) bool {
+	sort.SliceStable(usableCandidates, func(i, j int) bool {
 		return candidates[i].GetUsedLeafCellNumAtPriorities()[opportunisticPriority] <
 			candidates[j].GetUsedLeafCellNumAtPriorities()[opportunisticPriority]
 	})

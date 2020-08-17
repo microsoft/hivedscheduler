@@ -28,3 +28,4 @@ extras:
     taskRoles:
       train:
         skuType: K80
+    ignoreK8sSuggestedNodes: true
