@@ -20,6 +20,7 @@ taskRoles:
     commands:
       - rm /usr/local/cuda/lib64/stubs/libcuda.so.1
       - python mnist_cnn.py
+      - sleep 10m
 defaults:
   virtualCluster: vc1
 extras:

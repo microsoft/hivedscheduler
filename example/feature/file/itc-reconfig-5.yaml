@@ -11,7 +11,7 @@ taskRoles:
     instances: 3
     completion:
       minFailedInstances: 1
-      minSucceededInstances: 2
+      minSucceededInstances: 3
     dockerImage: keras_tensorflow_example
     resourcePerInstance:
       cpu: 16
