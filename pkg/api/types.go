@@ -83,7 +83,7 @@ type PodSchedulingSpec struct {
 	LeafCellNumber          int32              `yaml:"leafCellNumber"`
 	GangReleaseEnable       bool               `yaml:"gangReleaseEnable"`
 	LazyPreemptionEnable    bool               `yaml:"lazyPreemptionEnable"`
-	IgnoreK8sSuggestedNodes bool               `yaml:"ignoreK8sSuggestedNodes"`
+	IgnoreK8sSuggestedNodes bool               `yaml:"ignoreK8sSuggestedNodes" default:"true"`
 	AffinityGroup           *AffinityGroupSpec `yaml:"affinityGroup"`
 }
 

@@ -2,6 +2,14 @@
 
 
 [[projects]]
+  digest = "1:9226fabe5235554294994d76a9a36804979781581479c3e320f52814d97efd1f"
+  name = "github.com/creasty/defaults"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "0e0a32680926f0c16c92c25bb3df9fcd35af7046"
+  version = "v1.5.1"
+
+[[projects]]
   digest = "1:ffe9824d294da03b391f44e1ae8281281b4afc1bdaa9588c9097785e3af10cec"
   name = "github.com/davecgh/go-spew"
   packages = ["spew"]
@@ -607,6 +615,7 @@
   analyzer-name = "dep"
   analyzer-version = 1
   input-imports = [
+    "github.com/creasty/defaults",
     "github.com/fsnotify/fsnotify",
     "github.com/spf13/viper",
     "gopkg.in/yaml.v2",
