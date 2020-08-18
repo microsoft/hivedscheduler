@@ -27,7 +27,6 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/creasty/defaults"
 	si "github.com/microsoft/hivedscheduler/pkg/api"
 	"github.com/microsoft/hivedscheduler/pkg/common"
 	core "k8s.io/api/core/v1"
@@ -233,8 +232,7 @@ func ExtractPodSchedulingSpec(pod *core.Pod) *si.PodSchedulingSpec {
 	defer AsBadRequestPanic()
 	errPfx := fmt.Sprintf("Pod annotation %v: ", si.AnnotationKeyPodSchedulingSpec)
 
-	podSchedulingSpec := si.PodSchedulingSpec{}
-	defaults.Set(&podSchedulingSpec)
+	podSchedulingSpec := si.PodSchedulingSpec{IgnoreK8sSuggestedNodes: true}
 
 	annotation := convertOldAnnotation(pod.Annotations[si.AnnotationKeyPodSchedulingSpec])
 	if annotation == "" {
