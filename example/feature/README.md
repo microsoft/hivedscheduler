@@ -123,6 +123,7 @@ Within one VC, a high-priority job can preempt low-priority jobs.
    <img src="file/itc-intra-lazy-preempt-test.png" width="900"/>
    <img src="file/itc-intra-lazy-preempt-prod.png" width="900"/>
    <img src="file/itc-intra-lazy-preempt-prod2.png" width="900"/>
+> NOTE: `lazyPreemptionEnable` option is disabled by default, becasue earlier job may be downgraded to low priority job and get preempted by later jobs, which may be confusing.
 
 ## Inter-VC Preemption
 ### Description
@@ -219,17 +220,3 @@ Avoid scheduling pods to bad hardware.
 4. Bring back 10.151.41.26 by `sudo systemctl start kubelet`. Wait until this is detected by K8S.
 5. The waiting job will start running, without any retries.
    <img src="file/itc-badnode50-3.png" width="900"/>
-
-## Leverage K8S Default Scheduler
-### Description
-You can still leverage almost all scheduling features provided by your existing [K8S Default Scheduler](https://kubernetes.io/docs/concepts/scheduling/kube-scheduler) with HiveD, such as these [Filtering Policies](https://kubernetes.io/docs/concepts/scheduling/kube-scheduler/#filtering).
-
-### Reproduce Steps
-#### Leverage [Labels and Selectors](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels)
-1. Use [hived-config-2](file/hived-config-2.yaml).
-2. Remove PAI worker label for 10.151.41.26 (the only M60 node).
-3. Submit job [itc-no-worker-label](file/itc-no-worker-label.yaml), which requests M60 node, it will be waiting without IP associated.
-   <img src="file/itc-no-worker-label-1.png" width="900"/>
-4. Add back PAI worker label for 10.151.41.26.
-5. The waiting job will start running, without any retries.
-   <img src="file/itc-no-worker-label-2.png" width="900"/>
