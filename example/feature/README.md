@@ -11,7 +11,7 @@ HiveD guarantees **quota safety for all VCs**, in the sense that the requests to
 
 VC's cells can be described by Hardware Quantity, [Topology](#VC-Safety), [Type](#SKU-Type), [Pinned Cells](#Pinned-Cells), etc. To guarantee safety, HiveD never allows a VC to "invade" other VCs' cells. For example, to guarantee all VCs' topology, one VC's [guaranteed jobs](#Guaranteed-Job) should never make fragmentation inside other VCs:
 
-Two DGX-2s, two VCs each owns one DGX-2 node. For a traditional scheduler, this will translate into two VCs each owning 16 GPUs. When a user submits 16 1-GPU jobs to VC1, the user in VC2 might not be able to run a 16-GPU job, due to possible fragmentation issue caused by VC1. While HiveD can guarantee each VC always has one entire node available for its dedicated use.
+Two DGX-2s, two VCs each owns one DGX-2 node. For a traditional scheduler, this will translate into two VCs each owning 16 GPUs. When a user submits 16 1-GPU jobs to vc1, the user in vc2 might not be able to run a 16-GPU job, due to possible fragmentation issue caused by vc1. While HiveD can guarantee each VC always has one entire node available for its dedicated use.
 
 ### Reproduce Steps
 1. Use [hived-config-1](file/hived-config-1.yaml).
@@ -27,7 +27,7 @@ This is similar to [K8S Taints and Tolerations](https://kubernetes.io/docs/conce
 
 ### Reproduce Steps
 1. Use [hived-config-8](file/hived-config-8.yaml).
-2. Submit job [itc-pin](file/itc-pin.yaml) to VC1, all tasks in task role vc1pinned will be on node 10.151.41.25 (which is pinned), all tasks in task role vc1nopinned will NOT be on node 10.151.41.25.
+2. Submit job [itc-pin](file/itc-pin.yaml) to vc1, all tasks in task role vc1pinned will be on node 10.151.41.25 (which is pinned), all tasks in task role vc1nopinned will NOT be on node 10.151.41.25.
    <img src="file/itc-pin.png" width="900"/>
 
 ## SKU Type
@@ -68,8 +68,8 @@ This is useful for jobs that cannot perform any useful work, such as making prog
    <img src="file/itc-gang4.png" width="900"/>
 
 #### TensorFlow Distributed Training
-1. Use [hived-config-1](file/hived-config-1.yaml).
-2. Submit job [itc-dtf](file/itc-dtf.yaml) to VC2, it will success.
+1. Use [hived-config-2](file/hived-config-2.yaml).
+2. Submit job [itc-dtf](file/itc-dtf.yaml) to default VC, it will success.
    <img src="file/itc-dtf.png" width="900"/>
 
 ## Incremental Scheduling
@@ -110,27 +110,28 @@ Within one VC, a high-priority job can preempt low-priority jobs.
 ### Reproduce Steps
 #### Immediate Preemption
 1. Use [hived-config-3](file/hived-config-3.yaml).
-2. Submit [itc-intra-imd-preempt-test](file/itc-intra-imd-preempt-test.yaml), which requests for 4 M60 GPUs for VC1 with test (0) priority.
-3. Submit [itc-intra-imd-preempt-prod](file/itc-intra-imd-preempt-prod.yaml), which also requests for 4 M60 GPUs for VC1 with prod (100) priority. The job will preempt the test job immediately, so the test job is retried and waiting for resource.
+2. Submit [itc-intra-imd-preempt-test](file/itc-intra-imd-preempt-test.yaml), which requests for 4 M60 GPUs for vc1 with test (0) priority.
+3. Submit [itc-intra-imd-preempt-prod](file/itc-intra-imd-preempt-prod.yaml), which also requests for 4 M60 GPUs for vc1 with prod (100) priority. The job will preempt the test job immediately, so the test job is retried and waiting for resource.
    <img src="file/itc-intra-imd-preempt-test.png" width="900"/>
    <img src="file/itc-intra-imd-preempt-prod.png" width="900"/>
 
 #### Lazy Preemption
 1. Use [hived-config-3](file/hived-config-3.yaml).
-2. Submit [itc-intra-lazy-preempt-test](file/itc-intra-lazy-preempt-test.yaml), which requests for 4 K80 GPUs for VC1 with test (0) priority.
-3. Submit [itc-intra-lazy-preempt-prod](file/itc-intra-lazy-preempt-prod.yaml), which also requests for 4 K80 GPUs for VC1 with prod (100) priority. The job will just downgrade the test job to be [Opportunistic Job](#Opportunistic-Job), instead of preempting it immediately, because all jobs can still fit into the whole physical cluster.
+2. Submit [itc-intra-lazy-preempt-test](file/itc-intra-lazy-preempt-test.yaml), which requests for 4 K80 GPUs for vc1 with test (0) priority.
+3. Submit [itc-intra-lazy-preempt-prod](file/itc-intra-lazy-preempt-prod.yaml), which also requests for 4 K80 GPUs for vc1 with prod (100) priority. The job will just downgrade the test job to be [Opportunistic Job](#Opportunistic-Job), instead of preempting it immediately, because all jobs can still fit into the whole physical cluster.
 4. Submit [itc-intra-lazy-preempt-prod2](file/itc-intra-lazy-preempt-prod2.yaml), which also requests for 3 * 4 K80 GPUs for default VC with prod (100) priority. The job will preempt the test job immediately, because all jobs cannot fit into the whole physical cluster.
    <img src="file/itc-intra-lazy-preempt-test.png" width="900"/>
    <img src="file/itc-intra-lazy-preempt-prod.png" width="900"/>
    <img src="file/itc-intra-lazy-preempt-prod2.png" width="900"/>
+> NOTE: `lazyPreemptionEnable` option is disabled by default, becasue earlier job may be downgraded to low priority job and get preempted by later jobs, which may be confusing.
 
 ## Inter-VC Preemption
 ### Description
 One VC's [Guaranteed Job](#Guaranteed-Job) can preempt other VCs' [Opportunistic Jobs](#Opportunistic-Job).
 
 ### Reproduce Steps
-1. Use [hived-config-2](file/hived-config-2.yaml).
-2. Submit [itc-inter-preempt-oppo](file/itc-inter-preempt-oppo.yaml), which requests for 2 * 4 K80 GPUs for VC1 with oppo (-1) priority.
+1. Use [hived-config-3](file/hived-config-3.yaml).
+2. Submit [itc-inter-preempt-oppo](file/itc-inter-preempt-oppo.yaml), which requests for 2 * 4 K80 GPUs for vc1 with oppo (-1) priority.
 3. Submit [itc-inter-preempt-prod](file/itc-inter-preempt-prod.yaml), which also requests for 3 * 4 K80 GPUs for default VC with prod (100) priority. The job will preempt the oppo job immediately.
    <img src="file/itc-inter-preempt-oppo.png" width="900"/>
    <img src="file/itc-inter-preempt-prod.png" width="900"/>
@@ -190,20 +191,20 @@ HiveD can be reconfigured without unnecessary user impacts, such as add/update/d
 #### VirtualCluster Reconfig - Delete VirtualCluster
 1. Use [hived-config-2](file/hived-config-2.yaml).
 2. Submit job [itc-reconfig-3](file/itc-reconfig-3.yaml) to default VC. Wait until it is running.
-3. Delete the default VC and move its quota to VC1, then becomes [hived-config-5](file/hived-config-5.yaml).
+3. Delete the default VC and move its quota to vc1, then becomes [hived-config-5](file/hived-config-5.yaml).
 4. Use [hived-config-5](file/hived-config-5.yaml), and restart HiveD.
 5. The job will still run without any interruption but [lazy preempted](#Lazy-Preemption) by HiveD.
    <img src="file/itc-reconfig-3.png" width="900"/>
-6. To confirm it is [lazy preempted](#Lazy-Preemption), submit job [itc-reconfig-4](file/itc-reconfig-4.yaml) to VC1 which requests all K80 nodes. The job will immediately preempt [itc-reconfig-3](file/itc-reconfig-3.yaml).
+6. To confirm it is [lazy preempted](#Lazy-Preemption), submit job [itc-reconfig-4](file/itc-reconfig-4.yaml) to vc1 which requests all K80 nodes. The job will immediately preempt [itc-reconfig-3](file/itc-reconfig-3.yaml).
    <img src="file/itc-reconfig-4.png" width="900"/>
 
 #### VirtualCluster Reconfig - Update VirtualCluster
 1. Use [hived-config-2](file/hived-config-2.yaml).
 2. Submit job [itc-reconfig-3](file/itc-reconfig-3.yaml) to default VC. Wait until it is running.
-3. Move one K80-NODE cell from default VC to VC1, then becomes [hived-config-6](file/hived-config-6.yaml).
+3. Move one K80-NODE cell from default VC to vc1, then becomes [hived-config-6](file/hived-config-6.yaml).
 4. Use [hived-config-6](file/hived-config-6.yaml), and restart HiveD.
 5. The job will still run without any interruption but [lazy preempted](#Lazy-Preemption) by HiveD.
-6. To confirm it is [lazy preempted](#Lazy-Preemption), submit job [itc-reconfig-5](file/itc-reconfig-5.yaml) to VC1 which requests all K80 nodes. The job will immediately preempt [itc-reconfig-3](file/itc-reconfig-3.yaml).
+6. To confirm it is [lazy preempted](#Lazy-Preemption), submit job [itc-reconfig-5](file/itc-reconfig-5.yaml) to vc1 which requests all K80 nodes. The job will immediately preempt [itc-reconfig-3](file/itc-reconfig-3.yaml).
    <img src="file/itc-reconfig-5.png" width="900"/>
 
 ## Bad Hardware Awareness
@@ -219,17 +220,3 @@ Avoid scheduling pods to bad hardware.
 4. Bring back 10.151.41.26 by `sudo systemctl start kubelet`. Wait until this is detected by K8S.
 5. The waiting job will start running, without any retries.
    <img src="file/itc-badnode50-3.png" width="900"/>
-
-## Leverage K8S Default Scheduler
-### Description
-You can still leverage almost all scheduling features provided by your existing [K8S Default Scheduler](https://kubernetes.io/docs/concepts/scheduling/kube-scheduler) with HiveD, such as these [Filtering Policies](https://kubernetes.io/docs/concepts/scheduling/kube-scheduler/#filtering).
-
-### Reproduce Steps
-#### Leverage [Labels and Selectors](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels)
-1. Use [hived-config-2](file/hived-config-2.yaml).
-2. Remove PAI worker label for 10.151.41.26 (the only M60 node).
-3. Submit job [itc-no-worker-label](file/itc-no-worker-label.yaml), which requests M60 node, it will be waiting without IP associated.
-   <img src="file/itc-no-worker-label-1.png" width="900"/>
-4. Add back PAI worker label for 10.151.41.26.
-5. The waiting job will start running, without any retries.
-   <img src="file/itc-no-worker-label-2.png" width="900"/>

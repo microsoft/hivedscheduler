@@ -232,7 +232,7 @@ func ExtractPodSchedulingSpec(pod *core.Pod) *si.PodSchedulingSpec {
 	defer AsBadRequestPanic()
 	errPfx := fmt.Sprintf("Pod annotation %v: ", si.AnnotationKeyPodSchedulingSpec)
 
-	podSchedulingSpec := si.PodSchedulingSpec{}
+	podSchedulingSpec := si.PodSchedulingSpec{IgnoreK8sSuggestedNodes: true}
 
 	annotation := convertOldAnnotation(pod.Annotations[si.AnnotationKeyPodSchedulingSpec])
 	if annotation == "" {

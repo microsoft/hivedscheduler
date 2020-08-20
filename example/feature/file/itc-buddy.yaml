@@ -20,9 +20,9 @@ taskRoles:
     commands:
       - nvidia-smi -L
       - printenv
-      - sleep 10000
+      - sleep 10m
 defaults:
-  virtualCluster: VC1
+  virtualCluster: vc1
 extras:
   gangAllocation: true
   hivedScheduler:
@@ -30,4 +30,3 @@ extras:
     taskRoles:
       train:
         skuType: K80
-  submitFrom: submit-job-v2

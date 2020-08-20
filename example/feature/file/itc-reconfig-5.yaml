@@ -11,7 +11,7 @@ taskRoles:
     instances: 3
     completion:
       minFailedInstances: 1
-      minSucceededInstances: 2
+      minSucceededInstances: 3
     dockerImage: keras_tensorflow_example
     resourcePerInstance:
       cpu: 16
@@ -21,11 +21,10 @@ taskRoles:
       - rm /usr/local/cuda/lib64/stubs/libcuda.so.1
       - python mnist_cnn.py
 defaults:
-  virtualCluster: VC1
+  virtualCluster: vc1
 extras:
   hivedScheduler:
     jobPriorityClass: test
     taskRoles:
       train:
         skuType: K80
-  submitFrom: submit-job-v2

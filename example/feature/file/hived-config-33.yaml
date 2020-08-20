@@ -42,7 +42,7 @@ physicalCluster:
     # - cellAddress: 10.151.41.25
 
 virtualClusters:
-  VC1:
+  vc1:
     virtualCells:
     - cellType: K80-NODE-POOL.K80-NODE
       cellNumber: 1

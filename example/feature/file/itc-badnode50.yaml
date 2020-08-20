@@ -11,18 +11,17 @@ taskRoles:
     instances: 1
     completion:
       minFailedInstances: 1
-      minSucceededInstances: 6
+      minSucceededInstances: 1
     dockerImage: keras_tensorflow_example
     resourcePerInstance:
       cpu: 4
       memoryMB: 8192
       gpu: 1
     commands:
-      - nvidia-smi -L
-      - printenv
-      - sleep 10000
+      - rm /usr/local/cuda/lib64/stubs/libcuda.so.1
+      - python mnist_cnn.py
 defaults:
-  virtualCluster: VC1
+  virtualCluster: vc1
 extras:
   gangAllocation: true
   hivedScheduler:
@@ -30,4 +29,3 @@ extras:
     taskRoles:
       train:
         skuType: M60
-  submitFrom: submit-job-v2
