@@ -74,3 +74,20 @@ provided by the bot. You will only need to do this once across all repos using o
 This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/).
 For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or
 contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
+
+
+# Reference
+Please cite HiveD in your publications if it helps your research:
+```
+@inproceedings {hived-osdi2020,
+author = {Hanyu Zhao and Zhenhua Han and Zhi Yang and Quanlu Zhang and Fan Yang and Lidong Zhou and Mao Yang and Francis C.M. Lau and Yuqi Wang and Yifan Xiong and Bin Wang},
+title = {HiveD: Sharing a {GPU} Cluster for Deep Learning with Guarantees},
+booktitle = {14th {USENIX} Symposium on Operating Systems Design and Implementation ({OSDI} 20)},
+year = {2020},
+isbn = {978-1-939133-19-9},
+pages = {515--532},
+url = {https://www.usenix.org/conference/osdi20/presentation/zhao-hanyu},
+publisher = {{USENIX} Association},
+month = nov,
+}
+```
