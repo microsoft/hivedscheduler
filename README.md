@@ -81,7 +81,7 @@ Please cite HiveD in your publications if it helps your research:
 ```
 @inproceedings {hived-osdi2020,
 author = {Hanyu Zhao and Zhenhua Han and Zhi Yang and Quanlu Zhang and Fan Yang and Lidong Zhou and Mao Yang and Francis C.M. Lau and Yuqi Wang and Yifan Xiong and Bin Wang},
-title = {HiveD: Sharing a {GPU} Cluster for Deep Learning with Guarantees},
+title = {{HiveD}: Sharing a {GPU} Cluster for Deep Learning with Guarantees},
 booktitle = {14th {USENIX} Symposium on Operating Systems Design and Implementation ({OSDI} 20)},
 year = {2020},
 isbn = {978-1-939133-19-9},
