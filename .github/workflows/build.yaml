@@ -33,7 +33,7 @@ jobs:
       with:
         go-version: ${{ matrix.go }}
     - name: Setup GOPATH
-      run: echo "::set-env name=GOPATH::${{ github.workspace }}"
+      run: echo "GOPATH=${{ github.workspace }}" >> $GITHUB_ENV
     - name: Go test
       working-directory: src/github.com/${{ github.repository }}
       run: go test -race -covermode=atomic -coverprofile=$GOPATH/coverage.txt ./...
