@@ -28,6 +28,7 @@ import (
 	"strings"
 
 	si "github.com/microsoft/hivedscheduler/pkg/api"
+	apiv2 "github.com/microsoft/hivedscheduler/pkg/api/v2"
 	"github.com/microsoft/hivedscheduler/pkg/common"
 	core "k8s.io/api/core/v1"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -225,64 +226,39 @@ func ExtractPodBindAnnotations(allocatedPod *core.Pod) map[string]string {
 	}
 }
 
-// PodSchedulingSpec comes from external, so need more Defaulting and Validation
-// when deserialization.
-func ExtractPodSchedulingSpec(pod *core.Pod) *si.PodSchedulingSpec {
+// ExtractPodSchedulingSpec extracts pod scheduling request from k8s pod request.
+// TODO: Need more defaulting and validation when deserialization.
+func ExtractPodSchedulingSpec(pod *core.Pod) *apiv2.PodSchedulingSpec {
 	// Consider all panics are BadRequestPanic.
 	defer AsBadRequestPanic()
 	errPfx := fmt.Sprintf("Pod annotation %v: ", si.AnnotationKeyPodSchedulingSpec)
-
-	podSchedulingSpec := si.PodSchedulingSpec{IgnoreK8sSuggestedNodes: true}
 
 	annotation := convertOldAnnotation(pod.Annotations[si.AnnotationKeyPodSchedulingSpec])
 	if annotation == "" {
 		panic(fmt.Errorf(errPfx + "Annotation does not exist or is empty"))
 	}
 
-	common.FromYaml(annotation, &podSchedulingSpec)
+	podSchedulingSpec := apiv2.PodSchedulingSpec{Version: "v2"}
+
+	generalSpec := apiv2.GeneralSpec{"version": "v1"}
+	common.FromYaml(annotation, &generalSpec)
+	switch generalSpec["version"] {
+	case "v1":
+		podSchedulingSpecV1 := si.PodSchedulingSpec{IgnoreK8sSuggestedNodes: true}
+		common.FromYaml(annotation, &podSchedulingSpecV1)
+		podSchedulingSpec.ConvertFromV1(&podSchedulingSpecV1)
+	case "v2":
+		common.FromYaml(annotation, &podSchedulingSpec)
+	default:
+		panic(fmt.Errorf(errPfx+"Unknown version %v", generalSpec["version"]))
+	}
 
 	// Defaulting
-	if podSchedulingSpec.AffinityGroup == nil {
-		podSchedulingSpec.AffinityGroup = &si.AffinityGroupSpec{
-			Name: fmt.Sprintf("%v/%v", pod.Namespace, pod.Name),
-			Members: []si.AffinityGroupMemberSpec{{
-				PodNumber:      1,
-				LeafCellNumber: podSchedulingSpec.LeafCellNumber},
-			},
-		}
-	}
+	podSchedulingSpec.SetDefaults(pod)
 
 	// Validation
-	if podSchedulingSpec.VirtualCluster == "" {
-		panic(fmt.Errorf(errPfx + "VirtualCluster is empty"))
-	}
-	if podSchedulingSpec.Priority < si.OpportunisticPriority {
-		panic(fmt.Errorf(errPfx+"Priority is less than %v", si.OpportunisticPriority))
-	}
-	if podSchedulingSpec.Priority > si.MaxGuaranteedPriority {
-		panic(fmt.Errorf(errPfx+"Priority is greater than %v", si.MaxGuaranteedPriority))
-	}
-	if podSchedulingSpec.LeafCellNumber <= 0 {
-		panic(fmt.Errorf(errPfx + "LeafCellNumber is non-positive"))
-	}
-	if podSchedulingSpec.AffinityGroup.Name == "" {
-		panic(fmt.Errorf(errPfx + "AffinityGroup.Name is empty"))
-	}
-
-	isPodInGroup := false
-	for _, member := range podSchedulingSpec.AffinityGroup.Members {
-		if member.PodNumber <= 0 {
-			panic(fmt.Errorf(errPfx + "AffinityGroup.Members has non-positive PodNumber"))
-		}
-		if member.LeafCellNumber <= 0 {
-			panic(fmt.Errorf(errPfx + "AffinityGroup.Members has non-positive LeafCellNumber"))
-		}
-		if member.LeafCellNumber == podSchedulingSpec.LeafCellNumber {
-			isPodInGroup = true
-		}
-	}
-	if !isPodInGroup {
-		panic(fmt.Errorf(errPfx + "AffinityGroup.Members does not contains current Pod"))
+	if msg, ok := podSchedulingSpec.Validate(); !ok {
+		panic(fmt.Errorf(errPfx + msg))
 	}
 
 	return &podSchedulingSpec
