@@ -27,6 +27,7 @@ import (
 	"sync"
 
 	"github.com/microsoft/hivedscheduler/pkg/api"
+	apiv2 "github.com/microsoft/hivedscheduler/pkg/api/v2"
 	"github.com/microsoft/hivedscheduler/pkg/common"
 	"github.com/microsoft/hivedscheduler/pkg/internal"
 	core "k8s.io/api/core/v1"
@@ -35,19 +36,19 @@ import (
 )
 
 // HivedAlgorithm implements an internal.SchedulerAlgorithm. It schedules affinity groups using the algorithm of HiveD.
-// Note that the topologyAwareScheduler used in this struct is not another implementation of SchedulerAlgorithm;
+// Note that the skuScheduler used in this struct is not another implementation of SchedulerAlgorithm;
 // that is a specific algorithm for pod placement, used in intra-VC scheduling and opportunistic pod scheduling.
 type HivedAlgorithm struct {
 	// scheduler in each VC
 	vcSchedulers map[api.VirtualClusterName]intraVCScheduler
 	// scheduler for opportunistic pods
-	opportunisticSchedulers map[CellChain]*topologyAwareScheduler
+	opportunisticSchedulers map[CellChain]*skuScheduler
 	// ChainCellLists of physical cells of each cell chain (including the children of the free cells)
 	fullCellList map[CellChain]ChainCellList
 	// ChainCellLists of free physical cells of each cell chain (used in buddy alloc)
 	freeCellList map[CellChain]ChainCellList
-	// all affinity groups that have been allocated or are preempting other groups
-	affinityGroups map[string]*AlgoAffinityGroup
+	// all pod root groups that have been allocated or are preempting other groups
+	podGroups map[string]*PodGroupSchedulingStatus
 
 	// vcFreeCellNum, allVCFreeCellNum, and totalLeftCellNum are used to track cell usage of the VCs.
 	// Note that these numbers count both healthy and bad cells.
@@ -63,7 +64,7 @@ type HivedAlgorithm struct {
 	totalLeftCellNum map[CellChain]map[CellLevel]int32
 
 	// badFreeCells, vcDoomedBadCells, and allVCDoomedBadCellNum are used to track bad cells.
-	// Note that a cell is bad if ANY of its children is bad; so a cell may also contain healthy children.
+	// Note that a cell is bad if ANY of its children is bad; so a bad cell may also contain healthy children.
 
 	// A preassigned cell in a VC is "doomed to be bad" when the healthy free cells in the physical cluster
 	// is fewer than the VC's free cells (thus certain free cells in the VC will be inevitably bound
@@ -111,7 +112,7 @@ func NewHivedAlgorithm(sConfig *api.Config) *HivedAlgorithm {
 
 	h := &HivedAlgorithm{
 		vcSchedulers:            map[api.VirtualClusterName]intraVCScheduler{},
-		opportunisticSchedulers: map[CellChain]*topologyAwareScheduler{},
+		opportunisticSchedulers: map[CellChain]*skuScheduler{},
 		fullCellList:            fullPcl,
 		freeCellList:            freePcl,
 		vcFreeCellNum:           vcFreeCellNum,
@@ -123,7 +124,7 @@ func NewHivedAlgorithm(sConfig *api.Config) *HivedAlgorithm {
 		badNodes:                common.NewSet(),
 		cellChains:              chains,
 		cellTypes:               cellTypes,
-		affinityGroups:          map[string]*AlgoAffinityGroup{},
+		podGroups:               map[string]*PodGroupSchedulingStatus{},
 		apiClusterStatus: api.ClusterStatus{
 			PhysicalCluster: api.PhysicalClusterStatus{},
 			VirtualClusters: map[api.VirtualClusterName]api.VirtualClusterStatus{},
@@ -135,7 +136,7 @@ func NewHivedAlgorithm(sConfig *api.Config) *HivedAlgorithm {
 			nonPinnedFullVcl[vcName], nonPinnedFreeVcl[vcName], pinnedVcl[vcName], leafCellNums)
 	}
 	for chain, ccl := range h.fullCellList {
-		h.opportunisticSchedulers[chain] = NewTopologyAwareScheduler(ccl, leafCellNums[chain], false)
+		h.opportunisticSchedulers[chain] = NewSkuScheduler(ccl, leafCellNums[chain], false)
 	}
 	h.initCellNums()
 	h.initAPIClusterStatus()
@@ -186,7 +187,7 @@ func (h *HivedAlgorithm) Schedule(
 	defer h.algorithmLock.Unlock()
 
 	klog.Infof("[%v]: Scheduling pod in %v phase...", internal.Key(pod), phase)
-	s := internal.ExtractPodSchedulingSpec(pod)
+	podSchedSpec := internal.ExtractPodSchedulingSpec(pod)
 	suggestedNodeSet := common.NewSet()
 	for _, n := range suggestedNodes {
 		suggestedNodeSet.Add(n)
@@ -199,15 +200,16 @@ func (h *HivedAlgorithm) Schedule(
 		podIndex               int32 // index of current pod among those of the same leaf cell number in the group, 0 by default
 	)
 
-	if g := h.affinityGroups[s.AffinityGroup.Name]; g != nil {
+	podGroupSchedStatus := h.podGroups[podSchedSpec.PodRootGroup.Name]
+	if podGroupSchedStatus != nil {
 		groupPhysicalPlacement, groupVirtualPlacement, preemptionVictims, podIndex =
-			h.schedulePodFromExistingGroup(g, s, suggestedNodeSet, phase, pod)
+			h.schedulePodFromExistingGroup(podGroupSchedStatus, podSchedSpec, suggestedNodeSet, phase, pod)
 	}
 	// we need to re-evaluate the existence of the group here (instead of an "else") because it is
 	// possible that the group was a preempting group and deleted in h.schedulePodFromExistingGroup
-	if h.affinityGroups[s.AffinityGroup.Name] == nil {
+	if podGroupSchedStatus == nil {
 		groupPhysicalPlacement, groupVirtualPlacement, preemptionVictims, waitReason =
-			h.schedulePodFromNewGroup(s, suggestedNodeSet, phase, pod)
+			h.schedulePodFromNewGroup(podSchedSpec, suggestedNodeSet, phase, pod)
 	}
 	return generatePodScheduleResult(
 		groupPhysicalPlacement,
@@ -215,10 +217,10 @@ func (h *HivedAlgorithm) Schedule(
 		preemptionVictims,
 		waitReason,
 		h.cellTypes,
-		s.LeafCellNumber,
+		podSchedSpec.CellNumber,
 		podIndex,
-		h.affinityGroups[s.AffinityGroup.Name],
-		s.AffinityGroup.Name,
+		&AlgoAffinityGroup{}, // h.podGroups[podSchedSpec.PodRootGroup.Name],
+		podSchedSpec.PodRootGroup.Name,
 		suggestedNodeSet,
 		pod)
 }
@@ -230,16 +232,18 @@ func (h *HivedAlgorithm) DeleteUnallocatedPod(pod *core.Pod) {
 	h.algorithmLock.Lock()
 	defer h.algorithmLock.Unlock()
 
-	s := internal.ExtractPodSchedulingSpec(pod)
-	if g := h.affinityGroups[s.AffinityGroup.Name]; g != nil && g.state == groupPreempting {
-		if g.preemptingPods[pod.UID] != nil {
-			klog.Infof("[%v]: Deleting preempting pod from affinity group %v...", internal.Key(pod), g.name)
-			delete(g.preemptingPods, pod.UID)
+	podSchedSpec := internal.ExtractPodSchedulingSpec(pod)
+	podGroupSchedStatus := h.podGroups[podSchedSpec.PodRootGroup.Name]
+	if podGroupSchedStatus != nil && podGroupSchedStatus.state == podGroupPreempting {
+		if podGroupSchedStatus.preemptingPods[pod.UID] != nil {
+			klog.Infof("[%v]: Deleting preempting pod from pod group %v...", internal.Key(pod), podSchedSpec.PodRootGroup.Name)
+			delete(podGroupSchedStatus.preemptingPods, pod.UID)
 		}
-		if len(g.preemptingPods) == 0 {
-			klog.Infof("[%v]: Canceling affinity group %v's preemption because its pods are all deleted",
-				internal.Key(pod), g.name)
-			h.deletePreemptingAffinityGroup(g, pod)
+		if len(podGroupSchedStatus.preemptingPods) == 0 {
+			klog.Infof("[%v]: Canceling pod group %v's preemption because its pods are all deleted",
+				internal.Key(pod), podSchedSpec.PodRootGroup.Name)
+			// TODO: h.deletePreemptingAffinityGroup(podGroupSchedStatus, pod)
+			h.deletePreemptingAffinityGroup(&AlgoAffinityGroup{}, pod)
 		}
 	}
 }
@@ -248,49 +252,52 @@ func (h *HivedAlgorithm) AddAllocatedPod(pod *core.Pod) {
 	h.algorithmLock.Lock()
 	defer h.algorithmLock.Unlock()
 
-	s := internal.ExtractPodSchedulingSpec(pod)
+	podSchedSpec := internal.ExtractPodSchedulingSpec(pod)
 	info := internal.ExtractPodBindInfo(pod)
-	klog.Infof("[%v]: Adding allocated pod to affinity group %v...", internal.Key(pod), s.AffinityGroup.Name)
+	klog.Infof("[%v]: Adding allocated pod to pod group %v...", internal.Key(pod), podSchedSpec.PodRootGroup.Name)
 	klog.Infof("[%v]: Adding to node %v, leaf cells %v", internal.Key(pod), info.Node, common.ToJson(info.LeafCellIsolation))
 
 	podIndex := int32(0)
-	if g := h.affinityGroups[s.AffinityGroup.Name]; g != nil {
-		if g.state == groupPreempting {
-			h.allocatePreemptingAffinityGroup(g, pod)
+	if podGroupSchedStatus := h.podGroups[podSchedSpec.PodRootGroup.Name]; podGroupSchedStatus != nil {
+		if podGroupSchedStatus.state == podGroupPreempting {
+			// TODO: h.allocatePreemptingAffinityGroup(podGroupSchedStatus, pod)
+			h.allocatePreemptingAffinityGroup(&AlgoAffinityGroup{}, pod)
 		}
-		if podIndex = getAllocatedPodIndex(info, s.LeafCellNumber); podIndex == -1 {
+		if podIndex = getAllocatedPodIndex(info, podSchedSpec.CellNumber); podIndex == -1 {
 			klog.Errorf("[%v]: Pod placement not found in group %v: node %v, leaf cells %v",
-				internal.Key(pod), s.AffinityGroup.Name, info.Node, info.LeafCellIsolation)
+				internal.Key(pod), podSchedSpec.PodRootGroup.Name, info.Node, info.LeafCellIsolation)
 			return
 		}
 	} else {
-		h.createAllocatedAffinityGroup(s, info, pod)
+		// TODO: h.createAllocatedAffinityGroup(podSchedSpec, info, pod)
+		h.createAllocatedAffinityGroup(&api.PodSchedulingSpec{}, info, pod)
 	}
-	h.affinityGroups[s.AffinityGroup.Name].allocatedPods[s.LeafCellNumber][podIndex] = pod
+	h.podGroups[podSchedSpec.PodRootGroup.Name].allocatedPods[podSchedSpec.CellNumber][podIndex] = pod
 }
 
 func (h *HivedAlgorithm) DeleteAllocatedPod(pod *core.Pod) {
 	h.algorithmLock.Lock()
 	defer h.algorithmLock.Unlock()
 
-	s := internal.ExtractPodSchedulingSpec(pod)
+	podSchedSpec := internal.ExtractPodSchedulingSpec(pod)
 	info := internal.ExtractPodBindInfo(pod)
-	klog.Infof("[%v]: Deleting allocated pod from affinity group %v...", internal.Key(pod), s.AffinityGroup.Name)
+	klog.Infof("[%v]: Deleting allocated pod from pod group %v...", internal.Key(pod), podSchedSpec.PodRootGroup.Name)
 	klog.Infof("[%v]: Deleting from node %v, leaf cells %v", internal.Key(pod), info.Node, common.ToJson(info.LeafCellIsolation))
 
-	if g := h.affinityGroups[s.AffinityGroup.Name]; g == nil {
-		klog.Errorf("[%v]: Group %v not found when deleting pod", internal.Key(pod), s.AffinityGroup.Name)
+	if podGroupSchedStatus := h.podGroups[podSchedSpec.PodRootGroup.Name]; podGroupSchedStatus == nil {
+		klog.Errorf("[%v]: Group %v not found when deleting pod", internal.Key(pod), podSchedSpec.PodRootGroup.Name)
 		return
 	} else {
-		if podIndex := getAllocatedPodIndex(info, s.LeafCellNumber); podIndex == -1 {
+		if podIndex := getAllocatedPodIndex(info, podSchedSpec.CellNumber); podIndex == -1 {
 			klog.Errorf("[%v]: Pod placement not found in group %v: node %v, leaf cells %v",
-				internal.Key(pod), s.AffinityGroup.Name, info.Node, info.LeafCellIsolation)
+				internal.Key(pod), podSchedSpec.PodRootGroup.Name, info.Node, info.LeafCellIsolation)
 			return
 		} else {
-			g.allocatedPods[s.LeafCellNumber][podIndex] = nil
+			podGroupSchedStatus.allocatedPods[podSchedSpec.CellNumber][podIndex] = nil
 		}
-		if allPodsReleased(g.allocatedPods) {
-			h.deleteAllocatedAffinityGroup(g, pod)
+		if allPodsReleased(podGroupSchedStatus.allocatedPods) {
+			// TODO: h.deleteAllocatedAffinityGroup(podGroupSchedStatus, pod)
+			h.deleteAllocatedAffinityGroup(&AlgoAffinityGroup{}, pod)
 		}
 	}
 }
@@ -300,9 +307,9 @@ func (h *HivedAlgorithm) GetAllAffinityGroups() api.AffinityGroupList {
 	defer h.algorithmLock.RUnlock()
 
 	ags := api.AffinityGroupList{}
-	for _, aag := range h.affinityGroups {
-		ags.Items = append(ags.Items, aag.ToAffinityGroup())
-	}
+	// for _, aag := range h.affinityGroups {
+	// 	ags.Items = append(ags.Items, aag.ToAffinityGroup())
+	// }
 
 	return ags
 }
@@ -311,9 +318,9 @@ func (h *HivedAlgorithm) GetAffinityGroup(name string) api.AffinityGroup {
 	h.algorithmLock.RLock()
 	defer h.algorithmLock.RUnlock()
 
-	if aag := h.affinityGroups[name]; aag != nil {
-		return aag.ToAffinityGroup()
-	}
+	// if aag := h.affinityGroups[name]; aag != nil {
+	// 	return aag.ToAffinityGroup()
+	// }
 
 	panic(internal.NewBadRequestError(fmt.Sprintf(
 		"Affinity group %v does not exist since it is not allocated or preempting",
@@ -656,8 +663,8 @@ func (h *HivedAlgorithm) tryUnbindDoomedBadCell(c CellChain, l CellLevel) {
 // If it is from an allocated group, we will schedule the pod to the corresponding placement.
 // If it is from a preempting group, we will continue its preemption, or schedule it when the preemption is done.
 func (h *HivedAlgorithm) schedulePodFromExistingGroup(
-	g *AlgoAffinityGroup,
-	s *api.PodSchedulingSpec,
+	podGroupSchedStatus *PodGroupSchedulingStatus,
+	podSchedSpec *apiv2.PodSchedulingSpec,
 	suggestedNodes common.Set,
 	phase internal.SchedulingPhase,
 	pod *core.Pod) (
@@ -667,45 +674,46 @@ func (h *HivedAlgorithm) schedulePodFromExistingGroup(
 	podIndex int32) {
 
 	badOrNonSuggestedNodes := collectBadOrNonSuggestedNodes(
-		g.physicalLeafCellPlacement, suggestedNodes, g.ignoreK8sSuggestedNodes)
+		podGroupSchedStatus.physicalLeafCellPlacement, suggestedNodes, true)
 	// state of an existing group can be either Allocated or Preempting
-	if g.state == groupAllocated {
-		klog.Infof("[%v]: Pod is from an affinity group that is already allocated: %v",
-			internal.Key(pod), s.AffinityGroup.Name)
-		groupPhysicalPlacement = g.physicalLeafCellPlacement
-		groupVirtualPlacement = g.virtualLeafCellPlacement
+	if podGroupSchedStatus.state == podGroupAllocated {
+		klog.Infof("[%v]: Pod is from an pod group that is already allocated: %v",
+			internal.Key(pod), podSchedSpec.PodRootGroup.Name)
+		groupPhysicalPlacement = podGroupSchedStatus.physicalLeafCellPlacement
+		groupVirtualPlacement = podGroupSchedStatus.virtualLeafCellPlacement
 		if !badOrNonSuggestedNodes.IsEmpty() {
 			// for an allocated group, we always insist the previous scheduling decision
 			// even if some pods are now bad or not within suggested nodes
-			klog.Warningf("[%v]: Some nodes allocated to affinity group %v are no longer "+
-				"healthy and within K8s suggested nodes: %v", internal.Key(pod), g.name, badOrNonSuggestedNodes)
+			klog.Warningf("[%v]: Some nodes allocated to pod group %v are no longer "+
+				"healthy and within K8s suggested nodes: %v", internal.Key(pod), podSchedSpec.PodRootGroup.Name, badOrNonSuggestedNodes)
 		}
-		if podIndex = getNewPodIndex(g.allocatedPods[s.LeafCellNumber]); podIndex == -1 {
+		if podIndex = getNewPodIndex(podGroupSchedStatus.allocatedPods[podSchedSpec.CellNumber]); podIndex == -1 {
 			panic(internal.NewBadRequestError(fmt.Sprintf(
-				"Requesting more pods than the configured number for %v leaf cells (%v pods) in affinity group %v",
-				s.LeafCellNumber, g.totalPodNums[s.LeafCellNumber], s.AffinityGroup.Name)))
+				"Requesting more pods than the configured number for %v cells (%v pods) in affinity group %v",
+				podSchedSpec.CellNumber, podSchedSpec.GetCurrentPod().PodMinNumber, podSchedSpec.PodRootGroup.Name)))
 		}
 	} else { // groupPreempting
-		klog.Infof("[%v]: Pod is from an affinity group that is preempting others: %v",
-			internal.Key(pod), s.AffinityGroup.Name)
+		klog.Infof("[%v]: Pod is from an pod group that is preempting others: %v",
+			internal.Key(pod), podSchedSpec.PodRootGroup.Name)
 		if phase == internal.PreemptingPhase && !badOrNonSuggestedNodes.IsEmpty() {
 			// If we find a preempting group's placement is not fully healthy and within suggested nodes,
 			// we should cancel the preemption so as to reschedule it to other places.
 			// We should do this only in Preempting phase
 			// because only suggested nodes of this phase consider preemption.
-			klog.Infof("[%v]: Canceling affinity group %v's preemption because its placement is "+
+			klog.Infof("[%v]: Canceling pod group %v's preemption because its placement is "+
 				"no longer fully healthy and within Preempting-phase suggested nodes: %v",
-				internal.Key(pod), g.name, badOrNonSuggestedNodes)
-			h.deletePreemptingAffinityGroup(g, pod)
+				internal.Key(pod), podSchedSpec.PodRootGroup.Name, badOrNonSuggestedNodes)
+			// TODO: h.deletePreemptingAffinityGroup(podGroupSchedStatus, pod)
+			h.deletePreemptingAffinityGroup(&AlgoAffinityGroup{}, pod)
 		} else {
-			groupPhysicalPlacement = g.physicalLeafCellPlacement
-			groupVirtualPlacement = g.virtualLeafCellPlacement
+			groupPhysicalPlacement = podGroupSchedStatus.physicalLeafCellPlacement
+			groupVirtualPlacement = podGroupSchedStatus.virtualLeafCellPlacement
 			preemptionVictims, _ = collectPreemptionVictims(groupPhysicalPlacement)
 			if len(preemptionVictims) == 0 {
 				klog.Infof(
-					"Preemption victims have been cleaned up for the preemptor affinity group %v", g.name)
+					"Preemption victims have been cleaned up for the preemptor affinity group %v", podSchedSpec.PodRootGroup.Name)
 			}
-			g.preemptingPods[pod.UID] = pod
+			podGroupSchedStatus.preemptingPods[pod.UID] = pod
 		}
 	}
 	return groupPhysicalPlacement, groupVirtualPlacement, preemptionVictims, podIndex
@@ -714,7 +722,7 @@ func (h *HivedAlgorithm) schedulePodFromExistingGroup(
 // schedulePodFromNewGroup schedules a pod from a new affinity group, find placement for the group,
 // and checks if the group needs preemption.
 func (h *HivedAlgorithm) schedulePodFromNewGroup(
-	s *api.PodSchedulingSpec,
+	podSchedSpec *apiv2.PodSchedulingSpec,
 	suggestedNodes common.Set,
 	phase internal.SchedulingPhase,
 	pod *core.Pod) (
@@ -724,7 +732,7 @@ func (h *HivedAlgorithm) schedulePodFromNewGroup(
 	waitReason string) {
 
 	groupPhysicalPlacement, groupVirtualPlacement, waitReason = h.scheduleNewAffinityGroup(
-		pod, s, suggestedNodes)
+		pod, podSchedSpec, suggestedNodes)
 	if groupPhysicalPlacement == nil {
 		return nil, nil, nil, waitReason
 	}
@@ -734,14 +742,15 @@ func (h *HivedAlgorithm) schedulePodFromNewGroup(
 	if phase == internal.PreemptingPhase {
 		// first cancel preemption of other groups whose resources overlap with the current group
 		for preemptor := range overlappingPreemptors.Items() {
-			klog.Infof("[%v]: Canceling affinity group %v's preemption because it is "+
-				"further preempted by a higher-priority affinity group %v",
-				internal.Key(pod), preemptor.(*AlgoAffinityGroup).name, s.AffinityGroup.Name)
+			klog.Infof("[%v]: Canceling pod group %v's preemption because it is "+
+				"further preempted by a higher-priority pod group %v",
+				internal.Key(pod), preemptor.(*AlgoAffinityGroup).name, podSchedSpec.PodRootGroup.Name)
 			h.deletePreemptingAffinityGroup(preemptor.(*AlgoAffinityGroup), pod)
 		}
 		if len(preemptionVictims) != 0 {
 			// create preemption state to avoid resource contention among multiple preemptors
-			h.createPreemptingAffinityGroup(s, groupPhysicalPlacement, groupVirtualPlacement, pod)
+			// TODO: h.createPreemptingAffinityGroup(podSchedSpec, groupPhysicalPlacement, groupVirtualPlacement, pod)
+			h.createPreemptingAffinityGroup(&api.PodSchedulingSpec{}, groupPhysicalPlacement, groupVirtualPlacement, pod)
 		}
 	} else if len(preemptionVictims) != 0 {
 		// here we won't create preemption state since we call preempt only in Preempting phase
@@ -755,51 +764,43 @@ func (h *HivedAlgorithm) schedulePodFromNewGroup(
 // (in both the physical cluster and the VC). This is the entrance of a new scheduling attempt.
 func (h *HivedAlgorithm) scheduleNewAffinityGroup(
 	pod *core.Pod,
-	s *api.PodSchedulingSpec,
+	podSchedSpec *apiv2.PodSchedulingSpec,
 	suggestedNodes common.Set) (
 	physicalPlacement groupPhysicalPlacement,
 	virtualPlacement groupVirtualPlacement,
 	failedReason string) {
 
-	klog.Infof("[%v]: Scheduling new affinity group %v", internal.Key(pod), s.AffinityGroup.Name)
-	priority := CellPriority(s.Priority)
-	sr := schedulingRequest{
-		vc:                   s.VirtualCluster,
-		pinnedCellId:         s.PinnedCellId,
-		priority:             priority,
-		affinityGroupName:    s.AffinityGroup.Name,
-		affinityGroupPodNums: map[int32]int32{},
-		suggestedNodes:       suggestedNodes,
-		ignoreSuggestedNodes: s.IgnoreK8sSuggestedNodes,
+	klog.Infof("[%v]: Scheduling new pod group %v", internal.Key(pod), podSchedSpec.PodRootGroup.Name)
+	podGroupSchedRequest := PodGroupSchedulingRequest{
+		vc:           podSchedSpec.VirtualCluster,
+		pinnedCellId: podSchedSpec.PinnedCellId,
+		podRootGroup: *podSchedSpec.PodRootGroup,
+		priority:     CellPriority(podSchedSpec.Priority),
 	}
-	for _, m := range s.AffinityGroup.Members {
-		// we will merge group members with same leaf cell number
-		sr.affinityGroupPodNums[m.LeafCellNumber] += m.PodNumber
-	}
-	h.validateSchedulingRequest(sr, pod)
-	if sr.pinnedCellId != "" {
-		klog.Infof("Using pinned cell %v", s.PinnedCellId)
-		physicalPlacement, virtualPlacement, failedReason = h.handleSchedulingRequest(sr)
-	} else if s.LeafCellType != "" {
-		if _, ok := h.cellChains[s.LeafCellType]; !ok {
+	h.validateSchedulingRequest(podGroupSchedRequest, pod)
+	if podGroupSchedRequest.pinnedCellId != "" {
+		klog.Infof("Using pinned cell %v", podGroupSchedRequest.pinnedCellId)
+		physicalPlacement, virtualPlacement, failedReason = h.handleSchedulingRequest(podGroupSchedRequest)
+	} else if podSchedSpec.CellType != "" {
+		if _, ok := h.cellChains[podSchedSpec.CellType]; !ok {
 			panic(internal.NewBadRequestError(fmt.Sprintf(
-				"[%v]: Pod requesting leaf cell type %v which the whole cluster does not have",
-				internal.Key(pod), s.LeafCellType)))
+				"[%v]: Pod requesting cell type %v which the whole cluster does not have",
+				internal.Key(pod), podSchedSpec.CellType)))
 		}
-		klog.Infof("Using specified leaf cell type %v", s.LeafCellType)
-		physicalPlacement, virtualPlacement, failedReason = h.scheduleAffinityGroupForLeafCellType(
-			sr, s.LeafCellType, pod, true)
+		klog.Infof("Using specified cell type %v", podSchedSpec.CellType)
+		physicalPlacement, virtualPlacement, failedReason = h.scheduleAffinityGroupForCellType(
+			podGroupSchedRequest, podSchedSpec.CellType, pod, true)
 	} else {
-		physicalPlacement, virtualPlacement, failedReason = h.scheduleAffinityGroupForAnyLeafCellType(sr, pod)
+		physicalPlacement, virtualPlacement, failedReason = h.scheduleAffinityGroupForAnyLeafCellType(podGroupSchedRequest, pod)
 	}
 	return physicalPlacement, virtualPlacement, failedReason
 }
 
-// scheduleAffinityGroupForLeafCellType schedules an affinity group in a certain cell chain
-// that matches the given leaf cell type.
-func (h *HivedAlgorithm) scheduleAffinityGroupForLeafCellType(
-	sr schedulingRequest,
-	leafCellType string,
+// scheduleAffinityGroupForCellType schedules an affinity group in a certain cell chain
+// that matches the given cell type.
+func (h *HivedAlgorithm) scheduleAffinityGroupForCellType(
+	podGroupSchedRequest PodGroupSchedulingRequest,
+	cellType string,
 	pod *core.Pod,
 	typeSpecified bool) (
 	physicalPlacement groupPhysicalPlacement,
@@ -807,31 +808,31 @@ func (h *HivedAlgorithm) scheduleAffinityGroupForLeafCellType(
 	failedReason string) {
 
 	vcHasType := false
-	for _, chain := range h.cellChains[leafCellType] {
-		if sr.priority < minGuaranteedPriority ||
-			h.vcSchedulers[sr.vc].getNonPinnedPreassignedCells()[chain] != nil {
+	for _, chain := range h.cellChains[cellType] {
+		if podGroupSchedRequest.priority < minGuaranteedPriority ||
+			h.vcSchedulers[podGroupSchedRequest.vc].getNonPinnedPreassignedCells()[chain] != nil {
 			vcHasType = true
 			klog.Infof("Searching chain %v", chain)
-			sr.chain = chain
+			podGroupSchedRequest.chain = chain
 			physicalPlacement, virtualPlacement, failedReason =
-				h.handleSchedulingRequest(sr)
+				h.handleSchedulingRequest(podGroupSchedRequest)
 			if physicalPlacement != nil {
 				return physicalPlacement, virtualPlacement, ""
 			}
 		}
 	}
-	if typeSpecified && sr.priority >= minGuaranteedPriority && !vcHasType {
+	if typeSpecified && podGroupSchedRequest.priority >= minGuaranteedPriority && !vcHasType {
 		panic(internal.NewBadRequestError(fmt.Sprintf(
-			"[%v]: Pod requesting leaf cell type %v which VC %v does not have",
-			internal.Key(pod), leafCellType, sr.vc)))
+			"[%v]: Pod requesting cell type %v which VC %v does not have",
+			internal.Key(pod), cellType, podGroupSchedRequest.vc)))
 	}
 	return nil, nil, failedReason
 }
 
-// scheduleAffinityGroupForAnyLeafCellType schedules an affinity group in every possible leaf cell type
+// scheduleAffinityGroupForAnyLeafCellType schedules an pod group in every possible leaf cell type
 // (when the user does not specify a leaf cell type).
 func (h *HivedAlgorithm) scheduleAffinityGroupForAnyLeafCellType(
-	sr schedulingRequest,
+	podGroupSchedRequest PodGroupSchedulingRequest,
 	pod *core.Pod) (
 	groupPhysicalPlacement,
 	groupVirtualPlacement,
@@ -841,7 +842,7 @@ func (h *HivedAlgorithm) scheduleAffinityGroupForAnyLeafCellType(
 	for leafCellType := range h.cellChains {
 		klog.Infof("Searching leaf cell type %v", leafCellType)
 		typePhysicalPlacement, typeVirtualPlacement, typeFailedReason :=
-			h.scheduleAffinityGroupForLeafCellType(sr, leafCellType, pod, false)
+			h.scheduleAffinityGroupForCellType(podGroupSchedRequest, leafCellType, pod, false)
 		if typePhysicalPlacement != nil {
 			return typePhysicalPlacement, typeVirtualPlacement, ""
 		}
@@ -853,15 +854,15 @@ func (h *HivedAlgorithm) scheduleAffinityGroupForAnyLeafCellType(
 }
 
 // validateSchedulingRequest checks the existence of VC and pinned cell, and the legality of priority.
-func (h *HivedAlgorithm) validateSchedulingRequest(sr schedulingRequest, pod *core.Pod) {
+func (h *HivedAlgorithm) validateSchedulingRequest(podGroupSchedRequest PodGroupSchedulingRequest, pod *core.Pod) {
 	var message string
-	if h.vcSchedulers[sr.vc] == nil {
-		message = fmt.Sprintf("VC %v does not exists!", sr.vc)
-	} else if sr.pinnedCellId != "" {
-		if h.vcSchedulers[sr.vc].getPinnedCells()[sr.pinnedCellId] == nil {
-			message = fmt.Sprintf("VC %v does not have pinned cell %v", sr.vc, sr.pinnedCellId)
-		} else if sr.priority == opportunisticPriority {
-			message = fmt.Sprintf("opportunistic pod not supported to use pinned cell %v", sr.pinnedCellId)
+	if h.vcSchedulers[podGroupSchedRequest.vc] == nil {
+		message = fmt.Sprintf("VC %v does not exists!", podGroupSchedRequest.vc)
+	} else if podGroupSchedRequest.pinnedCellId != "" {
+		if h.vcSchedulers[podGroupSchedRequest.vc].getPinnedCells()[podGroupSchedRequest.pinnedCellId] == nil {
+			message = fmt.Sprintf("VC %v does not have pinned cell %v", podGroupSchedRequest.vc, podGroupSchedRequest.pinnedCellId)
+		} else if podGroupSchedRequest.priority == opportunisticPriority {
+			message = fmt.Sprintf("opportunistic pod not supported to use pinned cell %v", podGroupSchedRequest.pinnedCellId)
 		}
 	}
 	if message != "" {
@@ -871,21 +872,21 @@ func (h *HivedAlgorithm) validateSchedulingRequest(sr schedulingRequest, pod *co
 
 // handleSchedulingRequest feeds a request to a VC scheduler or the opportunistic scheduler depending on its priority.
 func (h *HivedAlgorithm) handleSchedulingRequest(
-	sr schedulingRequest) (
+	podGroupSchedRequest PodGroupSchedulingRequest) (
 	physicalPlacement groupPhysicalPlacement,
 	virtualPlacement groupVirtualPlacement,
 	failedReason string) {
 
-	str := fmt.Sprintf("chain %v", sr.chain)
-	if sr.pinnedCellId != "" {
-		str = fmt.Sprintf("pinned cell %v", sr.pinnedCellId)
+	str := fmt.Sprintf("chain %v", podGroupSchedRequest.chain)
+	if podGroupSchedRequest.pinnedCellId != "" {
+		str = fmt.Sprintf("pinned cell %v", podGroupSchedRequest.pinnedCellId)
 	}
-	klog.Infof("Processing scheduling request: %v, leaf cell numbers %v, priority %v",
-		str, common.ToJson(sr.affinityGroupPodNums), sr.priority)
-	if sr.priority >= minGuaranteedPriority {
-		physicalPlacement, virtualPlacement, failedReason = h.scheduleGuaranteedAffinityGroup(sr)
+	klog.Infof("Processing scheduling request: %v, pod root group %v, priority %v",
+		str, common.ToJson(podGroupSchedRequest.podRootGroup), podGroupSchedRequest.priority)
+	if podGroupSchedRequest.priority >= minGuaranteedPriority {
+		physicalPlacement, virtualPlacement, failedReason = h.scheduleGuaranteedPodGroup(podGroupSchedRequest)
 	} else {
-		physicalPlacement, failedReason = h.scheduleOpportunisticAffinityGroup(sr)
+		physicalPlacement, failedReason = h.scheduleOpportunisticPodGroup(podGroupSchedRequest)
 	}
 	if physicalPlacement == nil {
 		klog.Infof("Cannot find placement in %v: %v", str, failedReason)
@@ -895,47 +896,50 @@ func (h *HivedAlgorithm) handleSchedulingRequest(
 	return physicalPlacement, virtualPlacement, ""
 }
 
-// scheduleGuaranteedAffinityGroup schedules an affinity group in its VC,
+// scheduleGuaranteedPodGroup schedules a pod group in its VC,
 // and then maps the placement in VC to the physical cluster.
-func (h *HivedAlgorithm) scheduleGuaranteedAffinityGroup(
-	sr schedulingRequest) (
+func (h *HivedAlgorithm) scheduleGuaranteedPodGroup(
+	podGroupSchedRequest PodGroupSchedulingRequest) (
 	physicalPlacement groupPhysicalPlacement,
 	virtualPlacement groupVirtualPlacement,
 	failedReason string) {
 
 	// schedule in VC
-	virtualPlacement, failedReason = h.vcSchedulers[sr.vc].schedule(sr)
+	virtualPlacement, failedReason = h.vcSchedulers[podGroupSchedRequest.vc].schedule(podGroupSchedRequest)
 	if virtualPlacement == nil {
 		return nil, nil, failedReason
 	}
 	// map the vc placement to the physical cluster
 	bindings := map[api.CellAddress]*PhysicalCell{}
-	leafCellNums := common.Int32MapKeys(sr.affinityGroupPodNums)
+	leafCellNums := common.Int32MapKeys(map[int32]int32{})
 	common.SortInt32(leafCellNums)
-	lazyPreemptedGroups := h.tryLazyPreempt(virtualPlacement, leafCellNums, sr.affinityGroupName)
+	lazyPreemptedGroups := h.tryLazyPreempt(virtualPlacement, leafCellNums, podGroupSchedRequest.podRootGroup.Name)
 	preassignedCells, nonPreassignedCells := virtualPlacement.toBindingPaths(leafCellNums, bindings)
 	// make a copy of freeCellNum, may change its values during allocation
 	freeCellNumCopy := map[CellLevel]int32{}
-	for k, v := range h.allVCFreeCellNum[sr.chain] {
+	for k, v := range h.allVCFreeCellNum[podGroupSchedRequest.chain] {
 		freeCellNumCopy[k] = v
 	}
 	if ok := mapVirtualPlacementToPhysical(
 		preassignedCells,
 		nonPreassignedCells,
-		h.freeCellList[sr.chain].shallowCopy(),
+		h.freeCellList[podGroupSchedRequest.chain].shallowCopy(),
 		freeCellNumCopy,
-		sr.suggestedNodes,
-		sr.ignoreSuggestedNodes,
+		common.NewSet(),
+		true,
 		bindings); ok {
 		return virtualPlacement.toPhysicalPlacement(bindings, leafCellNums), virtualPlacement, ""
 	}
-	for groupName, placement := range lazyPreemptedGroups {
-		h.revertLazyPreempt(h.affinityGroups[groupName], placement)
+	for _, placement := range lazyPreemptedGroups {
+		// TODO: h.revertLazyPreempt(h.podGroups[groupName], placement)
+		h.revertLazyPreempt(&AlgoAffinityGroup{}, placement)
 	}
-	failedNodeType := "bad or non-suggested"
-	if sr.ignoreSuggestedNodes {
-		failedNodeType = "bad"
-	}
+	// ignore suggested nodes globally
+	// failedNodeType := "bad or non-suggested"
+	// if podGroupSchedRequest.ignoreSuggestedNodes {
+	// 	failedNodeType = "bad"
+	// }
+	failedNodeType := "bad"
 	return nil, nil, fmt.Sprintf(
 		"Mapping the virtual placement would need to use at least one %v node "+
 			"(virtual placement : %v)", failedNodeType, virtualPlacement)
@@ -964,18 +968,19 @@ func (h *HivedAlgorithm) tryLazyPreempt(
 	return preemptedGroups
 }
 
-// scheduleOpportunisticAffinityGroup calls the opportunistic pod scheduler to schedule an affinity group.
-func (h *HivedAlgorithm) scheduleOpportunisticAffinityGroup(
-	sr schedulingRequest) (
-	placement groupPhysicalPlacement,
+// scheduleOpportunisticPodGroup calls the opportunistic pod scheduler to schedule a pod group.
+func (h *HivedAlgorithm) scheduleOpportunisticPodGroup(
+	podGroupSchedRequest PodGroupSchedulingRequest) (
+	oldPlacement groupPhysicalPlacement,
 	failedReason string) {
 
-	placement, failedReason = h.opportunisticSchedulers[sr.chain].Schedule(
-		sr.affinityGroupPodNums, opportunisticPriority, sr.suggestedNodes, sr.ignoreSuggestedNodes)
-	if placement == nil {
+	var placement podGroupPlacement
+	placement, failedReason = h.opportunisticSchedulers[podGroupSchedRequest.chain].SkuSchedule(
+		&podGroupSchedRequest.podRootGroup, opportunisticPriority)
+	if placement.IsEmpty() {
 		return nil, fmt.Sprintf("%v when scheduling in physical cluster", failedReason)
 	}
-	return placement, ""
+	return groupPhysicalPlacement{}, ""
 }
 
 // createAllocatedAffinityGroup creates a new affinity group and allocate the resources.
@@ -1036,7 +1041,7 @@ func (h *HivedAlgorithm) createAllocatedAffinityGroup(s *api.PodSchedulingSpec, 
 	if shouldLazyPreempt {
 		h.lazyPreemptAffinityGroup(newGroup, newGroup.name)
 	}
-	h.affinityGroups[s.AffinityGroup.Name] = newGroup
+	// TODO: h.affinityGroups[s.AffinityGroup.Name] = newGroup
 	klog.Infof("[%v]: New allocated affinity group created: %v", internal.Key(pod), s.AffinityGroup.Name)
 }
 
@@ -1065,7 +1070,7 @@ func (h *HivedAlgorithm) deleteAllocatedAffinityGroup(g *AlgoAffinityGroup, pod 
 			}
 		}
 	}
-	delete(h.affinityGroups, g.name)
+	// TODO: delete(h.affinityGroups, g.name)
 	klog.Infof("[%v]: Allocated affinity group deleted: %v", internal.Key(pod), g.name)
 }
 
@@ -1107,7 +1112,7 @@ func (h *HivedAlgorithm) createPreemptingAffinityGroup(
 		}
 	}
 	newGroup.preemptingPods[pod.UID] = pod
-	h.affinityGroups[s.AffinityGroup.Name] = newGroup
+	// TODO: h.affinityGroups[s.AffinityGroup.Name] = newGroup
 	klog.Infof("[%v]: New preempting affinity group created: %v", internal.Key(pod), newGroup.name)
 }
 
@@ -1139,7 +1144,7 @@ func (h *HivedAlgorithm) deletePreemptingAffinityGroup(g *AlgoAffinityGroup, pod
 			}
 		}
 	}
-	delete(h.affinityGroups, g.name)
+	// TODO: delete(h.affinityGroups, g.name)
 	klog.Infof("[%v]: Preempting affinity group %v deleted", internal.Key(pod), g.name)
 }
 

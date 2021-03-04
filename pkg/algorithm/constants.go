@@ -23,8 +23,9 @@
 package algorithm
 
 import (
-	"github.com/microsoft/hivedscheduler/pkg/api"
 	"math"
+
+	"github.com/microsoft/hivedscheduler/pkg/api"
 )
 
 const (
@@ -57,7 +58,19 @@ const (
 	// will respect the group that reserved the cell, i.e., a group with a non-higher priority cannot get this cell.
 	cellReserved CellState = "Reserved"
 
-	// internal affinity group states
+	// internal pod group states
+
+	// The pod group has been allocated cells.
+	// All cells in the group must be in Used state.
+	podGroupAllocated PodGroupState = "Allocated"
+	// The pod group is preempting other groups to get free resource.
+	// Cells in the group must be in either Reserving or Reserved states.
+	podGroupPreempting PodGroupState = "Preempting"
+	// The pod group is being preempted by some other groups.
+	// Cells in the group must be in either Used or Reserving states.
+	podGroupBeingPreempted PodGroupState = "BeingPreempted"
+
+	// TODO: to remove
 
 	// The affinity group has been allocated cells.
 	// All cells in the group must be in Used state.

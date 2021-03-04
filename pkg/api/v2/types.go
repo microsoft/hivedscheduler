@@ -68,6 +68,24 @@ type PodGroupMemberCellSpec struct {
 	CellNumber int32  `yaml:"cellNumber"`
 }
 
+// GetCurrentPod returns current pod in pod group
+func (obj *PodSchedulingSpec) GetCurrentPod() PodGroupMemberSpec {
+	queue := []*PodGroupSpec{obj.PodRootGroup}
+	for len(queue) > 0 {
+		newQueue := []*PodGroupSpec{}
+		for _, podGroup := range queue {
+			for _, pod := range podGroup.Pods {
+				if pod.ContainsCurrentPod == true {
+					return pod
+				}
+			}
+			newQueue = append(newQueue, podGroup.ChildGroups...)
+		}
+		queue = newQueue
+	}
+	return PodGroupMemberSpec{}
+}
+
 // ConvertFromV1 converts a v1 pod scheduling request to v2 spec.
 func (obj *PodSchedulingSpec) ConvertFromV1(objV1 *api.PodSchedulingSpec) {
 	obj.Version = "v2"

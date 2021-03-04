@@ -20,14 +20,13 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE
 
-package v2
+package algorithm
 
 import (
-	algo "github.com/microsoft/hivedscheduler/pkg/algorithm"
 	"github.com/microsoft/hivedscheduler/pkg/api"
 	apiv2 "github.com/microsoft/hivedscheduler/pkg/api/v2"
+	core "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/kubernetes/pkg/apis/core"
 )
 
 // PodGroupState represents the internal state of pod group.
@@ -38,8 +37,8 @@ type PodGroupSchedulingRequest struct {
 	vc           api.VirtualClusterName
 	pinnedCellId api.PinnedCellId
 	podRootGroup apiv2.PodGroupSpec
-	chain        algo.CellChain
-	priority     algo.CellPriority
+	chain        CellChain
+	priority     CellPriority
 }
 
 // PodGroupSchedulingStatus represents internal scheduling status of pod group.
@@ -50,6 +49,10 @@ type PodGroupSchedulingStatus struct {
 	physicalPlacement    groupPhysicalPlacement
 	state                PodGroupState
 	lazyPreemptionStatus *api.LazyPreemptionStatus
+	// to remove
+	allocatedPods             map[int32][]*core.Pod
+	virtualLeafCellPlacement  map[int32][]CellList
+	physicalLeafCellPlacement map[int32][]CellList
 }
 
 // AllocatedPodGroup represents a tree structure of allocated pod group.
@@ -60,7 +63,7 @@ type AllocatedPodGroup struct {
 
 // podGroupPlacement represents a tree structure of intra VC scheduled placement.
 type podGroupPlacement struct {
-	podsPlacement        []algo.CellList
+	podsPlacement        []CellList
 	childGroupsPlacement []*podGroupPlacement
 }
 
@@ -69,3 +72,8 @@ type PodGroupPhysicalPlacement podGroupPlacement
 
 // PodGroupVirtualPlacement represents virtual placement of pod group.
 type PodGroupVirtualPlacement podGroupPlacement
+
+// IsEmpty checks whether podGroupPlacement is empty
+func (placement podGroupPlacement) IsEmpty() bool {
+	return (placement.podsPlacement == nil && placement.childGroupsPlacement == nil)
+}

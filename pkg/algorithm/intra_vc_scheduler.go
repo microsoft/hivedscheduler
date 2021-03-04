@@ -32,26 +32,26 @@ import (
 
 // intraVCScheduler is an interface for scheduling pods inside a VC.
 // It stores two maps of ChainCellList, one for pinned cells, the other for non-pinned ones.
-// It should be able to return a set of leaf cell placements in the VC for a scheduling request.
+// It should be able to return a set of cell placements in the VC for a scheduling request.
 type intraVCScheduler interface {
 	getNonPinnedFullCellList() map[CellChain]ChainCellList
 	getNonPinnedPreassignedCells() map[CellChain]ChainCellList
 	getPinnedCells() map[api.PinnedCellId]ChainCellList
 
-	// Schedule an affinity group inside a VC. We use topologyAwareScheduler by default.
-	schedule(schedulingRequest) (groupVirtualPlacement, string)
+	// Schedule a pod group inside a VC. We use skuScheduler.
+	schedule(PodGroupSchedulingRequest) (groupVirtualPlacement, string)
 }
 
 type defaultIntraVCScheduler struct {
 	nonPinnedFullCellList     map[CellChain]ChainCellList
 	nonPinnedPreassignedCells map[CellChain]ChainCellList
 	pinnedCells               map[api.PinnedCellId]ChainCellList
-	// Currently we create a topologyAwareScheduler for each cluster view (each chain, each pinned cell).
+	// Currently we create a skuScheduler for each cluster view (each chain, each pinned cell).
 	// We plan to support multiple cluster views in one scheduler, and to support schedule pods
 	// across different cluster views.
-	// TODO: Support an affinity group can relax to be allocated across multiple chains.
-	nonPinnedCellSchedulers map[CellChain]*topologyAwareScheduler
-	pinnedCellSchedulers    map[api.PinnedCellId]*topologyAwareScheduler
+	// TODO: Support a pod group can relax to be allocated across multiple chains.
+	nonPinnedCellSchedulers map[CellChain]*skuScheduler
+	pinnedCellSchedulers    map[api.PinnedCellId]*skuScheduler
 }
 
 func newDefaultIntraVCScheduler(
@@ -60,13 +60,13 @@ func newDefaultIntraVCScheduler(
 	pinnedList map[api.PinnedCellId]ChainCellList,
 	leafCellNums map[CellChain]map[CellLevel]int32) *defaultIntraVCScheduler {
 
-	snr := map[CellChain]*topologyAwareScheduler{}
-	sr := map[api.PinnedCellId]*topologyAwareScheduler{}
+	snr := map[CellChain]*skuScheduler{}
+	sr := map[api.PinnedCellId]*skuScheduler{}
 	for chain, ccl := range nonPinnedFullList {
-		snr[chain] = NewTopologyAwareScheduler(ccl, leafCellNums[chain], true)
+		snr[chain] = NewSkuScheduler(ccl, leafCellNums[chain], true)
 	}
 	for pid, ccl := range pinnedList {
-		sr[pid] = NewTopologyAwareScheduler(ccl, leafCellNums[ccl[CellLevel(1)][0].GetChain()], true)
+		sr[pid] = NewSkuScheduler(ccl, leafCellNums[ccl[CellLevel(1)][0].GetChain()], true)
 	}
 	return &defaultIntraVCScheduler{
 		nonPinnedFullCellList:     nonPinnedFullList,
@@ -90,28 +90,29 @@ func (s *defaultIntraVCScheduler) getPinnedCells() map[api.PinnedCellId]ChainCel
 }
 
 func (s *defaultIntraVCScheduler) schedule(
-	sr schedulingRequest) (
-	placement groupVirtualPlacement,
+	podGroupSchedRequest PodGroupSchedulingRequest) (
+	oldPlacement groupVirtualPlacement,
 	failedReason string) {
 
-	scheduler := s.nonPinnedCellSchedulers[sr.chain]
-	str := fmt.Sprintf("chain %v", sr.chain)
-	if sr.pinnedCellId != "" {
-		scheduler = s.pinnedCellSchedulers[sr.pinnedCellId]
-		str = fmt.Sprintf("pinned cell %v", sr.pinnedCellId)
+	var placement podGroupPlacement
+
+	scheduler := s.nonPinnedCellSchedulers[podGroupSchedRequest.chain]
+	str := fmt.Sprintf("chain %v", podGroupSchedRequest.chain)
+	if podGroupSchedRequest.pinnedCellId != "" {
+		scheduler = s.pinnedCellSchedulers[podGroupSchedRequest.pinnedCellId]
+		str = fmt.Sprintf("pinned cell %v", podGroupSchedRequest.pinnedCellId)
 	}
-	klog.Infof("Processing scheduling request in VC %v: %v, leaf cell numbers %v, priority %v",
-		sr.vc, str, common.ToJson(sr.affinityGroupPodNums), sr.priority)
+	klog.Infof("Processing scheduling request in VC %v: %v, pod group %v, priority %v",
+		podGroupSchedRequest.vc, str, common.ToJson(podGroupSchedRequest.podRootGroup), podGroupSchedRequest.priority)
 	if scheduler != nil {
-		placement, failedReason = scheduler.Schedule(
-			sr.affinityGroupPodNums,
-			sr.priority,
-			sr.suggestedNodes,
-			sr.ignoreSuggestedNodes)
+		placement, failedReason = scheduler.SkuSchedule(
+			&podGroupSchedRequest.podRootGroup,
+			podGroupSchedRequest.priority,
+		)
 	}
-	if placement == nil {
-		return nil, fmt.Sprintf("%v when scheduling in VC %v", failedReason, sr.vc)
+	if placement.IsEmpty() {
+		return nil, fmt.Sprintf("%v when scheduling in VC %v", failedReason, podGroupSchedRequest.vc)
 	}
-	klog.Infof("Found placement in VC %v: %v", sr.vc, placement)
-	return placement, ""
+	klog.Infof("Found placement in VC %v: %v", podGroupSchedRequest.vc, placement)
+	return groupVirtualPlacement{}, ""
 }
