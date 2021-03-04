@@ -24,7 +24,8 @@ package main
 
 import (
 	"github.com/microsoft/hivedscheduler/pkg/common"
-	"github.com/microsoft/hivedscheduler/pkg/scheduler"
+	"github.com/microsoft/hivedscheduler/pkg/algorithm"
+	// "github.com/microsoft/hivedscheduler/pkg/scheduler"
 )
 
 func init() {
@@ -32,5 +33,6 @@ func init() {
 }
 
 func main() {
-	scheduler.NewHivedScheduler().Run(common.NewStopChannel())
+	algorithm.Convert()
+	// scheduler.NewHivedScheduler().Run(common.NewStopChannel())
 }
