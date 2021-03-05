@@ -1198,16 +1198,16 @@ func testDeletePods(t *testing.T, h *HivedAlgorithm) {
 		h.DeleteAllocatedPod(allocatedPods[i])
 	}
 	for _, pod := range allocatedPods {
-		if g, ok := h.podGroups[pss[pod.UID].PodRootGroup.Name]; ok {
-			t.Errorf("Group %v is expected to be deleted in scheduler, but not", g.name)
+		if _, ok := h.podGroups[pss[pod.UID].PodRootGroup.Name]; ok {
+			t.Errorf("Group %v is expected to be deleted in scheduler, but not", pss[pod.UID].PodRootGroup.Name)
 		}
 	}
 	for i := len(preemptingPods) - 1; i >= 0; i-- {
 		h.DeleteUnallocatedPod(preemptingPods[i])
 	}
 	for _, pod := range preemptingPods {
-		if g, ok := h.podGroups[pss[pod.UID].PodRootGroup.Name]; ok {
-			t.Errorf("Group %v is expected to be deleted in scheduler, but not", g.name)
+		if _, ok := h.podGroups[pss[pod.UID].PodRootGroup.Name]; ok {
+			t.Errorf("Group %v is expected to be deleted in scheduler, but not", pss[pod.UID].PodRootGroup.Name)
 		}
 	}
 }
@@ -1256,25 +1256,25 @@ func testSuggestedNodes(t *testing.T, configFilePath string) {
 	psr = h.Schedule(pod, nodes, internal.FilteringPhase)
 	// group should not be preempting because this is Filtering phase
 	if g := h.podGroups[pss[pod.UID].PodRootGroup.Name]; g != nil {
-		t.Errorf("Group %v should not exist but it does", g.name)
+		t.Errorf("Group %v should not exist but it does", pss[pod.UID].PodRootGroup.Name)
 	}
 	psr = h.Schedule(pod, nodes[:len(nodes)-1], internal.PreemptingPhase)
 	// group should not be preempting because the placement is not fully within Preempting-phase suggested nodes
 	if g := h.podGroups[pss[pod.UID].PodRootGroup.Name]; g != nil {
-		t.Errorf("Group %v should not exist but it does", g.name)
+		t.Errorf("Group %v should not exist but it does", pss[pod.UID].PodRootGroup.Name)
 	}
 	// this time group will be preempting
 	psr = h.Schedule(pod, nodes, internal.PreemptingPhase)
 	if g := h.podGroups[pss[pod.UID].PodRootGroup.Name]; g == nil {
 		t.Errorf("Group %v should be preempting but does not exist",
 			pss[pod.UID].PodRootGroup.Name)
-	} else if g.state != groupPreempting {
-		t.Errorf("Group %v should be in Preempting state but not", g.name)
+	} else if g.state != podGroupPreempting {
+		t.Errorf("Group %v should be in Preempting state but not", pss[pod.UID].PodRootGroup.Name)
 	}
 	psr = h.Schedule(pod, nodes[:len(nodes)-1], internal.PreemptingPhase)
 	// group should have been deleted because the placement is not within Preempting-phase suggested nodes
 	if g := h.podGroups[pss[pod.UID].PodRootGroup.Name]; g != nil {
-		t.Errorf("Group %v should have been deleted, but not", g.name)
+		t.Errorf("Group %v should have been deleted, but not", pss[pod.UID].PodRootGroup.Name)
 	}
 
 	// test backtracking search for cell binding
@@ -1303,14 +1303,14 @@ func testSuggestedNodes(t *testing.T, configFilePath string) {
 	if g := h.podGroups["group27"]; g == nil {
 		t.Errorf("Group %v should be allocated but does not exist",
 			pss[pod.UID].PodRootGroup.Name)
-	} else if g.state != groupAllocated {
-		t.Errorf("Group %v should be in Allocated state but not", g.name)
+	} else if g.state != podGroupAllocated {
+		t.Errorf("Group %v should be in Allocated state but not", "group27")
 	}
 	if g := h.podGroups["group28"]; g == nil {
 		t.Errorf("Group %v should be allocated but does not exist",
 			pss[pod.UID].PodRootGroup.Name)
-	} else if g.state != groupAllocated {
-		t.Errorf("Group %v should be in Allocated state but not", g.name)
+	} else if g.state != podGroupAllocated {
+		t.Errorf("Group %v should be in Allocated state but not", "group28")
 	}
 }
 
@@ -1547,7 +1547,7 @@ func testReconfiguration(t *testing.T, configFilePath string) {
 		pod := allPods[podName]
 		g := h.podGroups[pss[pod.UID].PodRootGroup.Name]
 		if g.virtualLeafCellPlacement != nil {
-			t.Errorf("Group %v is expected to be lazy preempted, but not", g.name)
+			t.Errorf("Group %v is expected to be lazy preempted, but not", pss[pod.UID].PodRootGroup.Name)
 		}
 	}
 	testDeletePods(t, h)
