@@ -1,6 +1,0 @@
-
-package algorithm
-
-
-func Convert() {
-}
