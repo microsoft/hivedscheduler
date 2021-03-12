@@ -1300,7 +1300,7 @@ func testSuggestedNodes(t *testing.T, configFilePath string) {
 	pod.Annotations[api.AnnotationKeyPodSchedulingSpec] = common.ToYaml(podSchedulingSpec[pod.UID])
 	psr = h.Schedule(pod, []string{"0.0.3.2", "0.0.3.3", "0.0.4.3"}, internal.PreemptingPhase)
 	// the pod tries to lazy preempt group27 and group28, but is reverted
-	lazyPreemptedGroupList: = []string{"group27", "group28"}
+	lazyPreemptedGroupList := []string{"group27", "group28"}
 	for _, groupName := range lazyPreemptedGroupList {
 		if g := h.podGroups[groupName]; g == nil {
 			t.Errorf("Group %v should be allocated but does not exist",
@@ -1334,23 +1334,25 @@ func testStatefulPreemption(t *testing.T, configFilePath string) {
 			h.DeleteAllocatedPod(allocatedPods[0])
 		}
 		if podName == "pod35" {
-			p := &groupPhysicalPlacement{}
-			*p = h.podGroups[podSchedulingSpec[pod.UID].PodRootGroup.Name].physicalLeafCellPlacement
+			p := &PodGroupPhysicalPlacement{}
+			*p = h.podGroups[podSchedulingSpec[pod.UID].PodRootGroup.Name].physicalPlacement
 			h.DeleteUnallocatedPod(pod)
 			// test correctness of preemption cancellation
-			for _, podPlacements := range *p {
-				for _, podLeafCells := range podPlacements {
-					for _, leafCell := range podLeafCells {
-						pLeafCell := leafCell.(*PhysicalCell)
-						if pLeafCell.GetState() == cellUsed {
-							if int32(pLeafCell.GetPriority()) != podSchedulingSpec["pod34"].Priority {
-								t.Errorf("Cell %v's priority should be pod34's priority, but is %v",
-									pLeafCell.GetAddress(), pLeafCell.GetPriority())
-							}
-						} else if pLeafCell.GetState() != cellFree {
-							t.Errorf("Cell %v should be in Free state, but is %v",
-								pLeafCell.GetAddress(), pLeafCell.GetState())
+			// The physicalPlacement shouldn't child groups, and p.podsPlacement will be the leaf cell.
+			if len(p.childGroupsPlacement) != 0 {
+				t.Errorf("Group %v should only contain childGroupsPlacement but it does", podSchedulingSpec[pod.UID].PodRootGroup.Name)
+			}
+			for _, podLeafCells := range p.podsPlacement {
+				for _, leafCell := range podLeafCells {
+					pLeafCell := leafCell.(*PhysicalCell)
+					if pLeafCell.GetState() == cellUsed {
+						if int32(pLeafCell.GetPriority()) != podSchedulingSpec["pod34"].Priority {
+							t.Errorf("Cell %v's priority should be pod34's priority, but is %v",
+								pLeafCell.GetAddress(), pLeafCell.GetPriority())
 						}
+					} else if pLeafCell.GetState() != cellFree {
+						t.Errorf("Cell %v should be in Free state, but is %v",
+							pLeafCell.GetAddress(), pLeafCell.GetState())
 					}
 				}
 			}
@@ -1543,7 +1545,7 @@ func testReconfiguration(t *testing.T, configFilePath string) {
 	for _, podName := range casesThatShouldBeLazyPreempted {
 		pod := allPods[podName]
 		g := h.podGroups[podSchedulingSpec[pod.UID].PodRootGroup.Name]
-		if g.virtualLeafCellPlacement != nil {
+		if g.virtualPlacement != nil {
 			t.Errorf("Group %v is expected to be lazy preempted, but not", podSchedulingSpec[pod.UID].PodRootGroup.Name)
 		}
 	}
