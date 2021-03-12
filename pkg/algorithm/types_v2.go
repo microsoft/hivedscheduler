@@ -45,8 +45,8 @@ type PodGroupSchedulingRequest struct {
 type PodGroupSchedulingStatus struct {
 	preemptingPods       map[types.UID]*core.Pod
 	allocatedPodGroup    AllocatedPodGroup
-	virtualPlacement     groupVirtualPlacement
-	physicalPlacement    groupPhysicalPlacement
+	virtualPlacement     PodGroupVirtualPlacement
+	physicalPlacement    PodGroupPhysicalPlacement
 	state                PodGroupState
 	lazyPreemptionStatus *api.LazyPreemptionStatus
 	// to remove
