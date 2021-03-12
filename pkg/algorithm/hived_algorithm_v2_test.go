@@ -1338,9 +1338,9 @@ func testStatefulPreemption(t *testing.T, configFilePath string) {
 			*p = h.podGroups[podSchedulingSpec[pod.UID].PodRootGroup.Name].physicalPlacement
 			h.DeleteUnallocatedPod(pod)
 			// test correctness of preemption cancellation
-			// The physicalPlacement shouldn't child groups, and p.podsPlacement will be the leaf cell.
+			// The physicalPlacement shouldn't have child groups, and p.podsPlacement will be the leaf cell.
 			if len(p.childGroupsPlacement) != 0 {
-				t.Errorf("Group %v should only contain childGroupsPlacement but it does", podSchedulingSpec[pod.UID].PodRootGroup.Name)
+				t.Errorf("Group %v should not contain childGroupsPlacement but it does", podSchedulingSpec[pod.UID].PodRootGroup.Name)
 			}
 			for _, podLeafCells := range p.podsPlacement {
 				for _, leafCell := range podLeafCells {
