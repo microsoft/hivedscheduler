@@ -99,6 +99,8 @@ type HivedAlgorithm struct {
 	cellChains map[string][]CellChain
 	// map each level in a chain to the specific cell type name
 	cellTypes map[CellChain]map[CellLevel]api.CellType
+	// map each type name in a chain to the specific cell level
+	cellLevels map[CellChain]map[api.CellType]CellLevel
 	// cluster status exposed to external
 	apiClusterStatus api.ClusterStatus
 	// lock
@@ -108,7 +110,7 @@ type HivedAlgorithm struct {
 // NewHivedAlgorithm initializes a HivedAlgorithm from the config file.
 func NewHivedAlgorithm(sConfig *api.Config) *HivedAlgorithm {
 	fullPcl, freePcl, vcFreeCellNum, nonPinnedFullVcl, nonPinnedFreeVcl, pinnedVcl, pinnedPcl,
-		leafCellNums, chains, cellTypes := ParseConfig(sConfig)
+		leafCellNums, chains, cellTypes, cellLevels := ParseConfig(sConfig)
 
 	h := &HivedAlgorithm{
 		vcSchedulers:            map[api.VirtualClusterName]intraVCScheduler{},
@@ -124,6 +126,7 @@ func NewHivedAlgorithm(sConfig *api.Config) *HivedAlgorithm {
 		badNodes:                common.NewSet(),
 		cellChains:              chains,
 		cellTypes:               cellTypes,
+		cellLevels:              cellLevels,
 		podGroups:               map[string]*PodGroupSchedulingStatus{},
 		apiClusterStatus: api.ClusterStatus{
 			PhysicalCluster: api.PhysicalClusterStatus{},
@@ -133,10 +136,10 @@ func NewHivedAlgorithm(sConfig *api.Config) *HivedAlgorithm {
 	for vcName := range nonPinnedFullVcl {
 		// TODO: Support per-VC configurable intra VC scheduling algo.
 		h.vcSchedulers[vcName] = newDefaultIntraVCScheduler(
-			nonPinnedFullVcl[vcName], nonPinnedFreeVcl[vcName], pinnedVcl[vcName], leafCellNums)
+			nonPinnedFullVcl[vcName], nonPinnedFreeVcl[vcName], pinnedVcl[vcName], leafCellNums, cellLevels)
 	}
 	for chain, ccl := range h.fullCellList {
-		h.opportunisticSchedulers[chain] = NewSkuScheduler(ccl, leafCellNums[chain], false)
+		h.opportunisticSchedulers[chain] = NewSkuScheduler(ccl, leafCellNums[chain], cellLevels[chain], false)
 	}
 	h.initCellNums()
 	h.initAPIClusterStatus()
@@ -975,7 +978,7 @@ func (h *HivedAlgorithm) scheduleOpportunisticPodGroup(
 	failedReason string) {
 
 	var placement podGroupPlacement
-	placement, failedReason = h.opportunisticSchedulers[podGroupSchedRequest.chain].SkuSchedule(
+	placement, failedReason = h.opportunisticSchedulers[podGroupSchedRequest.chain].Schedule(
 		&podGroupSchedRequest.podRootGroup, opportunisticPriority)
 	if placement.IsEmpty() {
 		return nil, fmt.Sprintf("%v when scheduling in physical cluster", failedReason)

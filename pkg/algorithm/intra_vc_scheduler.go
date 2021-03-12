@@ -58,15 +58,16 @@ func newDefaultIntraVCScheduler(
 	nonPinnedFullList map[CellChain]ChainCellList,
 	nonPinnedFreeList map[CellChain]ChainCellList,
 	pinnedList map[api.PinnedCellId]ChainCellList,
-	leafCellNums map[CellChain]map[CellLevel]int32) *defaultIntraVCScheduler {
+	leafCellNums map[CellChain]map[CellLevel]int32,
+	cellLevels map[CellChain]map[api.CellType]CellLevel) *defaultIntraVCScheduler {
 
 	snr := map[CellChain]*skuScheduler{}
 	sr := map[api.PinnedCellId]*skuScheduler{}
 	for chain, ccl := range nonPinnedFullList {
-		snr[chain] = NewSkuScheduler(ccl, leafCellNums[chain], true)
+		snr[chain] = NewSkuScheduler(ccl, leafCellNums[chain], cellLevels[chain], true)
 	}
 	for pid, ccl := range pinnedList {
-		sr[pid] = NewSkuScheduler(ccl, leafCellNums[ccl[CellLevel(1)][0].GetChain()], true)
+		sr[pid] = NewSkuScheduler(ccl, leafCellNums[ccl[CellLevel(1)][0].GetChain()], cellLevels[ccl[CellLevel(1)][0].GetChain()], true)
 	}
 	return &defaultIntraVCScheduler{
 		nonPinnedFullCellList:     nonPinnedFullList,
@@ -105,7 +106,7 @@ func (s *defaultIntraVCScheduler) schedule(
 	klog.Infof("Processing scheduling request in VC %v: %v, pod group %v, priority %v",
 		podGroupSchedRequest.vc, str, common.ToJson(podGroupSchedRequest.podRootGroup), podGroupSchedRequest.priority)
 	if scheduler != nil {
-		placement, failedReason = scheduler.SkuSchedule(
+		placement, failedReason = scheduler.Schedule(
 			&podGroupSchedRequest.podRootGroup,
 			podGroupSchedRequest.priority,
 		)

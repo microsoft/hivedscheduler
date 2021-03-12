@@ -25,6 +25,7 @@ package algorithm
 import (
 	"sort"
 
+	"github.com/microsoft/hivedscheduler/pkg/api"
 	apiv2 "github.com/microsoft/hivedscheduler/pkg/api/v2"
 )
 
@@ -41,45 +42,48 @@ type skuClusterView []*skuCell
 type skuScheduler struct {
 	ccl               ChainCellList
 	levelLeafCellNum  map[CellLevel]int32
+	cellLevels        map[api.CellType]CellLevel
 	crossPriorityPack bool
 }
 
 func NewSkuScheduler(
 	ccl ChainCellList,
 	levelLeafCellNum map[CellLevel]int32,
+	cellLevels map[api.CellType]CellLevel,
 	crossPriorityPack bool) *skuScheduler {
 
 	return &skuScheduler{
 		ccl:               ccl,
 		levelLeafCellNum:  levelLeafCellNum,
+		cellLevels:        cellLevels,
 		crossPriorityPack: crossPriorityPack,
 	}
 }
 
-func (s *skuScheduler) SkuSchedule(
+func (s *skuScheduler) Schedule(
 	podRootGroup *apiv2.PodGroupSpec,
 	p CellPriority) (
 	placement podGroupPlacement,
 	failedReason string) {
 
 	// sort pods in descending order by couting leaf cell number
-	sortPodGroup(s.levelLeafCellNum, podRootGroup)
+	s.sortPodGroup(podRootGroup)
 
 	// disable preemption first to reduce preemption
 	priority := opportunisticPriority
 	// try to schedule
-	placement, failedReason = findCellsForPodGroup(s.ccl, podRootGroup, nil, nil, priority, s.crossPriorityPack)
+	placement, failedReason = s.findCellsForPodGroup(podRootGroup, priority, &skuCell{c: nil}, nil)
 
 	// enable preemption if scheduling failed
 	if failedReason != "" && p > priority {
-		placement, failedReason = findCellsForPodGroup(s.ccl, podRootGroup, nil, nil, p, s.crossPriorityPack)
+		placement, failedReason = s.findCellsForPodGroup(podRootGroup, p, &skuCell{c: nil}, nil)
 	}
 	return placement, failedReason
 }
 
-func sortPodGroup(levelLeafCellNum map[CellLevel]int32, podGroup *apiv2.PodGroupSpec) {
+func (s *skuScheduler) sortPodGroup(podGroup *apiv2.PodGroupSpec) {
 	sort.SliceStable(podGroup.Pods, func(i, j int) bool {
-		return countLeafCellNums(levelLeafCellNum, podGroup.Pods[i]) > countLeafCellNums(levelLeafCellNum, podGroup.Pods[j])
+		return s.countLeafCellNums(podGroup.Pods[i]) > s.countLeafCellNums(podGroup.Pods[j])
 	})
 	sortedPods := []apiv2.PodGroupMemberSpec{}
 	for _, p := range podGroup.Pods {
@@ -90,39 +94,37 @@ func sortPodGroup(levelLeafCellNum map[CellLevel]int32, podGroup *apiv2.PodGroup
 	podGroup.Pods = sortedPods
 
 	sort.SliceStable(podGroup.ChildGroups, func(i, j int) bool {
-		return countLeafCellNums(levelLeafCellNum, podGroup.ChildGroups[i]) > countLeafCellNums(levelLeafCellNum, podGroup.ChildGroups[j])
+		return s.countLeafCellNums(podGroup.ChildGroups[i]) > s.countLeafCellNums(podGroup.ChildGroups[j])
 	})
 	for _, g := range podGroup.ChildGroups {
-		sortPodGroup(levelLeafCellNum, g)
+		s.sortPodGroup(g)
 	}
 }
 
-func countLeafCellNums(levelLeafCellNum map[CellLevel]int32, x interface{}) int32 {
+func (s *skuScheduler) countLeafCellNums(x interface{}) int32 {
 	count := int32(0)
 	switch p := x.(type) {
 	case apiv2.PodGroupMemberSpec:
-		count = levelLeafCellNum[cellTypeToLevel(p.CellsPerPod.CellType)] * p.CellsPerPod.CellNumber
+		count = s.levelLeafCellNum[s.cellLevels[p.CellsPerPod.CellType]] * p.CellsPerPod.CellNumber
 	case []apiv2.PodGroupMemberSpec:
 		for _, pp := range p {
-			count += countLeafCellNums(levelLeafCellNum, pp)
+			count += s.countLeafCellNums(pp)
 		}
 	case *apiv2.PodGroupSpec:
-		count += countLeafCellNums(levelLeafCellNum, p.Pods) + countLeafCellNums(levelLeafCellNum, p.ChildGroups)
+		count += s.countLeafCellNums(p.Pods) + s.countLeafCellNums(p.ChildGroups)
 	case []*apiv2.PodGroupSpec:
 		for _, pp := range p {
-			count += countLeafCellNums(levelLeafCellNum, pp)
+			count += s.countLeafCellNums(pp)
 		}
 	}
 	return count
 }
 
-func findCellsForPodGroup(
-	ccl ChainCellList,
+func (s *skuScheduler) findCellsForPodGroup(
 	podGroup *apiv2.PodGroupSpec,
-	within *skuCell,
-	allocated *podGroupPlacement,
 	p CellPriority,
-	crossPriorityPack bool) (
+	within *skuCell,
+	allocated *podGroupPlacement) (
 	placement podGroupPlacement,
 	failedReason string) {
 
@@ -132,12 +134,12 @@ func findCellsForPodGroup(
 	}
 	failedReason = ""
 
-	cv := newSkuClusterView(ccl, within, cellTypeToLevel(podGroup.WithinOneCell), p, crossPriorityPack)
+	cv := s.createSkuClusterView(within, s.cellLevels[podGroup.WithinOneCell], p)
 	for _, c := range cv {
-		placement.podsPlacement, failedReason = findCellsForPods(podGroup.Pods, c, allocated)
+		placement.podsPlacement, failedReason = s.findCellsForPods(podGroup.Pods, c, allocated)
 		if failedReason == "" {
 			for _, childGroup := range podGroup.ChildGroups {
-				childPodsPlacement, childFailedReason := findCellsForPodGroup(ccl, childGroup, c, &placement, p, crossPriorityPack)
+				childPodsPlacement, childFailedReason := s.findCellsForPodGroup(childGroup, p, c, &placement)
 				if childFailedReason != "" {
 					placement.childGroupsPlacement = []*podGroupPlacement{}
 					failedReason = childFailedReason
@@ -153,7 +155,7 @@ func findCellsForPodGroup(
 	return placement, failedReason
 }
 
-func findCellsForPods(
+func (s *skuScheduler) findCellsForPods(
 	pods []apiv2.PodGroupMemberSpec,
 	within *skuCell,
 	allocated *podGroupPlacement) (
@@ -165,7 +167,7 @@ func findCellsForPods(
 
 	for _, p := range pods {
 		// within level, node level
-		candidates := getLevelCells(within.c, cellTypeToLevel(p.CellsPerPod.CellType), CellList{})
+		candidates := getLevelCells(within.c, s.cellLevels[p.CellsPerPod.CellType], CellList{})
 		placement = append(placement, candidates[:p.CellsPerPod.CellNumber])
 	}
 
@@ -185,18 +187,16 @@ func getLevelCells(c Cell, l CellLevel, freeCells CellList) CellList {
 	return freeCells
 }
 
-func newSkuClusterView(
-	ccl ChainCellList,
-	within *skuCell,
-	level CellLevel,
-	p CellPriority,
-	crossPriorityPack bool) skuClusterView {
+func (s *skuScheduler) createSkuClusterView(
+	withinCell *skuCell,
+	withinLevel CellLevel,
+	p CellPriority) skuClusterView {
 
 	cv := skuClusterView{}
-	for l := level; l >= CellLevel(1); l-- {
-		for _, c := range ccl[l] {
-			if (within.c == nil || isAncestor(within, c)) && !containsAncestor(cv, c) {
-				skuCell := &skuCell{
+	for l := withinLevel; l >= CellLevel(1); l-- {
+		for _, c := range s.ccl[l] {
+			if (withinCell.c == nil || isAncestor(withinCell, c)) && !containsAncestor(cv, c) {
+				cell := &skuCell{
 					c:                             c,
 					freeLeafCellNumAtPriority:     c.GetTotalLeafCellNum(),
 					usedLeafCellNumAtPriority:     0,
@@ -204,20 +204,20 @@ func newSkuClusterView(
 				}
 				for priority, num := range c.GetUsedLeafCellNumAtPriorities() {
 					if priority >= p {
-						skuCell.freeLeafCellNumAtPriority -= num
+						cell.freeLeafCellNumAtPriority -= num
 					}
-					if crossPriorityPack {
-						skuCell.usedLeafCellNumAtPriority += num
+					if s.crossPriorityPack {
+						cell.usedLeafCellNumAtPriority += num
 					} else {
 						if priority == p {
-							skuCell.usedLeafCellNumAtPriority += num
+							cell.usedLeafCellNumAtPriority += num
 						}
 						if priority > p {
-							skuCell.usedLeafCellNumHigherPriority += num
+							cell.usedLeafCellNumHigherPriority += num
 						}
 					}
 				}
-				cv = append(cv, skuCell)
+				cv = append(cv, cell)
 			}
 		}
 	}
@@ -273,9 +273,4 @@ func containsAncestor(cv skuClusterView, c Cell) bool {
 		}
 	}
 	return false
-}
-
-func cellTypeToLevel(cellType string) CellLevel {
-	// TODO
-	return CellLevel(1)
 }

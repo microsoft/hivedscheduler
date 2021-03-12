@@ -48,7 +48,7 @@ type PodSchedulingSpec struct {
 // PodGroupSpec represents a tree stucture of pod group spec.
 type PodGroupSpec struct {
 	Name          string               `yaml:"name"`
-	WithinOneCell string               `yaml:"withinOneCell"`
+	WithinOneCell api.CellType         `yaml:"withinOneCell"`
 	Pods          []PodGroupMemberSpec `yaml:"pods"`
 	ChildGroups   []*PodGroupSpec      `yaml:"childGroups"`
 }
@@ -64,8 +64,8 @@ type PodGroupMemberSpec struct {
 
 // PodGroupMemberCellSpec represents cell spec for each pod in pod group.
 type PodGroupMemberCellSpec struct {
-	CellType   string `yaml:"cellType"`
-	CellNumber int32  `yaml:"cellNumber"`
+	CellType   api.CellType `yaml:"cellType"`
+	CellNumber int32        `yaml:"cellNumber"`
 }
 
 // GetCurrentPod returns current pod in pod group
@@ -103,7 +103,7 @@ func (obj *PodSchedulingSpec) ConvertFromV1(objV1 *api.PodSchedulingSpec) {
 				PodMinNumber: memberV1.PodNumber,
 				PodMaxNumber: memberV1.PodNumber,
 				CellsPerPod: PodGroupMemberCellSpec{
-					CellType:   obj.CellType,
+					CellType:   api.CellType(obj.CellType),
 					CellNumber: memberV1.LeafCellNumber,
 				},
 				ContainsCurrentPod: bool(obj.CellNumber == memberV1.LeafCellNumber),
@@ -126,7 +126,7 @@ func (obj *PodSchedulingSpec) SetDefaults(pod *core.Pod) {
 				PodMinNumber: 1,
 				PodMaxNumber: 1,
 				CellsPerPod: PodGroupMemberCellSpec{
-					CellType:   obj.CellType,
+					CellType:   api.CellType(obj.CellType),
 					CellNumber: obj.CellNumber,
 				},
 				ContainsCurrentPod: true,
