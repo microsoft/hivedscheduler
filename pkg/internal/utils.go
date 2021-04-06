@@ -170,7 +170,7 @@ func IsNodeHealthy(node *core.Node) bool {
 	return false
 }
 
-func NewBindingPod(pod *core.Pod, podBindInfo *si.PodBindInfo) *core.Pod {
+func NewBindingPod(pod *core.Pod, podBindInfo *apiv2.PodBindingInfo) *core.Pod {
 	bindingPod := pod.DeepCopy()
 
 	bindingPod.Spec.NodeName = podBindInfo.Node
@@ -198,10 +198,11 @@ func convertOldAnnotation(annotation string) string {
 }
 
 // PodBindInfo comes from internal, so just need to assert when deserialization.
-func ExtractPodBindInfo(allocatedPod *core.Pod) *si.PodBindInfo {
-	podBindInfo := si.PodBindInfo{}
+func ExtractPodBindInfo(allocatedPod *core.Pod) *apiv2.PodBindingInfo {
+	podBindInfo := apiv2.PodBindingInfo{}
 
 	annotation := convertOldAnnotation(allocatedPod.Annotations[si.AnnotationKeyPodBindInfo])
+	// TODO: backward compatibility
 	if annotation == "" {
 		panic(fmt.Errorf(
 			"Pod does not contain or contains empty annotation: %v",

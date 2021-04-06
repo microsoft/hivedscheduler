@@ -66,6 +66,7 @@ func initNodes(h *HivedAlgorithm) {
 }
 
 type podSchedulingSpecType map[types.UID]apiv2.PodSchedulingSpec
+
 var podSchedulingSpecTestData = `pod1:
   version: v2
   virtualCluster: VC1
@@ -1002,7 +1003,6 @@ pod46:
 
 var podSchedulingSpec = podSchedulingSpecType{}
 
-
 var casesThatShouldSucceed = []string{
 	"pod1", "pod2", "pod3", "pod4", "pod5", "pod6", "pod7", "pod8", "pod9", "pod16", "pod17", "pod18", "pod19", "pod20",
 	"pod21", "pod22", "pod23", "pod24", "pod25",
@@ -1545,7 +1545,7 @@ func testReconfiguration(t *testing.T, configFilePath string) {
 	for _, podName := range casesThatShouldBeLazyPreempted {
 		pod := allPods[podName]
 		g := h.podGroups[podSchedulingSpec[pod.UID].PodRootGroup.Name]
-		if g.virtualPlacement != nil {
+		if !PodGroupPlacement(g.virtualPlacement).IsEmpty() {
 			t.Errorf("Group %v is expected to be lazy preempted, but not", podSchedulingSpec[pod.UID].PodRootGroup.Name)
 		}
 	}

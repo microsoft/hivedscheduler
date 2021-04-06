@@ -63,7 +63,7 @@ func NewSkuScheduler(
 func (s *skuScheduler) Schedule(
 	podRootGroup *apiv2.PodGroupSpec,
 	p CellPriority) (
-	placement podGroupPlacement,
+	placement PodGroupPlacement,
 	failedReason string) {
 
 	// sort pods in descending order by couting leaf cell number
@@ -124,13 +124,13 @@ func (s *skuScheduler) findCellsForPodGroup(
 	podGroup *apiv2.PodGroupSpec,
 	p CellPriority,
 	within *skuCell,
-	allocated *podGroupPlacement) (
-	placement podGroupPlacement,
+	allocated *PodGroupPlacement) (
+	placement PodGroupPlacement,
 	failedReason string) {
 
-	placement = podGroupPlacement{
+	placement = PodGroupPlacement{
 		podsPlacement:        []CellList{},
-		childGroupsPlacement: []*podGroupPlacement{},
+		childGroupsPlacement: []*PodGroupPlacement{},
 	}
 	failedReason = ""
 
@@ -141,7 +141,7 @@ func (s *skuScheduler) findCellsForPodGroup(
 			for _, childGroup := range podGroup.ChildGroups {
 				childPodsPlacement, childFailedReason := s.findCellsForPodGroup(childGroup, p, c, &placement)
 				if childFailedReason != "" {
-					placement.childGroupsPlacement = []*podGroupPlacement{}
+					placement.childGroupsPlacement = []*PodGroupPlacement{}
 					failedReason = childFailedReason
 					break
 				}
@@ -158,7 +158,7 @@ func (s *skuScheduler) findCellsForPodGroup(
 func (s *skuScheduler) findCellsForPods(
 	pods []apiv2.PodGroupMemberSpec,
 	within *skuCell,
-	allocated *podGroupPlacement) (
+	allocated *PodGroupPlacement) (
 	placement []CellList,
 	failedReason string) {
 

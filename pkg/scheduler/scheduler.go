@@ -29,6 +29,7 @@ import (
 
 	"github.com/microsoft/hivedscheduler/pkg/algorithm"
 	si "github.com/microsoft/hivedscheduler/pkg/api"
+	apiv2 "github.com/microsoft/hivedscheduler/pkg/api/v2"
 	"github.com/microsoft/hivedscheduler/pkg/common"
 	"github.com/microsoft/hivedscheduler/pkg/internal"
 	"github.com/microsoft/hivedscheduler/pkg/webserver"
@@ -181,8 +182,8 @@ func NewHivedScheduler() *HivedScheduler {
 			PreemptHandler: s.preemptRoutine,
 		},
 		internal.InspectHandlers{
-			GetAllAffinityGroupsHandler:        s.getAllAffinityGroups,
-			GetAffinityGroupHandler:            s.getAffinityGroup,
+			GetAllPodGroupsHandler:             s.getAllPodGroups,
+			GetPodGroupHandler:                 s.getPodGroup,
 			GetClusterStatusHandler:            s.getClusterStatus,
 			GetPhysicalClusterStatusHandler:    s.getPhysicalClusterStatus,
 			GetAllVirtualClustersStatusHandler: s.getAllVirtualClustersStatus,
@@ -383,7 +384,7 @@ func (s *HivedScheduler) generalScheduleAdmissionCheck(
 }
 
 func (s *HivedScheduler) validatePodBindInfo(
-	podBindInfo *si.PodBindInfo, suggestedNodes []string) error {
+	podBindInfo *apiv2.PodBindingInfo, suggestedNodes []string) error {
 	node := podBindInfo.Node
 
 	// Check against existing nodes
@@ -720,12 +721,12 @@ func (s *HivedScheduler) preemptRoutine(args ei.ExtenderPreemptionArgs) *ei.Exte
 	}
 }
 
-func (s *HivedScheduler) getAllAffinityGroups() si.AffinityGroupList {
-	return s.schedulerAlgorithm.GetAllAffinityGroups()
+func (s *HivedScheduler) getAllPodGroups() apiv2.PodGroupList {
+	return s.schedulerAlgorithm.GetAllPodGroups()
 }
 
-func (s *HivedScheduler) getAffinityGroup(name string) si.AffinityGroup {
-	return s.schedulerAlgorithm.GetAffinityGroup(name)
+func (s *HivedScheduler) getPodGroup(name string) apiv2.PodGroupItem {
+	return s.schedulerAlgorithm.GetPodGroup(name)
 }
 
 func (s *HivedScheduler) getClusterStatus() si.ClusterStatus {

@@ -27,6 +27,7 @@ import (
 	"math/rand"
 
 	"github.com/microsoft/hivedscheduler/pkg/api"
+	apiv2 "github.com/microsoft/hivedscheduler/pkg/api/v2"
 	"github.com/microsoft/hivedscheduler/pkg/common"
 	"github.com/microsoft/hivedscheduler/pkg/internal"
 	core "k8s.io/api/core/v1"
@@ -36,26 +37,26 @@ import (
 
 // generatePodScheduleResult writes the scheduling result into a PodScheduleResult.
 func generatePodScheduleResult(
-	groupPhysicalPlacement groupPhysicalPlacement,
-	groupVirtualPlacement groupVirtualPlacement,
+	physicalPlacement PodGroupPhysicalPlacement,
+	virtualPlacement PodGroupVirtualPlacement,
 	preemptionVictims map[string]common.Set,
 	waitReason string,
 	cellLevelToType map[CellChain]map[CellLevel]api.CellType,
-	currentLeafCellNum int32,
+	currentCellNum int32,
+	currentPodGroupIndex int32,
 	currentPodIndex int32,
-	group *AlgoAffinityGroup,
-	groupName string,
+	podGroupSchedStatus *PodGroupSchedulingStatus,
 	suggestedNodes common.Set,
 	pod *core.Pod) internal.PodScheduleResult {
 
 	klog.V(4).Infof("[%v]: Got K8s suggested nodes: %v", internal.Key(pod), suggestedNodes)
-	if groupPhysicalPlacement == nil {
+	if PodGroupPlacement(physicalPlacement).IsEmpty() {
 		klog.Infof("[%v]: Pod needs to wait, reason: %v", internal.Key(pod), waitReason)
 		return internal.PodScheduleResult{PodWaitInfo: &internal.PodWaitInfo{Reason: waitReason}}
 	}
-	klog.Infof("[%v]: Physical placement: %v", internal.Key(pod), groupPhysicalPlacement)
-	if groupVirtualPlacement != nil {
-		klog.Infof("[%v]: Virtual placement: %v", internal.Key(pod), groupVirtualPlacement)
+	klog.Infof("[%v]: Physical placement: %v", internal.Key(pod), physicalPlacement)
+	if !PodGroupPlacement(virtualPlacement).IsEmpty() {
+		klog.Infof("[%v]: Virtual placement: %v", internal.Key(pod), virtualPlacement)
 	}
 	if len(preemptionVictims) > 0 {
 		return internal.PodScheduleResult{
@@ -64,16 +65,16 @@ func generatePodScheduleResult(
 	}
 	// we find the selected node after the preemption is done, otherwise the preemption victims
 	// may cause the selected node to be excluded from the suggested nodes
-	affinityGroupBindInfo, selectedNode, selectedLeafCellIndices, cellChain := generateAffinityGroupBindInfo(
-		groupPhysicalPlacement, groupVirtualPlacement, cellLevelToType, currentLeafCellNum, currentPodIndex, group, groupName)
+	podRootGroupBindingInfo, selectedNode, selectedLeafCellIndices, cellChain := generatePodGroupBindInfo(
+		physicalPlacement, virtualPlacement, cellLevelToType, currentCellNum, currentPodGroupIndex, currentPodIndex, podGroupSchedStatus)
 	klog.Infof("[%v]: pod is decided to be scheduled to node %v, leaf cells %v",
 		internal.Key(pod), selectedNode, common.ToJson(selectedLeafCellIndices))
 	return internal.PodScheduleResult{
-		PodBindInfo: &api.PodBindInfo{
-			Node:                  selectedNode,
-			LeafCellIsolation:     selectedLeafCellIndices,
-			CellChain:             cellChain,
-			AffinityGroupBindInfo: affinityGroupBindInfo,
+		PodBindInfo: &apiv2.PodBindingInfo{
+			Node:                    selectedNode,
+			LeafCellIsolation:       selectedLeafCellIndices,
+			CellChain:               cellChain,
+			PodRootGroupBindingInfo: podRootGroupBindingInfo,
 		},
 	}
 }
@@ -102,132 +103,148 @@ func generatePodPreemptInfo(preemptionVictims map[string]common.Set, pod *core.P
 	return &internal.PodPreemptInfo{VictimPods: victimPods}
 }
 
-// generateAffinityGroupBindInfo translates the physical and virtual placements of an affinity group
-// into a a series of AffinityGroupMemberBindInfos, and also returns the allocated node and leaf cell addresses
+// generatePodGroupBindInfo translates the physical and virtual placements of a pod group
+// into PodGroupBindingInfo, and also returns the allocated node and leaf cell addresses
 // of the current pod.
-func generateAffinityGroupBindInfo(
-	groupPhysicalPlacement groupPhysicalPlacement,
-	groupVirtualPlacement groupVirtualPlacement,
+func generatePodGroupBindInfo(
+	physicalPlacement PodGroupPhysicalPlacement,
+	virtualPlacement PodGroupVirtualPlacement,
 	cellLevelToType map[CellChain]map[CellLevel]api.CellType,
 	currentLeafCellNum int32,
+	currentPodGroupIndex int32,
 	currentPodIndex int32,
-	group *AlgoAffinityGroup,
-	groupName string) (
-	affinityGroupBindInfo []api.AffinityGroupMemberBindInfo,
+	podGroupSchedStatus *PodGroupSchedulingStatus) (
+	podRootGroupBindingInfo *apiv2.PodGroupBindingInfo,
 	selectedNode string,
 	selectedLeafCellIndices []int32,
 	chain string) {
 
-	affinityGroupBindInfo = make([]api.AffinityGroupMemberBindInfo, len(groupPhysicalPlacement))
-	groupMemberIndex := 0
-	for podLeafCellNum, podPhysicalPlacements := range groupPhysicalPlacement {
-		mbi := api.AffinityGroupMemberBindInfo{
-			PodPlacements: make([]api.PodPlacementInfo, len(podPhysicalPlacements)),
-		}
-		for podIndex := int32(0); podIndex < int32(len(podPhysicalPlacements)); podIndex++ {
-			mbi.PodPlacements[podIndex].PhysicalLeafCellIndices = make([]int32, podLeafCellNum)
-			mbi.PodPlacements[podIndex].PreassignedCellTypes = make([]api.CellType, podLeafCellNum)
-			for leafCellIndex := int32(0); leafCellIndex < podLeafCellNum; leafCellIndex++ {
-				pLeafCell := podPhysicalPlacements[podIndex][leafCellIndex]
-				if pLeafCell == nil {
-					if group == nil || group.state == groupPreempting {
-						panic(fmt.Sprintf("The first pod in group %v was allocated invalid resource", groupName))
-					}
-					// if the physical placement of this pod is not found (e.g., removed due to reconfiguration),
-					// we will insist the decision by retrieving it from other pods
-					mbi.PodPlacements[podIndex], chain = retrieveMissingPodPlacement(group, podLeafCellNum, podIndex)
-					klog.Warningf(
-						"pod placement has been invalid and is retrieved from annotation of other pods: node %v, leaf cell %v",
-						mbi.PodPlacements[podIndex].PhysicalNode, mbi.PodPlacements[podIndex].PhysicalLeafCellIndices[leafCellIndex])
-				} else {
-					nodes, leafCellIndices := pLeafCell.(*PhysicalCell).GetPhysicalPlacement()
-					// here each cell (i.e., pLeafCell) is only one leaf cell, hence we takes the first element
-					// in its "nodes" and "leafCellIndices" as the node and leaf cell address
-					if mbi.PodPlacements[podIndex].PhysicalNode == "" {
-						mbi.PodPlacements[podIndex].PhysicalNode = nodes[0]
-					}
-					mbi.PodPlacements[podIndex].PhysicalLeafCellIndices[leafCellIndex] = leafCellIndices[0]
-					if groupVirtualPlacement != nil {
-						vLeafCell := groupVirtualPlacement[podLeafCellNum][podIndex][leafCellIndex].(*VirtualCell)
-						mbi.PodPlacements[podIndex].PreassignedCellTypes[leafCellIndex] =
-							cellLevelToType[vLeafCell.GetChain()][vLeafCell.GetPreassignedCell().GetLevel()]
+	podGroupIndex := int32(0)
+	podRootGroupBindingInfo = &apiv2.PodGroupBindingInfo{}
+
+	physicalPlacementQueue := []*PodGroupPlacement{(*PodGroupPlacement)(&physicalPlacement)}
+	virtualPlacementQueue := []*PodGroupPlacement{(*PodGroupPlacement)(&virtualPlacement)}
+	podGroupBindingInfoQueue := []*apiv2.PodGroupBindingInfo{podRootGroupBindingInfo}
+	for len(physicalPlacementQueue) > 0 {
+		newPhysicalPlacementQueue := []*PodGroupPlacement{}
+		newVirtualPlacementQueue := []*PodGroupPlacement{}
+		newPodGroupBindingInfoQueue := []*apiv2.PodGroupBindingInfo{}
+		for index, placement := range physicalPlacementQueue {
+			podGroupBindingInfoQueue[index].PodPlacements = make([]apiv2.PodPlacementsInfo, len(placement.podsPlacement))
+			for podIndex, podPlacement := range placement.podsPlacement {
+				podLeafCellNum := len(podPlacement)
+				podGroupBindingInfoQueue[index].PodPlacements[podIndex].PhysicalLeafCellIndices = make([]int32, podLeafCellNum)
+				podGroupBindingInfoQueue[index].PodPlacements[podIndex].PreassignedCellTypes = make([]api.CellType, podLeafCellNum)
+				for leafCellIndex, pLeafCell := range podPlacement {
+					if pLeafCell == nil {
+						if podGroupSchedStatus == nil || podGroupSchedStatus.state == podGroupPreempting {
+							panic(fmt.Sprintf("The first pod in group %v was allocated invalid resource", podGroupSchedStatus.name))
+						}
+						// if the physical placement of this pod is not found (e.g., removed due to reconfiguration),
+						// we will insist the decision by retrieving it from other pods
+						podGroupBindingInfoQueue[index].PodPlacements[podIndex], chain =
+							retrieveMissingPodPlacement(podGroupSchedStatus, podGroupIndex, int32(podIndex))
+						klog.Warningf(
+							"pod placement has been invalid and is retrieved from annotation of other pods: node %v, leaf cell %v",
+							podGroupBindingInfoQueue[index].PodPlacements[podIndex].PhysicalNode,
+							podGroupBindingInfoQueue[index].PodPlacements[podIndex].PhysicalLeafCellIndices[leafCellIndex])
 					} else {
-						mbi.PodPlacements[podIndex].PreassignedCellTypes[leafCellIndex] = ""
+						nodes, leafCellIndices := pLeafCell.(*PhysicalCell).GetPhysicalPlacement()
+						// here each cell (i.e., pLeafCell) is only one leaf cell, hence we takes the first element
+						// in its "nodes" and "leafCellIndices" as the node and leaf cell address
+						if podGroupBindingInfoQueue[index].PodPlacements[podIndex].PhysicalNode == "" {
+							podGroupBindingInfoQueue[index].PodPlacements[podIndex].PhysicalNode = nodes[0]
+						}
+						podGroupBindingInfoQueue[index].PodPlacements[podIndex].PhysicalLeafCellIndices[leafCellIndex] = leafCellIndices[0]
+						if !PodGroupPlacement(virtualPlacement).IsEmpty() {
+							vLeafCell := virtualPlacementQueue[index].podsPlacement[podIndex][leafCellIndex].(*VirtualCell)
+							podGroupBindingInfoQueue[index].PodPlacements[podIndex].PreassignedCellTypes[leafCellIndex] =
+								cellLevelToType[vLeafCell.GetChain()][vLeafCell.GetPreassignedCell().GetLevel()]
+						} else {
+							podGroupBindingInfoQueue[index].PodPlacements[podIndex].PreassignedCellTypes[leafCellIndex] = ""
+						}
 					}
 				}
 			}
-		}
-		if podLeafCellNum == currentLeafCellNum {
-			selectedNode = mbi.PodPlacements[currentPodIndex].PhysicalNode
-			selectedLeafCellIndices = mbi.PodPlacements[currentPodIndex].PhysicalLeafCellIndices
-			if pLeafCell := groupPhysicalPlacement[currentLeafCellNum][currentPodIndex][0]; pLeafCell != nil {
-				chain = string(pLeafCell.GetChain())
+			if podGroupIndex == currentPodGroupIndex {
+				selectedNode = podGroupBindingInfoQueue[index].PodPlacements[currentPodIndex].PhysicalNode
+				selectedLeafCellIndices = podGroupBindingInfoQueue[index].PodPlacements[currentPodIndex].PhysicalLeafCellIndices
+				if pLeafCell := virtualPlacementQueue[index].podsPlacement[currentPodIndex][0]; pLeafCell != nil {
+					chain = string(pLeafCell.GetChain())
+				}
 			}
+			if placement.childGroupsPlacement != nil {
+				podGroupBindingInfoQueue[index].ChildGroupBindingInfo = make([]*apiv2.PodGroupBindingInfo, len(placement.childGroupsPlacement))
+				for childIndex := range placement.childGroupsPlacement {
+					podGroupBindingInfoQueue[index].ChildGroupBindingInfo[childIndex] = &apiv2.PodGroupBindingInfo{}
+				}
+			}
+			podGroupIndex++
+			newPhysicalPlacementQueue = append(newPhysicalPlacementQueue, physicalPlacementQueue[index].childGroupsPlacement...)
+			newVirtualPlacementQueue = append(newVirtualPlacementQueue, virtualPlacementQueue[index].childGroupsPlacement...)
+			newPodGroupBindingInfoQueue = append(newPodGroupBindingInfoQueue, podGroupBindingInfoQueue...)
 		}
-		affinityGroupBindInfo[groupMemberIndex] = mbi
-		groupMemberIndex++
+		physicalPlacementQueue = newPhysicalPlacementQueue
+		virtualPlacementQueue = newVirtualPlacementQueue
+		podGroupBindingInfoQueue = newPodGroupBindingInfoQueue
 	}
-	return affinityGroupBindInfo, selectedNode, selectedLeafCellIndices, chain
+
+	return podRootGroupBindingInfo, selectedNode, selectedLeafCellIndices, chain
 }
 
 // collectBadOrNonSuggestedNodes collects all the nodes that are not within the suggested nodes
-// in the physical placement of an affinity group.
+// in the physical placement of a pod group.
 func collectBadOrNonSuggestedNodes(
-	placement groupPhysicalPlacement,
+	placement PodGroupPhysicalPlacement,
 	suggestedNodes common.Set,
 	ignoreSuggestedNodes bool) (
 	badOrNonSuggestedNodes common.Set) {
 
 	badOrNonSuggestedNodes = common.NewSet()
-	for leafCellNum := range placement {
-		for podIndex := range placement[leafCellNum] {
-			for _, leafCell := range placement[leafCellNum][podIndex] {
-				if leafCell == nil {
-					continue
-				}
-				nodes, _ := leafCell.(*PhysicalCell).GetPhysicalPlacement()
-				if !leafCell.(*PhysicalCell).IsHealthy() ||
-					(!ignoreSuggestedNodes && !suggestedNodes.Contains(nodes[0])) {
-					badOrNonSuggestedNodes.Add(nodes[0])
-				}
+	for iter := PodGroupPlacement(placement).Iterator(); iter.HasNext(); {
+		for _, leafCell := range *iter.Next() {
+			if leafCell == nil {
+				continue
+			}
+			nodes, _ := leafCell.(*PhysicalCell).GetPhysicalPlacement()
+			if !leafCell.(*PhysicalCell).IsHealthy() ||
+				(!ignoreSuggestedNodes && !suggestedNodes.Contains(nodes[0])) {
+				badOrNonSuggestedNodes.Add(nodes[0])
 			}
 		}
 	}
 	return badOrNonSuggestedNodes
 }
 
-// collectPreemptionVictims collects preemption victims of an affinity group.
+// collectPreemptionVictims collects preemption victims of a pod group.
 // If any of the leaf cells allocated for the whole group is still used by a pod,
 // we will wait for the preemption, as a group is gang-scheduled.
-func collectPreemptionVictims(placement groupPhysicalPlacement) (
+func collectPreemptionVictims(placement PodGroupPhysicalPlacement) (
 	victimPods map[string]common.Set, overlappingPreemptorGroups common.Set) {
 
 	victimPods = map[string]common.Set{} // node -> pods
 	overlappingPreemptorGroups = common.NewSet()
-	for leafCellNum := range placement {
-		for podIndex := range placement[leafCellNum] {
-			for _, leafCell := range placement[leafCellNum][podIndex] {
-				if leafCell == nil {
-					continue
-				}
-				pLeafCell := leafCell.(*PhysicalCell)
-				state := pLeafCell.GetState()
-				if state == cellUsed || state == cellReserving {
-					// for any victim pod, gang-preempt all the other pods from the same affinity group
-					for _, pods := range pLeafCell.GetUsingGroup().allocatedPods {
-						for _, v := range pods {
-							if v != nil {
-								if _, ok := victimPods[v.Spec.NodeName]; !ok {
-									victimPods[v.Spec.NodeName] = common.NewSet()
-								}
-								victimPods[v.Spec.NodeName].Add(v)
-							}
+	for iter := PodGroupPlacement(placement).Iterator(); iter.HasNext(); {
+		for _, leafCell := range *iter.Next() {
+			if leafCell == nil {
+				continue
+			}
+			pLeafCell := leafCell.(*PhysicalCell)
+			state := pLeafCell.GetState()
+			if state == cellUsed || state == cellReserving {
+				// for any victim pod, gang-preempt all the other pods from the same pod group
+				for iter := pLeafCell.GetUsingGroup().allocatedPodGroup.Iterator(); iter.HasNext(); {
+					pod := iter.Next()
+					if pod != nil {
+						if _, ok := victimPods[pod.Spec.NodeName]; !ok {
+							victimPods[pod.Spec.NodeName] = common.NewSet()
 						}
+						victimPods[pod.Spec.NodeName].Add(pod)
 					}
 				}
-				if state == cellReserving || state == cellReserved {
-					overlappingPreemptorGroups.Add(pLeafCell.GetReservingOrReservedGroup())
-				}
+			}
+			if state == cellReserving || state == cellReserved {
+				overlappingPreemptorGroups.Add(pLeafCell.GetReservingOrReservedGroup())
 			}
 		}
 	}
@@ -245,77 +262,78 @@ func victimsToString(victimPods map[string]common.Set) string {
 	return common.ToJson(s)
 }
 
-// retrieveMissingPodPlacement finds the placement of a pod from the annotation of other pods in the same group
+// retrieveMissingPodPlacement finds the placement of a pod from the annotation of other pods in the same pod group
 // when the pod's placement has been invalid (i.e., not found in the spec).
-func retrieveMissingPodPlacement(g *AlgoAffinityGroup, leafCellNum int32, podIndex int32) (api.PodPlacementInfo, string) {
-	for _, pods := range g.allocatedPods {
-		for _, p := range pods {
-			if p != nil {
-				info := internal.ExtractPodBindInfo(p)
-				for _, mbi := range info.AffinityGroupBindInfo {
-					if leafCellNum == int32(len(mbi.PodPlacements[0].PhysicalLeafCellIndices)) {
-						return mbi.PodPlacements[podIndex], info.CellChain
-					}
+func retrieveMissingPodPlacement(podGroupSchedStatus *PodGroupSchedulingStatus, podGroupIndex int32, podIndex int32) (apiv2.PodPlacementsInfo, string) {
+	for iter := podGroupSchedStatus.allocatedPodGroup.Iterator(); iter.HasNext(); {
+		pod := iter.Next()
+		if pod != nil {
+			info := internal.ExtractPodBindInfo(pod)
+			index := int32(0)
+			for infoIter := info.PodRootGroupBindingInfo.Iterator(podGroupIndex); infoIter.HasNext(); {
+				podPlacementsInfo := infoIter.Next()
+				if index == podIndex {
+					return *podPlacementsInfo, info.CellChain
 				}
+				index++
 			}
 		}
 	}
 	panic(fmt.Sprintf(
-		"No allocated pod found in an allocated group %v when retrieving placement for pod %v with leaf cell number %v", g.name, podIndex, leafCellNum))
+		"No allocated pod found in an allocated group %v when retrieving placement for pod group %v pod %v", podGroupSchedStatus.name, podGroupIndex, podIndex))
 }
 
-// retrieveVirtualCell finds the corresponding virtual cell for a physical cell in the placements of an affinity group.
+// retrieveVirtualCell finds the corresponding virtual cell for a physical cell in the placements of a pod group.
 func retrieveVirtualCell(
-	physicalPlacement groupPhysicalPlacement,
-	virtualPlacement groupVirtualPlacement,
+	physicalPlacement PodGroupPhysicalPlacement,
+	virtualPlacement PodGroupVirtualPlacement,
 	pLeafCell *PhysicalCell) (vLeafCell *VirtualCell) {
 
-	for leafCellNum := range physicalPlacement {
-		for podIndex := range physicalPlacement[leafCellNum] {
-			for leafCellIndex, leafCell := range physicalPlacement[leafCellNum][podIndex] {
-				if leafCell != nil && CellEqual(leafCell, pLeafCell) {
-					return virtualPlacement[leafCellNum][podIndex][leafCellIndex].(*VirtualCell)
-				}
+	pIter := PodGroupPlacement(physicalPlacement).Iterator()
+	vIter := PodGroupPlacement(virtualPlacement).Iterator()
+	for pIter.HasNext() {
+		pLeafCells := *pIter.Next()
+		vLeafCells := *vIter.Next()
+		for leafCellIndex, leafCell := range pLeafCells {
+			if leafCell != nil && CellEqual(leafCell, pLeafCell) {
+				return vLeafCells[leafCellIndex].(*VirtualCell)
 			}
 		}
 	}
 	return nil
 }
 
-// getAllocatedPodIndex assigns a new index for a new pod in an affinity group.
-func getNewPodIndex(pods []*core.Pod) int32 {
-	podIndex := int32(-1)
-	for i, p := range pods {
-		if p == nil {
-			podIndex = int32(i)
-			break
+// getAllocatedPodIndex assigns a new index for a new pod in a pod group.
+func getNewPodIndex(allocatedPodGroup AllocatedPodGroup, podGroupIndex int32) int32 {
+	podIndex := int32(0)
+	for iter := allocatedPodGroup.Iterator(podGroupIndex); iter.HasNext(); {
+		if iter.Next() == nil {
+			return podIndex
 		}
+		podIndex++
 	}
-	return podIndex
+	return -1
 }
 
 // getAllocatedPodIndex finds the index of an allocated pod in its group according to its placement.
-func getAllocatedPodIndex(info *api.PodBindInfo, leafCellNum int32) int32 {
-	for _, gms := range info.AffinityGroupBindInfo {
-		if leafCellNumber := int32(len(gms.PodPlacements[0].PhysicalLeafCellIndices)); leafCellNumber == leafCellNum {
-			for podIndex, placement := range gms.PodPlacements {
-				if placement.PhysicalNode == info.Node && common.Int32SliceContains(
-					placement.PhysicalLeafCellIndices, info.LeafCellIsolation[0]) {
-					return int32(podIndex)
-				}
-			}
+func getAllocatedPodIndex(info *apiv2.PodBindingInfo, podGroupIndex int32) int32 {
+	podIndex := int32(0)
+	for iter := info.PodRootGroupBindingInfo.Iterator(podGroupIndex); iter.HasNext(); {
+		podPlacementsInfo := iter.Next()
+		if podPlacementsInfo.PhysicalNode == info.Node && common.Int32SliceContains(
+			podPlacementsInfo.PhysicalLeafCellIndices, info.LeafCellIsolation[0]) {
+			return podIndex
 		}
+		podIndex++
 	}
 	return -1
 }
 
 // allPodsReleased checks if all the pods of an affinity group were released.
-func allPodsReleased(allocatedPods map[int32][]*core.Pod) bool {
-	for _, pods := range allocatedPods {
-		for _, p := range pods {
-			if p != nil {
-				return false
-			}
+func allPodsReleased(allocatedPodGroup AllocatedPodGroup) bool {
+	for iter := allocatedPodGroup.Iterator(); iter.HasNext(); {
+		if iter.Next() != nil {
+			return false
 		}
 	}
 	return true
