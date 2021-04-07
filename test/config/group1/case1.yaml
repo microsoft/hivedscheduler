@@ -2,13 +2,13 @@
   parameters:
     podName: group1_pod1
     phase: "Preempting"
-    pgsr:
+    podGroupSchedulingRequest:
       version: v2
       virtualCluster: VC1
       priority: 1
       pinnedCellId: ""
       cellType: V100
-      cellNumber: 1
+      cellNumber: 5
       gangReleaseEnable: false
       lazyPreemptionEnable: false
       podRootGroup:
@@ -19,7 +19,7 @@
           podMaxNumber: 1
           cellsPerPod:
             cellType: V100
-            cellNumber: 1
+            cellNumber: 5
           containsCurrentPod: true
         childGroups: []
 - method: AssertPodBindResult
@@ -27,12 +27,12 @@
     podName: group1_pod1
     expectedResult:
       node: 0.0.0.1
-      leafCellIsolation: [0]
+      leafCellIsolation: [0, 1, 2, 3, 4]
 - method: SchedulePod
   parameters:
     podName: group2_pod1
     phase: "Preempting"
-    pgsr:
+    podGroupSchedulingRequest:
       version: v2
       virtualCluster: VC1
       priority: 2
@@ -43,7 +43,7 @@
       lazyPreemptionEnable: false
       podRootGroup:
         name: group2
-        withinOneCell: "V100-SOCKET"
+        withinOneCell: "V100-NODE"
         pods:
         - podMinNumber: 4
           podMaxNumber: 4
@@ -54,15 +54,15 @@
         childGroups: []
 - method: AssertPodBindResult
   parameters:
-    podName: group1_pod1
+    podName: group2_pod1
     expectedResult:
-      node: 0.0.0.1
-      leafCellIsolation: [4]
+      node: 0.0.0.2
+      leafCellIsolation: [0]
 - method: SchedulePod
   parameters:
     podName: group2_pod2
     phase: "Preempting"
-    pgsr:
+    podGroupSchedulingRequest:
       version: v2
       virtualCluster: VC1
       priority: 2
@@ -73,7 +73,7 @@
       lazyPreemptionEnable: false
       podRootGroup:
         name: group2
-        withinOneCell: "V100-SOCKET"
+        withinOneCell: "V100-NODE"
         pods:
         - podMinNumber: 4
           podMaxNumber: 4
@@ -84,15 +84,15 @@
         childGroups: []
 - method: AssertPodBindResult
   parameters:
-    podName: group2_pod2
+    podName: group1_pod2
     expectedResult:
-      node: 0.0.0.1
-      leafCellIsolation: [5]
+      node: 0.0.0.2
+      leafCellIsolation: [1]
 - method: SchedulePod
   parameters:
     podName: group2_pod3
     phase: "Preempting"
-    pgsr:
+    podGroupSchedulingRequest:
       version: v2
       virtualCluster: VC1
       priority: 2
@@ -103,7 +103,7 @@
       lazyPreemptionEnable: false
       podRootGroup:
         name: group2
-        withinOneCell: "V100-SOCKET"
+        withinOneCell: "V100-NODE"
         pods:
         - podMinNumber: 4
           podMaxNumber: 4
@@ -114,15 +114,15 @@
         childGroups: []
 - method: AssertPodBindResult
   parameters:
-    podName: group2_pod3
+    podName: group1_pod3
     expectedResult:
-      node: 0.0.0.1
-      leafCellIsolation: [6]
+      node: 0.0.0.2
+      leafCellIsolation: [2]
 - method: SchedulePod
   parameters:
     podName: group2_pod4
     phase: "Preempting"
-    pgsr:
+    podGroupSchedulingRequest:
       version: v2
       virtualCluster: VC1
       priority: 2
@@ -133,7 +133,7 @@
       lazyPreemptionEnable: false
       podRootGroup:
         name: group2
-        withinOneCell: "V100-SOCKET"
+        withinOneCell: "V100-NODE"
         pods:
         - podMinNumber: 4
           podMaxNumber: 4
@@ -144,7 +144,8 @@
         childGroups: []
 - method: AssertPodBindResult
   parameters:
-    podName: group2_pod4
+    podName: group1_pod4
     expectedResult:
-      node: 0.0.0.1
-      leafCellIsolation: [7]
+      node: 0.0.0.2
+      leafCellIsolation: [3]
+

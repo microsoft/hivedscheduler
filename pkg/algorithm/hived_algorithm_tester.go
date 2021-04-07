@@ -64,7 +64,7 @@ type HivedAlgorithmTester interface {
 	SetNodeToBad(nodeName string)
 	SetNodeToHealthy(nodeName string)
 
-	SchedulePod(podName string, pgsr apiv2.PodSchedulingSpec, phase internal.SchedulingPhase)
+	SchedulePod(podName string, podGroupSchedulingRequest apiv2.PodSchedulingSpec, phase internal.SchedulingPhase)
 	DeallocatePod(podName string)
 
 	AssertPodBindResult(podName string, expectedResult bindResult)
@@ -136,7 +136,7 @@ func (tester *GenericHivedAlgorithmTester) SetNodeToHealthy(nodeName string) {
 }
 
 
-func (tester *GenericHivedAlgorithmTester) SchedulePod(podName string, pgsr apiv2.PodSchedulingSpec, phase internal.SchedulingPhase) {
+func (tester *GenericHivedAlgorithmTester) SchedulePod(podName string, podGroupSchedulingRequest apiv2.PodSchedulingSpec, phase internal.SchedulingPhase) {
 	h := tester.h
 	t := tester.t
 	defer func() {
@@ -154,7 +154,7 @@ func (tester *GenericHivedAlgorithmTester) SchedulePod(podName string, pgsr apiv
 				Annotations: map[string]string{},
 			},
 	}
-	pod.Annotations[api.AnnotationKeyPodSchedulingSpec] = common.ToYaml(pgsr)
+	pod.Annotations[api.AnnotationKeyPodSchedulingSpec] = common.ToYaml(podGroupSchedulingRequest)
 	psr := h.Schedule(pod, tester.allNodes, phase)
 	if psr.PodBindInfo != nil {
 		allocatedPod := internal.NewBindingPod(pod, psr.PodBindInfo)
@@ -273,9 +273,9 @@ func (tester *GenericHivedAlgorithmTester) ExecuteCaseFromYamlFile(filePath stri
 		if step.Method == "SchedulePod" {
 			var podName = step.Paramaters["podName"].(string)
 			var phase = internal.SchedulingPhase(step.Paramaters["phase"].(string))
-			pgsr := apiv2.PodSchedulingSpec{}
-			common.FromYaml(common.ToYaml(step.Paramaters["pgsr"]), &pgsr)
-			tester.SchedulePod(podName, pgsr, phase)
+			podGroupSchedulingRequest := apiv2.PodSchedulingSpec{}
+			common.FromYaml(common.ToYaml(step.Paramaters["podGroupSchedulingRequest"]), &podGroupSchedulingRequest)
+			tester.SchedulePod(podName, podGroupSchedulingRequest, phase)
 		} else if step.Method == "DeallocatePod" {
 			var podName = step.Paramaters["podName"].(string)
 			tester.DeallocatePod(podName)

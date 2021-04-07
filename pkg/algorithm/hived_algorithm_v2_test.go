@@ -29,38 +29,29 @@ import (
 	"strings"
 )
 
-var testYamlRootPath, _ = filepath.Abs("../../test")
-var groupASettingPath = filepath.Join(testYamlRootPath, "group_A_setting.yaml")
-var groupBSettingPath = filepath.Join(testYamlRootPath, "group_B_setting.yaml")
+var testConfigRootPath, _ = filepath.Abs("../../test/config")
 
-func TestHivedAlgorithmGroupA(t *testing.T) {
-	fileInfo, err := ioutil.ReadDir(testYamlRootPath)
+func ExecuteHivedAlgorithmTestGroup(t *testing.T, groupFolder string) {
+	groupSettingPath := filepath.Join(groupFolder, "setting.yaml")
+	fileInfo, err := ioutil.ReadDir(groupFolder)
 	if err != nil {
 		panic(err)
 	}
 	for _, file := range fileInfo {
-		if (file.IsDir() == false) && (strings.HasPrefix(file.Name(), "group_A_case_")) {
+		if (file.IsDir() == false) && (strings.HasPrefix(file.Name(), "case")) {
 			caseFileName := file.Name()
-			caseFilePath := filepath.Join(testYamlRootPath, caseFileName)
-			t.Logf("Will execute %v for group A", caseFileName)
-			tester := NewHivedAlgorithmTester(t, groupASettingPath)
+			caseFilePath := filepath.Join(groupFolder, caseFileName)
+			t.Logf("Will execute %v", caseFilePath)
+			tester := NewHivedAlgorithmTester(t, groupSettingPath)
 			tester.ExecuteCaseFromYamlFile(caseFilePath)
 		}
 	}
 }
 
-func TestHivedAlgorithmGroupB(t *testing.T) {
-	fileInfo, err := ioutil.ReadDir(testYamlRootPath)
-	if err != nil {
-		panic(err)
-	}
-	for _, file := range fileInfo {
-		if (file.IsDir() == false) && (strings.HasPrefix(file.Name(), "group_B_case_")) {
-			caseFileName := file.Name()
-			caseFilePath := filepath.Join(testYamlRootPath, caseFileName)
-			t.Logf("Will execute %v for group B", caseFileName)
-			tester := NewHivedAlgorithmTester(t, groupBSettingPath)
-			tester.ExecuteCaseFromYamlFile(caseFilePath)
-		}
-	}
+func TestHivedAlgorithmGroup1(t *testing.T) {
+	ExecuteHivedAlgorithmTestGroup(t, filepath.Join(testConfigRootPath, "group1"))
+}
+
+func TestHivedAlgorithmGroup2(t *testing.T) {
+	ExecuteHivedAlgorithmTestGroup(t, filepath.Join(testConfigRootPath, "group2"))
 }
