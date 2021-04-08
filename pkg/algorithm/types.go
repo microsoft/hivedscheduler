@@ -169,7 +169,7 @@ func newAlgoAffinityGroup(
 		virtualLeafCellPlacement:  groupVirtualPlacement{},
 		state:                     state,
 	}
-	if state == groupPreempting {
+	if state == AffinityGroupState("Preempting") {
 		group.preemptingPods = map[types.UID]*core.Pod{}
 	}
 	for leafCellNum, podNum := range podNums {

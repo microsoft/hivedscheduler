@@ -39,7 +39,7 @@ type intraVCScheduler interface {
 	getPinnedCells() map[api.PinnedCellId]ChainCellList
 
 	// Schedule a pod group inside a VC. We use skuScheduler.
-	schedule(PodGroupSchedulingRequest) (groupVirtualPlacement, string)
+	schedule(PodGroupSchedulingRequest) (PodGroupVirtualPlacement, string)
 }
 
 type defaultIntraVCScheduler struct {
@@ -92,10 +92,8 @@ func (s *defaultIntraVCScheduler) getPinnedCells() map[api.PinnedCellId]ChainCel
 
 func (s *defaultIntraVCScheduler) schedule(
 	podGroupSchedRequest PodGroupSchedulingRequest) (
-	oldPlacement groupVirtualPlacement,
+	virtualPlacement PodGroupVirtualPlacement,
 	failedReason string) {
-
-	var placement podGroupPlacement
 
 	scheduler := s.nonPinnedCellSchedulers[podGroupSchedRequest.chain]
 	str := fmt.Sprintf("chain %v", podGroupSchedRequest.chain)
@@ -106,14 +104,16 @@ func (s *defaultIntraVCScheduler) schedule(
 	klog.Infof("Processing scheduling request in VC %v: %v, pod group %v, priority %v",
 		podGroupSchedRequest.vc, str, common.ToJson(podGroupSchedRequest.podRootGroup), podGroupSchedRequest.priority)
 	if scheduler != nil {
+		var placement PodGroupPlacement
 		placement, failedReason = scheduler.Schedule(
 			&podGroupSchedRequest.podRootGroup,
 			podGroupSchedRequest.priority,
 		)
+		virtualPlacement = PodGroupVirtualPlacement(placement)
 	}
-	if placement.IsEmpty() {
-		return nil, fmt.Sprintf("%v when scheduling in VC %v", failedReason, podGroupSchedRequest.vc)
+	if PodGroupPlacement(virtualPlacement).IsEmpty() {
+		return PodGroupVirtualPlacement{}, fmt.Sprintf("%v when scheduling in VC %v", failedReason, podGroupSchedRequest.vc)
 	}
-	klog.Infof("Found placement in VC %v: %v", podGroupSchedRequest.vc, placement)
-	return groupVirtualPlacement{}, ""
+	klog.Infof("Found placement in VC %v: %v", podGroupSchedRequest.vc, virtualPlacement)
+	return virtualPlacement, ""
 }

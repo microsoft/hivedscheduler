@@ -129,13 +129,13 @@ func (c *GenericCell) IncreaseUsedLeafCellNumAtPriority(p CellPriority, delta in
 // PhysicalCell defines a cell in the physical cluster.
 type PhysicalCell struct {
 	GenericCell
-	nodes                    []string           // node names inside the cell
-	leafCellIndices          []int32            // [-1] for cells at levels higher than node
-	usingGroup               *AlgoAffinityGroup // affinity group using this cell
-	reservingOrReservedGroup *AlgoAffinityGroup // affinity group that is reserving, or has reserved the cell (e.g., waiting for preemption)
-	virtualCell              *VirtualCell       // points to the bound virtual cell
-	split                    bool               // true when the cell has been split
-	pinned                   bool               // true when this is a pinned cell
+	nodes                    []string                  // node names inside the cell
+	leafCellIndices          []int32                   // [-1] for cells at levels higher than node
+	usingGroup               *PodGroupSchedulingStatus // pod group using this cell
+	reservingOrReservedGroup *PodGroupSchedulingStatus // pod group that is reserving, or has reserved the cell (e.g., waiting for preemption)
+	virtualCell              *VirtualCell              // points to the bound virtual cell
+	split                    bool                      // true when the cell has been split
+	pinned                   bool                      // true when this is a pinned cell
 	// This status only contains the statuses that need to be exposed to external,
 	// and should not be used for internal status management
 	apiStatus *api.PhysicalCellStatus
@@ -216,46 +216,46 @@ func (c *PhysicalCell) SetPhysicalResources(nodes []string, leafCellIndices []in
 	c.leafCellIndices = leafCellIndices
 }
 
-func (c *PhysicalCell) AddUsingGroup(g *AlgoAffinityGroup) {
+func (c *PhysicalCell) AddUsingGroup(g *PodGroupSchedulingStatus) {
 	if c.usingGroup != nil {
-		klog.Errorf("Found another using affinity group %v when adding "+
-			"using affinity group %v to cell %v", c.usingGroup.name, g.name, c.address)
+		klog.Errorf("Found another using pod group %v when adding "+
+			"using pod group %v to cell %v", c.usingGroup.name, g.name, c.address)
 	}
 	c.usingGroup = g
-	klog.Infof("Cell %v is now used by affinity group %v", c.address, g.name)
+	klog.Infof("Cell %v is now used by pod group %v", c.address, g.name)
 }
 
-func (c *PhysicalCell) DeleteUsingGroup(g *AlgoAffinityGroup) {
+func (c *PhysicalCell) DeleteUsingGroup(g *PodGroupSchedulingStatus) {
 	if c.usingGroup == nil || c.usingGroup.name != g.name {
-		klog.Errorf("Using affinity group %v not found when deleting it from cell %v", g.name, c.address)
+		klog.Errorf("Using pod group %v not found when deleting it from cell %v", g.name, c.address)
 	}
 	c.usingGroup = nil
-	klog.Infof("Cell %v is no longer used by affinity group %v", c.address, g.name)
+	klog.Infof("Cell %v is no longer used by pod group %v", c.address, g.name)
 }
 
-func (c *PhysicalCell) GetUsingGroup() *AlgoAffinityGroup {
+func (c *PhysicalCell) GetUsingGroup() *PodGroupSchedulingStatus {
 	return c.usingGroup
 }
 
-func (c *PhysicalCell) AddReservingOrReservedGroup(g *AlgoAffinityGroup) {
+func (c *PhysicalCell) AddReservingOrReservedGroup(g *PodGroupSchedulingStatus) {
 	if c.reservingOrReservedGroup != nil {
-		klog.Errorf("Found another reserving or reserved affinity group %v when adding "+
-			"reserving or reserved affinity group %v to cell %v", c.reservingOrReservedGroup.name, g.name, c.address)
+		klog.Errorf("Found another reserving or reserved pod group %v when adding "+
+			"reserving or reserved pod group %v to cell %v", c.reservingOrReservedGroup.name, g.name, c.address)
 	}
 	c.reservingOrReservedGroup = g
-	klog.Infof("Cell %v is now reserved (or being reserved) by affinity group %v", c.address, g.name)
+	klog.Infof("Cell %v is now reserved (or being reserved) by pod group %v", c.address, g.name)
 }
 
-func (c *PhysicalCell) DeleteReservingOrReservedGroup(g *AlgoAffinityGroup) {
+func (c *PhysicalCell) DeleteReservingOrReservedGroup(g *PodGroupSchedulingStatus) {
 	if c.reservingOrReservedGroup == nil || c.reservingOrReservedGroup.name != g.name {
-		klog.Errorf("Reserving or reserved affinity group %v not found when deleting it from cell %v",
+		klog.Errorf("Reserving or reserved pod group %v not found when deleting it from cell %v",
 			g.name, c.address)
 	}
 	c.reservingOrReservedGroup = nil
-	klog.Infof("Cell %v is no longer reserved by affinity group %v", c.address, g.name)
+	klog.Infof("Cell %v is no longer reserved by pod group %v", c.address, g.name)
 }
 
-func (c *PhysicalCell) GetReservingOrReservedGroup() *AlgoAffinityGroup {
+func (c *PhysicalCell) GetReservingOrReservedGroup() *PodGroupSchedulingStatus {
 	return c.reservingOrReservedGroup
 }
 

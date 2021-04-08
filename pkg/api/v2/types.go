@@ -27,6 +27,7 @@ import (
 
 	"github.com/microsoft/hivedscheduler/pkg/api"
 	core "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 // GeneralSpec represents a generic key-value yaml object interface.
@@ -68,22 +69,35 @@ type PodGroupMemberCellSpec struct {
 	CellNumber int32        `yaml:"cellNumber"`
 }
 
-// GetCurrentPod returns current pod in pod group
-func (obj *PodSchedulingSpec) GetCurrentPod() PodGroupMemberSpec {
+type PodGroupStatus struct {
+	VC                   api.VirtualClusterName                `json:"vc"`
+	Priority             int32                                 `json:"priority"`
+	State                string                                `json:"state"`
+	PhysicalPlacement    map[string][]int32                    `json:"physicalPlacement,omitempty"` // node -> leaf cell indices
+	VirtualPlacement     map[api.CellAddress][]api.CellAddress `json:"virtualPlacement,omitempty"`  // preassigned cell -> leaf cells
+	AllocatedPods        []types.UID                           `json:"allocatedPods,omitempty"`
+	PreemptingPods       []types.UID                           `json:"preemptingPods,omitempty"`
+	LazyPreemptionStatus *api.LazyPreemptionStatus             `json:"lazyPreemptionStatus,omitempty"`
+}
+
+// GetCurrentPod returns level traverse index and current pod in pod group.
+func (obj *PodSchedulingSpec) GetCurrentPod() (int32, PodGroupMemberSpec) {
+	index := int32(0)
 	queue := []*PodGroupSpec{obj.PodRootGroup}
 	for len(queue) > 0 {
 		newQueue := []*PodGroupSpec{}
 		for _, podGroup := range queue {
 			for _, pod := range podGroup.Pods {
 				if pod.ContainsCurrentPod == true {
-					return pod
+					return index, pod
 				}
 			}
+			index++
 			newQueue = append(newQueue, podGroup.ChildGroups...)
 		}
 		queue = newQueue
 	}
-	return PodGroupMemberSpec{}
+	return int32(-1), PodGroupMemberSpec{}
 }
 
 // ConvertFromV1 converts a v1 pod scheduling request to v2 spec.
@@ -184,4 +198,75 @@ func (obj *PodSchedulingSpec) Validate() (msg string, ok bool) {
 		return "PodGroup.Pods does not contain current Pod", false
 	}
 	return "", true
+}
+
+type PodBindingInfo struct {
+	Node                    string               `yaml:"node"`              // node to bind
+	LeafCellIsolation       []int32              `yaml:"leafCellIsolation"` // leaf cells to bind
+	CellChain               string               `yaml:"cellChain"`         // cell chain selected
+	PodRootGroupBindingInfo *PodGroupBindingInfo `yaml:"PodRootGroupBindingInfo"`
+}
+
+type PodGroupBindingInfo struct {
+	PodPlacements         []PodPlacementsInfo    `yaml:"podPlacements"`
+	ChildGroupBindingInfo []*PodGroupBindingInfo `yaml:"childGroupBindingInfo"`
+}
+
+type PodPlacementsInfo struct {
+	PhysicalNode            string  `yaml:"physicalNode"`
+	PhysicalLeafCellIndices []int32 `yaml:"physicalLeafCellIndices"`
+	// preassigned cell types used by the pods. used to locate the virtual cells
+	// when adding an allocated pod
+	PreassignedCellTypes []api.CellType `yaml:"preassignedCellTypes"`
+}
+
+type podGroupBindingInfoIterator struct {
+	podPlacementsInfoList []*PodPlacementsInfo
+	index                 int
+	length                int
+}
+
+// Next returns the next item in iteration.
+func (i *podGroupBindingInfoIterator) Next() *PodPlacementsInfo {
+	i.index++
+	return i.podPlacementsInfoList[i.index-1]
+}
+
+// HasNext return true if iteration not finishes.
+func (i *podGroupBindingInfoIterator) HasNext() bool {
+	return i.index < i.length
+}
+
+// Iterator returns a stateful iterator for PodGroupBindingInfo
+func (podRootGroupBindingInfo *PodGroupBindingInfo) Iterator(args ...int32) *podGroupBindingInfoIterator {
+	index := int32(0)
+	podPlacementsInfoList := []*PodPlacementsInfo{}
+	queue := []*PodGroupBindingInfo{podRootGroupBindingInfo}
+	for len(queue) > 0 {
+		newQueue := []*PodGroupBindingInfo{}
+		for _, podGroupBindingInfo := range queue {
+			if len(args) == 1 && args[0] == index {
+				podPlacementsInfoList = []*PodPlacementsInfo{}
+			}
+			for podIndex := range podGroupBindingInfo.PodPlacements {
+				podPlacementsInfoList = append(podPlacementsInfoList, &podGroupBindingInfo.PodPlacements[podIndex])
+			}
+			if len(args) == 1 && args[0] == index {
+				return &podGroupBindingInfoIterator{podPlacementsInfoList, 0, len(podPlacementsInfoList)}
+			}
+			index++
+			newQueue = append(newQueue, podGroupBindingInfo.ChildGroupBindingInfo...)
+		}
+		queue = newQueue
+	}
+	return &podGroupBindingInfoIterator{podPlacementsInfoList, 0, len(podPlacementsInfoList)}
+}
+
+type PodGroupList struct {
+	Items []PodGroupItem `json:"items"`
+}
+
+type PodGroupItem struct {
+	api.ObjectMeta `json:"metadata"`
+	Status         PodGroupStatus `json:"status"`
 }
