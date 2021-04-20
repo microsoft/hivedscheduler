@@ -224,7 +224,8 @@ type PodGroupVirtualPlacement PodGroupPlacement
 
 // IsEmpty checks whether PodGroupPlacement is empty
 func (placement PodGroupPlacement) IsEmpty() bool {
-	return (placement.podsPlacement == nil && placement.childGroupsPlacement == nil)
+	return ((placement.podsPlacement == nil || len(placement.podsPlacement) == 0) &&
+		(placement.childGroupsPlacement == nil || len(placement.childGroupsPlacement) == 0))
 }
 
 type podGroupPlacementIterator struct {

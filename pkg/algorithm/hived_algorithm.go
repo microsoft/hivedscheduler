@@ -846,6 +846,7 @@ func (h *HivedAlgorithm) schedulePodGroupForAnyLeafCellType(
 	var failedReason string
 	for leafCellType := range h.cellChains {
 		klog.Infof("Searching leaf cell type %v", leafCellType)
+		podGroupSchedRequest.podRootGroup.SetCellType(leafCellType)
 		typePhysicalPlacement, typeVirtualPlacement, typeFailedReason :=
 			h.schedulePodGroupForCellType(podGroupSchedRequest, leafCellType, pod, false)
 		if !PodGroupPlacement(typePhysicalPlacement).IsEmpty() {

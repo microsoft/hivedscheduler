@@ -1032,8 +1032,8 @@ var expectedBindInfos = map[string]result{
 	"pod4":  {node: "0.0.5.0", leafCellIsolation: []int32{0}},
 	"pod5":  {node: "0.0.3.0", leafCellIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
 	"pod6":  {node: "0.0.3.1", leafCellIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
-	"pod8":  {node: "1.0.0.0", leafCellIsolation: []int32{1, 3, 4, 7, 0, 2, 6}},
-	"pod9":  {node: "1.0.0.2", leafCellIsolation: []int32{0, 1, 2, 3, 4}},
+	"pod8":  {node: "1.0.0.2", leafCellIsolation: []int32{0, 1, 2, 3, 4, 5, 6}},
+	"pod9":  {node: "1.0.0.0", leafCellIsolation: []int32{1, 3, 4, 7, 0}},
 	"pod18": {node: "0.0.3.2", leafCellIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
 	"pod19": {node: "0.0.3.3", leafCellIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
 	"pod20": {node: "0.0.4.0", leafCellIsolation: []int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
@@ -1213,6 +1213,7 @@ func testDeletePods(t *testing.T, h *HivedAlgorithm) {
 }
 
 func testSuggestedNodes(t *testing.T, configFilePath string) {
+	t.Skip("Do not support suggested nodes any more!")
 	sConfig := api.NewConfig(api.InitRawConfig(&configFilePath))
 	h := NewHivedAlgorithm(sConfig)
 	for _, chains := range h.cellChains {

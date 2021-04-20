@@ -80,6 +80,47 @@ type PodGroupStatus struct {
 	LazyPreemptionStatus *api.LazyPreemptionStatus             `json:"lazyPreemptionStatus,omitempty"`
 }
 
+type podGroupSpecIterator struct {
+	pods   []*PodGroupMemberSpec
+	index  int
+	length int
+}
+
+// Next returns the next item in iteration.
+func (i *podGroupSpecIterator) Next() *PodGroupMemberSpec {
+	i.index++
+	return i.pods[i.index-1]
+}
+
+// HasNext return true if iteration not finishes.
+func (i *podGroupSpecIterator) HasNext() bool {
+	return i.index < i.length
+}
+
+// Iterator returns a stateful iterator for PodGroupSpec
+func (podRootGroup *PodGroupSpec) Iterator() *podGroupSpecIterator {
+	pods := []*PodGroupMemberSpec{}
+	queue := []*PodGroupSpec{podRootGroup}
+	for len(queue) > 0 {
+		newQueue := []*PodGroupSpec{}
+		for _, podGroup := range queue {
+			for podIndex := range podGroup.Pods {
+				pods = append(pods, &podGroup.Pods[podIndex])
+			}
+			newQueue = append(newQueue, podGroup.ChildGroups...)
+		}
+		queue = newQueue
+	}
+	return &podGroupSpecIterator{pods, 0, len(pods)}
+}
+
+// SetCellType sets cell type for all pods in pod group.
+func (podRootGroup *PodGroupSpec) SetCellType(cellType string) {
+	for iter := podRootGroup.Iterator(); iter.HasNext(); {
+		iter.Next().CellsPerPod.CellType = api.CellType(cellType)
+	}
+}
+
 // GetCurrentPod returns level traverse index and current pod in pod group.
 func (obj *PodSchedulingSpec) GetCurrentPod() (int32, PodGroupMemberSpec) {
 	index := int32(0)

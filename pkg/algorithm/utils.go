@@ -169,7 +169,7 @@ func generatePodGroupBindInfo(
 			if podGroupIndex == currentPodGroupIndex {
 				selectedNode = podGroupBindingInfoQueue[index].PodPlacements[currentPodIndex].PhysicalNode
 				selectedLeafCellIndices = podGroupBindingInfoQueue[index].PodPlacements[currentPodIndex].PhysicalLeafCellIndices
-				if pLeafCell := virtualPlacementQueue[index].podsPlacement[currentPodIndex][0]; pLeafCell != nil {
+				if pLeafCell := physicalPlacementQueue[index].podsPlacement[currentPodIndex][0]; pLeafCell != nil {
 					chain = string(pLeafCell.GetChain())
 				}
 			}

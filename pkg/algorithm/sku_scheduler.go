@@ -88,11 +88,11 @@ func (s *skuScheduler) Schedule(
 	s.sortPodGroup(podRootGroup)
 
 	// disable preemption first to reduce preemption, try to schedule
-	placement, failedReason = s.findCellsForPodGroup(podRootGroup, opportunisticPriority, nil, nil)
+	placement, failedReason = s.findCellsForPodGroup(podRootGroup, opportunisticPriority, nil, &placement)
 
 	// enable preemption if scheduling failed
 	if failedReason != "" && priority > opportunisticPriority {
-		placement, failedReason = s.findCellsForPodGroup(podRootGroup, priority, nil, nil)
+		placement, failedReason = s.findCellsForPodGroup(podRootGroup, priority, nil, &placement)
 	}
 
 	// convert cells to leaf cells in placement
@@ -164,11 +164,15 @@ func (s *skuScheduler) findCellsForPodGroup(
 	placement PodGroupPlacement,
 	failedReason string) {
 
-	placement, failedReason = PodGroupPlacement{}, ""
+	placement, failedReason = PodGroupPlacement{}, "no matched cells in vc"
 
-	cv := s.createSkuClusterView(within, s.cellLevels[podGroup.WithinOneCell], priority)
+	cv := skuClusterView{nil}
+	if level, ok := s.cellLevels[podGroup.WithinOneCell]; ok {
+		cv = s.createSkuClusterView(within, level, priority)
+	}
+
 	for _, withinCell := range cv {
-		if len(podGroup.Pods) > 0 && !withinCell.healthy {
+		if len(podGroup.Pods) > 0 && withinCell != nil && !withinCell.healthy {
 			return PodGroupPlacement{}, fmt.Sprintf(
 				"have to use at least one bad cell %v", withinCell.address)
 		}
@@ -212,7 +216,7 @@ func (s *skuScheduler) findCellsForPods(
 
 	cv := skuClusterView{within}
 	nodeLevel := s.getNodeLevel()
-	if within.cell.GetLevel() > nodeLevel {
+	if within == nil || within.cell.GetLevel() > nodeLevel {
 		cv = s.createSkuClusterView(within, nodeLevel, priority)
 	}
 
@@ -452,9 +456,10 @@ func (cv skuClusterView) Len() int {
 // Less method for sorting sku cells in cluster view
 // sort in the following order:
 // 1. cell health (prefer healthy)
-// 1. cell level (prefer lower)
-// 2. usedLeafCellNumAtPriority (prefer higher)
-// 3. usedLeafCellNumHigherPriority (prefer lower)
+// 2. cell level (prefer lower)
+// 3. usedLeafCellNumAtPriority (prefer higher)
+// 4. usedLeafCellNumHigherPriority (prefer lower)
+// 5. cell address (prefer lower)
 func (cv skuClusterView) Less(i, j int) bool {
 	if cv[i].healthy != cv[j].healthy {
 		return cv[i].healthy
@@ -467,6 +472,9 @@ func (cv skuClusterView) Less(i, j int) bool {
 	}
 	if cv[i].usedLeafCellNumHigherPriority != cv[j].usedLeafCellNumHigherPriority {
 		return cv[i].usedLeafCellNumHigherPriority < cv[j].usedLeafCellNumHigherPriority
+	}
+	if cv[i].address != cv[j].address {
+		return cv[i].address < cv[j].address
 	}
 	return true
 }
