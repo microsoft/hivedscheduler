@@ -84,7 +84,7 @@ func (s *skuScheduler) Schedule(
 	placement PodGroupPlacement,
 	failedReason string) {
 
-	// sort pods in descending order by couting leaf cell number
+	// sort pods in descending order by counting leaf cell number
 	s.sortPodGroup(podRootGroup)
 
 	// disable preemption first to reduce preemption, try to schedule
@@ -230,7 +230,7 @@ func (s *skuScheduler) findCellsForPods(
 			return nil, fmt.Sprintf(
 				"have to use at least one bad cell %v", withinCell.address)
 		}
-		podPlacement := s.findCellsForPod(pods[podIndex], priority, withinCell, allocatedCells)
+		podPlacement := s.findCellsForSinglePod(pods[podIndex], priority, withinCell, allocatedCells)
 		if podPlacement == nil {
 			withinCellIndex++
 		} else {
@@ -243,7 +243,7 @@ func (s *skuScheduler) findCellsForPods(
 	return placement, failedReason
 }
 
-func (s *skuScheduler) findCellsForPod(
+func (s *skuScheduler) findCellsForSinglePod(
 	pod apiv2.PodGroupMemberSpec,
 	priority CellPriority,
 	within *skuCell,
@@ -299,7 +299,7 @@ func (s *skuScheduler) findCellsForPod(
 			}
 			if searchCellIndex == pod.CellsPerPod.CellNumber-1 {
 				foundOptimalAffinity := false
-				bestAffinity, foundOptimalAffinity = checkCurrentCells(
+				bestAffinity, foundOptimalAffinity = checkOptimalAffinityForCells(
 					currentAffinity[len(currentAffinity)-1].GetLevel(),
 					freeCells,
 					currentCellIndices,
@@ -371,9 +371,9 @@ func getFreeCellsAtLevel(
 	return freeCells, preemptibleCells
 }
 
-// checkCurrentCells checks if the currently picked cells have the lowest LCA.
+// checkOptimalAffinityForCells checks if the currently picked cells have the lowest LCA.
 // It also checks if the solution is optimal (if the leaf cells are all buddies).
-func checkCurrentCells(
+func checkOptimalAffinityForCells(
 	affinity CellLevel,
 	freeCells CellList,
 	currentCellIndices []int32,
@@ -405,7 +405,7 @@ func (s *skuScheduler) createSkuClusterView(
 	for l := withinLevel; l >= CellLevel(1); l-- {
 		for _, c := range s.chainCellList[l] {
 			if (within != nil && !isAncestor(within.cell, c)) ||
-				cv.containsAncestor(ancestorNoHigherThanLevel(withinLevel, c)) {
+				cv.contains(ancestorNoHigherThanLevel(withinLevel, c)) {
 				continue
 			}
 			cell := &skuCell{
@@ -487,7 +487,7 @@ func (cv skuClusterView) Swap(i int, j int) {
 	cv[i], cv[j] = cv[j], cv[i]
 }
 
-func (cv skuClusterView) containsAncestor(cell Cell) bool {
+func (cv skuClusterView) contains(cell Cell) bool {
 	for _, withinCell := range cv {
 		if CellEqual(cell, withinCell.cell) {
 			return true
