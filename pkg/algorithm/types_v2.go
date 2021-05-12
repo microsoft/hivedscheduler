@@ -86,6 +86,8 @@ func (podGroupSchedStatus *PodGroupSchedulingStatus) DumpPodGroup() apiv2.PodGro
 
 func newPodGroupSchedulingStatus(
 	podSchedSpec *apiv2.PodSchedulingSpec,
+	leafCellNums map[CellLevel]int32,
+	cellLevel map[api.CellType]CellLevel,
 	state PodGroupState) *PodGroupSchedulingStatus {
 
 	podGroupSchedStatus := &PodGroupSchedulingStatus{
@@ -121,9 +123,13 @@ func newPodGroupSchedulingStatus(
 			podNumIndex := int32(0)
 			for _, pod := range podGroup.Pods {
 				for i := int32(0); i < pod.PodMinNumber; i++ {
-					// TODO: need leaf cell number
-					virtualPlacementQueue[index].podsPlacement[podNumIndex] = make(CellList, pod.CellsPerPod.CellNumber)
-					physicalPlacementQueue[index].podsPlacement[podNumIndex] = make(CellList, pod.CellsPerPod.CellNumber)
+					if level, ok := cellLevel[pod.CellsPerPod.CellType]; ok {
+						virtualPlacementQueue[index].podsPlacement[podNumIndex] = make(CellList, pod.CellsPerPod.CellNumber*leafCellNums[level])
+						physicalPlacementQueue[index].podsPlacement[podNumIndex] = make(CellList, pod.CellsPerPod.CellNumber*leafCellNums[level])
+					} else {
+						virtualPlacementQueue[index].podsPlacement[podNumIndex] = make(CellList, pod.CellsPerPod.CellNumber)
+						physicalPlacementQueue[index].podsPlacement[podNumIndex] = make(CellList, pod.CellsPerPod.CellNumber)
+					}
 					podNumIndex++
 				}
 			}

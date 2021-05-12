@@ -459,7 +459,7 @@ func (cv skuClusterView) Len() int {
 // 2. cell level (prefer lower)
 // 3. usedLeafCellNumAtPriority (prefer higher)
 // 4. usedLeafCellNumHigherPriority (prefer lower)
-// 5. cell address (prefer lower)
+// 5. cell physical/virtual address (prefer lower)
 func (cv skuClusterView) Less(i, j int) bool {
 	if cv[i].healthy != cv[j].healthy {
 		return cv[i].healthy
@@ -475,6 +475,9 @@ func (cv skuClusterView) Less(i, j int) bool {
 	}
 	if cv[i].address != cv[j].address {
 		return cv[i].address < cv[j].address
+	}
+	if cv[i].cell.GetAddress() != cv[j].cell.GetAddress() {
+		return cv[i].cell.GetAddress() < cv[j].cell.GetAddress()
 	}
 	return true
 }

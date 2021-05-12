@@ -95,7 +95,11 @@ type HivedAlgorithm struct {
 
 	// bad nodes in the physical cluster
 	badNodes common.Set
+	// map each level in a chain to the leaf cell number
+	leafCellNums map[CellChain]map[CellLevel]int32
 	// map each leaf cell type to all chains that contain this type
+	leafCellChains map[string][]CellChain
+	// map each within cell type to all chains that contain this type
 	cellChains map[string][]CellChain
 	// map each level in a chain to the specific cell type name
 	cellTypes map[CellChain]map[CellLevel]api.CellType
@@ -110,7 +114,7 @@ type HivedAlgorithm struct {
 // NewHivedAlgorithm initializes a HivedAlgorithm from the config file.
 func NewHivedAlgorithm(sConfig *api.Config) *HivedAlgorithm {
 	fullPcl, freePcl, vcFreeCellNum, nonPinnedFullVcl, nonPinnedFreeVcl, pinnedVcl, pinnedPcl,
-		leafCellNums, chains, cellTypes, cellLevels := ParseConfig(sConfig)
+		leafCellNums, leafCellChains, cellChains, cellTypes, cellLevels := ParseConfig(sConfig)
 
 	h := &HivedAlgorithm{
 		vcSchedulers:            map[api.VirtualClusterName]intraVCScheduler{},
@@ -124,7 +128,9 @@ func NewHivedAlgorithm(sConfig *api.Config) *HivedAlgorithm {
 		vcDoomedBadCells:        map[api.VirtualClusterName]map[CellChain]ChainCellList{},
 		allVCDoomedBadCellNum:   map[CellChain]map[CellLevel]int32{},
 		badNodes:                common.NewSet(),
-		cellChains:              chains,
+		leafCellNums:            leafCellNums,
+		leafCellChains:          leafCellChains,
+		cellChains:              cellChains,
 		cellTypes:               cellTypes,
 		cellLevels:              cellLevels,
 		podGroups:               map[string]*PodGroupSchedulingStatus{},
@@ -844,7 +850,7 @@ func (h *HivedAlgorithm) schedulePodGroupForAnyLeafCellType(
 	string) {
 
 	var failedReason string
-	for leafCellType := range h.cellChains {
+	for leafCellType := range h.leafCellChains {
 		klog.Infof("Searching leaf cell type %v", leafCellType)
 		podGroupSchedRequest.podRootGroup.SetCellType(leafCellType)
 		typePhysicalPlacement, typeVirtualPlacement, typeFailedReason :=
@@ -982,7 +988,8 @@ func (h *HivedAlgorithm) scheduleOpportunisticPodGroup(
 // createAllocatedPodGroup creates a new pod group and allocate the resources.
 func (h *HivedAlgorithm) createAllocatedPodGroup(podSchedSpec *apiv2.PodSchedulingSpec, info *apiv2.PodBindingInfo, pod *core.Pod) {
 	klog.Infof("[%v]: Creating new allocated pod group: %v", internal.Key(pod), podSchedSpec.PodRootGroup.Name)
-	newPodGroupSchedStatus := newPodGroupSchedulingStatus(podSchedSpec, podGroupAllocated)
+	newPodGroupSchedStatus := newPodGroupSchedulingStatus(
+		podSchedSpec, h.leafCellNums[CellChain(info.CellChain)], h.cellLevels[CellChain(info.CellChain)], podGroupAllocated)
 	shouldLazyPreempt := false
 
 	infoIter := info.PodRootGroupBindingInfo.Iterator()
@@ -1084,7 +1091,8 @@ func (h *HivedAlgorithm) createPreemptingPodGroup(
 	pod *core.Pod) {
 
 	klog.Infof("[%v]: Creating new preempting pod group: %v", internal.Key(pod), podSchedSpec.PodRootGroup.Name)
-	newPodGroupSchedStatus := newPodGroupSchedulingStatus(podSchedSpec, podGroupPreempting)
+	newPodGroupSchedStatus := newPodGroupSchedulingStatus(
+		podSchedSpec, map[CellLevel]int32{}, map[api.CellType]CellLevel{}, podGroupPreempting)
 	newPodGroupSchedStatus.physicalPlacement = physicalPlacement
 	newPodGroupSchedStatus.virtualPlacement = virtualPlacement
 
