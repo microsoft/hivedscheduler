@@ -23,10 +23,10 @@
 package algorithm
 
 import (
-	"path/filepath"
 	"io/ioutil"
-	"testing"
+	"path/filepath"
 	"strings"
+	"testing"
 )
 
 var testConfigRootPath, _ = filepath.Abs("../../test/config")

@@ -35,7 +35,7 @@
   parameters:
     podName: group1_pod1
     expectedResult:
-      node: 0.0.0.1
+      node: 0.0.0.3
       leafCellIsolation: [0]
 - method: SchedulePod
   parameters:
@@ -65,7 +65,7 @@
   parameters:
     podName: group2_pod1
     expectedResult:
-      node: 0.0.0.3
+      node: 0.0.0.1
       leafCellIsolation: [0]
 - method: SchedulePod
   parameters:

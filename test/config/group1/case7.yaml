@@ -115,9 +115,9 @@
             cellNumber: 1
           containsCurrentPod: true
         childGroups: []
-- method: AssertPodPrememptResult
+- method: AssertPodPreemptResult
   parameters:
     podName: group4_pod1
     expectedResult:
-      VictimPods:
+      victimPods:
         - group1_pod1

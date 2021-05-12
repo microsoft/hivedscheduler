@@ -84,7 +84,7 @@
         childGroups: []
 - method: AssertPodBindResult
   parameters:
-    podName: group1_pod2
+    podName: group2_pod2
     expectedResult:
       node: 0.0.0.2
       leafCellIsolation: [1]
@@ -144,8 +144,7 @@
         childGroups: []
 - method: AssertPodBindResult
   parameters:
-    podName: group1_pod4
+    podName: group2_pod4
     expectedResult:
       node: 0.0.0.2
       leafCellIsolation: [3]
-

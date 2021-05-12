@@ -25,9 +25,9 @@ package algorithm
 import (
 	"fmt"
 	"io/ioutil"
+	"reflect"
 	"sort"
 	"testing"
-	"reflect"
 
 	"github.com/microsoft/hivedscheduler/pkg/api"
 	apiv2 "github.com/microsoft/hivedscheduler/pkg/api/v2"
@@ -39,8 +39,8 @@ import (
 )
 
 type bindResult struct {
-	Node              string    `yaml:"node"`
-	LeafCellIsolation []int32   `yaml:"leafCellIsolation"`
+	Node              string  `yaml:"node"`
+	LeafCellIsolation []int32 `yaml:"leafCellIsolation"`
 }
 
 type preemptResult struct {
@@ -68,7 +68,7 @@ type HivedAlgorithmTester interface {
 	DeallocatePod(podName string)
 
 	AssertPodBindResult(podName string, expectedResult bindResult)
-	AssertPodPrememptResult(podName string, expectedResult preemptResult)
+	AssertPodPreemptResult(podName string, expectedResult preemptResult)
 	AssertPodWait(podName string)
 	AssertPodPanic(podName string)
 	ExecuteCaseFromYamlFile(filePath string)
@@ -82,14 +82,14 @@ type GenericHivedAlgorithmTester struct {
 	// podScheduleResult map podName to internal.PodScheduleResult.
 	// pods which have valid scheduling result will be kept in this map.
 	podScheduleResult map[string]internal.PodScheduleResult
-	// panicPodNames record the pods which panic during scheduling, 
+	// panicPodNames record the pods which panic during scheduling,
 	// not including those with preempt info or wait info.
 	panicPodNames map[string]bool
 	// pods record pod definition.
 	pods map[string]*core.Pod
 }
 
-func NewHivedAlgorithmTester(t *testing.T, configFilePath string) *GenericHivedAlgorithmTester{
+func NewHivedAlgorithmTester(t *testing.T, configFilePath string) *GenericHivedAlgorithmTester {
 	sConfig := api.NewConfig(api.InitRawConfig(&configFilePath))
 	h := NewHivedAlgorithm(sConfig)
 	var allNodes []string
@@ -100,14 +100,14 @@ func NewHivedAlgorithmTester(t *testing.T, configFilePath string) *GenericHivedA
 	}
 	// sort chains of each leaf cell type for stability of the test
 	for _, chains := range h.cellChains {
-			var chainsTemp []string
-			for _, c := range chains {
-				chainsTemp = append(chainsTemp, string(c))
-			}
-			sort.Strings(chainsTemp)
-			for i := range chains {
-				chains[i] = CellChain(chainsTemp[len(chainsTemp)-i-1])
-			}
+		var chainsTemp []string
+		for _, c := range chains {
+			chainsTemp = append(chainsTemp, string(c))
+		}
+		sort.Strings(chainsTemp)
+		for i := range chains {
+			chains[i] = CellChain(chainsTemp[len(chainsTemp)-i-1])
+		}
 	}
 	tester := GenericHivedAlgorithmTester{h: h, t: t, allNodes: allNodes}
 	tester.SetAllNodesToHealthy()
@@ -129,12 +129,10 @@ func (tester *GenericHivedAlgorithmTester) SetNodeToBad(nodeName string) {
 	h.setBadNode(nodeName)
 }
 
-
 func (tester *GenericHivedAlgorithmTester) SetNodeToHealthy(nodeName string) {
 	h := tester.h
 	h.setHealthyNode(nodeName)
 }
-
 
 func (tester *GenericHivedAlgorithmTester) SchedulePod(podName string, podGroupSchedulingRequest apiv2.PodSchedulingSpec, phase internal.SchedulingPhase) {
 	h := tester.h
@@ -143,16 +141,16 @@ func (tester *GenericHivedAlgorithmTester) SchedulePod(podName string, podGroupS
 		if err := recover(); err != nil {
 			// record the panic
 			t.Logf("Panic detected for pod %v. Details: %v", podName, err)
-			tester.panicPodNames[podName] = true 
+			tester.panicPodNames[podName] = true
 		}
 	}()
 	pod := &core.Pod{
-			ObjectMeta: meta.ObjectMeta{
-				Name:        podName,
-				Namespace:   "test",
-				UID:         types.UID(podName),
-				Annotations: map[string]string{},
-			},
+		ObjectMeta: meta.ObjectMeta{
+			Name:        podName,
+			Namespace:   "test",
+			UID:         types.UID(podName),
+			Annotations: map[string]string{},
+		},
 	}
 	pod.Annotations[api.AnnotationKeyPodSchedulingSpec] = common.ToYaml(podGroupSchedulingRequest)
 	psr := h.Schedule(pod, tester.allNodes, phase)
@@ -163,7 +161,7 @@ func (tester *GenericHivedAlgorithmTester) SchedulePod(podName string, podGroupS
 		tester.pods[podName] = allocatedPod
 	} else if psr.PodPreemptInfo != nil {
 		for _, victimPod := range psr.PodPreemptInfo.VictimPods {
-			h.DeleteUnallocatedPod(victimPod)
+			h.DeleteAllocatedPod(victimPod)
 		}
 		tester.pods[podName] = pod
 		tester.podScheduleResult[podName] = psr
@@ -177,8 +175,8 @@ func (tester *GenericHivedAlgorithmTester) DeallocatePod(podName string) {
 	h := tester.h
 	pod, ok := tester.pods[podName]
 	if ok {
-		h.DeleteUnallocatedPod(pod)
-		delete(tester.pods, podName);
+		h.DeleteAllocatedPod(pod)
+		delete(tester.pods, podName)
 	} else {
 		panic("Cannot find pod " + podName)
 	}
@@ -196,7 +194,7 @@ func (tester *GenericHivedAlgorithmTester) AssertPodBindResult(podName string, e
 				t.Errorf("AssertPodBindResult failed for pod %v: Expected node is %v but got node %v", podName, expectedResult.Node, podBindInfo.Node)
 			} else {
 				if !reflect.DeepEqual(expectedResult.LeafCellIsolation, podBindInfo.LeafCellIsolation) {
-					t.Errorf("AssertPodBindResult failed for pod %v: Expected LeafCellIsolation is %v but got %v", podName, 
+					t.Errorf("AssertPodBindResult failed for pod %v: Expected LeafCellIsolation is %v but got %v", podName,
 						expectedResult.LeafCellIsolation, podBindInfo.LeafCellIsolation)
 				} else {
 					t.Logf("AssertPodBindResult ok for pod %v.", podName)
@@ -208,35 +206,34 @@ func (tester *GenericHivedAlgorithmTester) AssertPodBindResult(podName string, e
 	}
 }
 
-func (tester *GenericHivedAlgorithmTester) AssertPodPrememptResult(podName string, expectedResult preemptResult) {
+func (tester *GenericHivedAlgorithmTester) AssertPodPreemptResult(podName string, expectedResult preemptResult) {
 	t := tester.t
 	psr, ok := tester.podScheduleResult[podName]
 	if ok {
 		if psr.PodPreemptInfo == nil {
-			t.Errorf("AssertPodPrememptResult failed for pod %v: Cannot find valid PodPreemptInfo!", podName)
+			t.Errorf("AssertPodPreemptResult failed for pod %v: Cannot find valid PodPreemptInfo!", podName)
 		} else {
-			victimPodNames := make([]string, len(psr.PodPreemptInfo.VictimPods))
-			for _, pod := range(psr.PodPreemptInfo.VictimPods) {
+			victimPodNames := []string{}
+			for _, pod := range psr.PodPreemptInfo.VictimPods {
 				victimPodNames = append(victimPodNames, pod.Name)
 			}
-			expectedVictimPodNames := make([]string, len(expectedResult.VictimPods))
-			for _, pod := range(expectedResult.VictimPods) {
-				expectedVictimPodNames = append(expectedVictimPodNames, pod)
+			expectedVictimPodNames := []string{}
+			for _, podName := range expectedResult.VictimPods {
+				expectedVictimPodNames = append(expectedVictimPodNames, podName)
 			}
 			sort.Strings(expectedVictimPodNames)
 			sort.Strings(victimPodNames)
 			if !reflect.DeepEqual(expectedVictimPodNames, victimPodNames) {
-				t.Errorf("AssertPodPrememptResult failed for pod %v: Expected victim pods are %v but got %v", podName, 
+				t.Errorf("AssertPodPreemptResult failed for pod %v: Expected victim pods are %v but got %v", podName,
 					expectedVictimPodNames, victimPodNames)
 			} else {
-				t.Logf("AssertPodPrememptResult ok for pod %v.", podName)
+				t.Logf("AssertPodPreemptResult ok for pod %v.", podName)
 			}
 		}
 	} else {
-		t.Errorf("AssertPodPrememptResult failed for pod %v: Cannot find valid schedule result!", podName)
+		t.Errorf("AssertPodPreemptResult failed for pod %v: Cannot find valid schedule result!", podName)
 	}
 }
-
 
 func (tester *GenericHivedAlgorithmTester) AssertPodWait(podName string) {
 	t := tester.t
@@ -284,11 +281,11 @@ func (tester *GenericHivedAlgorithmTester) ExecuteCaseFromYamlFile(filePath stri
 			expectedResult := bindResult{}
 			common.FromYaml(common.ToYaml(step.Paramaters["expectedResult"]), &expectedResult)
 			tester.AssertPodBindResult(podName, expectedResult)
-		} else if step.Method == "AssertPodPrememptResult" {
+		} else if step.Method == "AssertPodPreemptResult" {
 			var podName = step.Paramaters["podName"].(string)
 			expectedResult := preemptResult{}
 			common.FromYaml(common.ToYaml(step.Paramaters["expectedResult"]), &expectedResult)
-			tester.AssertPodPrememptResult(podName, expectedResult)
+			tester.AssertPodPreemptResult(podName, expectedResult)
 		} else if step.Method == "AssertPodWait" {
 			var podName = step.Paramaters["podName"].(string)
 			tester.AssertPodWait(podName)
