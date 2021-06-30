@@ -55,3 +55,7 @@ func TestHivedAlgorithmGroup1(t *testing.T) {
 func TestHivedAlgorithmGroup2(t *testing.T) {
 	ExecuteHivedAlgorithmTestGroup(t, filepath.Join(testConfigRootPath, "group2"))
 }
+
+func TestHivedAlgorithmGroup3(t *testing.T) {
+	ExecuteHivedAlgorithmTestGroup(t, filepath.Join(testConfigRootPath, "group3"))
+}
