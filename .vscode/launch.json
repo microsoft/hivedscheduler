@@ -1,0 +1,41 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "HiveD TestHivedAlgorithm",
+            "type": "go",
+            "request": "launch",
+            "mode": "test",
+            "program": "${workspaceFolder}/pkg/algorithm",
+            "args": [
+                "-test.run",
+                "^TestHivedAlgorithm$"
+            ]
+        },
+        {
+            "name": "HiveD TestHivedAlgorithmGroup1",
+            "type": "go",
+            "request": "launch",
+            "mode": "test",
+            "program": "${workspaceFolder}/pkg/algorithm",
+            "args": [
+                "-test.run",
+                "^TestHivedAlgorithmGroup1$"
+            ]
+        },
+        {
+            "name": "HiveD TestHivedAlgorithmGroup2",
+            "type": "go",
+            "request": "launch",
+            "mode": "test",
+            "program": "${workspaceFolder}/pkg/algorithm",
+            "args": [
+                "-test.run",
+                "^TestHivedAlgorithmGroup2$"
+            ]
+        },
+    ]
+}

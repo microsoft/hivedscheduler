@@ -30,49 +30,48 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-// GeneralSpec represents a generic key-value yaml object interface.
-type GeneralSpec map[string]interface{}
-
 // PodSchedulingSpec represents HiveD scheudling spec in k8s pod request.
 type PodSchedulingSpec struct {
-	Version              string                 `yaml:"version"`
-	VirtualCluster       api.VirtualClusterName `yaml:"virtualCluster"`
-	Priority             int32                  `yaml:"priority"`
-	PinnedCellId         api.PinnedCellId       `yaml:"pinnedCellId"`
-	CellType             string                 `yaml:"cellType"`
-	CellNumber           int32                  `yaml:"cellNumber"`
-	GangReleaseEnable    bool                   `yaml:"gangReleaseEnable"`
-	LazyPreemptionEnable bool                   `yaml:"lazyPreemptionEnable"`
-	PodRootGroup         *PodGroupSpec          `yaml:"podRootGroup"`
+	Version              string                 `yaml:"version"`              // version of HiveD PodSchedulingSpec, currently supports v1, v2.
+	VirtualCluster       api.VirtualClusterName `yaml:"virtualCluster"`       // virtual cluster for pod to be scheduled in
+	Priority             int32                  `yaml:"priority"`             // pod priority
+	PinnedCellId         api.PinnedCellId       `yaml:"pinnedCellId"`         // pinned cell id to be scheduled
+	CellType             string                 `yaml:"cellType"`             // cell type to be used in pod, can be leaf or non-leaf cell defined in config, no higher than node level
+	CellNumber           int32                  `yaml:"cellNumber"`           // cell number to be used in pod, cannot exceed node resource limit
+	GangReleaseEnable    bool                   `yaml:"gangReleaseEnable"`    // whether release in gang (all pods released at the same time) or not
+	LazyPreemptionEnable bool                   `yaml:"lazyPreemptionEnable"` // whether lazy preempt or not
+	PodRootGroup         *PodGroupSpec          `yaml:"podRootGroup"`         // the hierarchical structure for whole pod group
 }
 
 // PodGroupSpec represents a tree stucture of pod group spec.
 type PodGroupSpec struct {
-	Name          string               `yaml:"name"`
-	WithinOneCell api.CellType         `yaml:"withinOneCell"`
-	Pods          []PodGroupMemberSpec `yaml:"pods"`
-	ChildGroups   []*PodGroupSpec      `yaml:"childGroups"`
+	Name          string               `yaml:"name"`          // pod group name
+	WithinOneCell api.CellType         `yaml:"withinOneCell"` // within cell for all cells in current group, e.g., two GPU-cell within one numa-cell, two node-cell within one rack-cell
+	Pods          []PodGroupMemberSpec `yaml:"pods"`          // pod list for current group, any two pods are gang with each other in the groupS
+	ChildGroups   []*PodGroupSpec      `yaml:"childGroups"`   // child group in the hierarchical structure
 }
 
 // PodGroupMemberSpec represents content of each node in tree stucture pod group.
 // It contains pod number and cell spec for the pod.
 type PodGroupMemberSpec struct {
-	PodMinNumber       int32                  `yaml:"podMinNumber"`
-	PodMaxNumber       int32                  `yaml:"podMaxNumber"`
-	CellsPerPod        PodGroupMemberCellSpec `yaml:"cellsPerPod"`
-	ContainsCurrentPod bool                   `yaml:"containsCurrentPod"`
+	PodMinNumber       int32                  `yaml:"podMinNumber"`       // minumum number of pods to be gang scheduled in the group, TODO: not support yet
+	PodMaxNumber       int32                  `yaml:"podMaxNumber"`       // maximum number of pods to be gang scheduled in the group
+	CellsPerPod        PodGroupMemberCellSpec `yaml:"cellsPerPod"`        // number of cells in each k8s pod
+	ContainsCurrentPod bool                   `yaml:"containsCurrentPod"` // whether current pod group member contains current pod request
 }
 
 // PodGroupMemberCellSpec represents cell spec for each pod in pod group.
 type PodGroupMemberCellSpec struct {
-	CellType   api.CellType `yaml:"cellType"`
-	CellNumber int32        `yaml:"cellNumber"`
+	CellType   api.CellType `yaml:"cellType"`   // cell type to be used in pod, differnt group can have differnt cell typs in the same chain, TODO: not support multiple chains yet
+	CellNumber int32        `yaml:"cellNumber"` // cell number to be used in pod, cannot exceed node resource limit
 }
+
+type PodGroupState string
 
 type PodGroupStatus struct {
 	VC                   api.VirtualClusterName                `json:"vc"`
 	Priority             int32                                 `json:"priority"`
-	State                string                                `json:"state"`
+	State                PodGroupState                         `json:"state"`
 	PhysicalPlacement    map[string][]int32                    `json:"physicalPlacement,omitempty"` // node -> leaf cell indices
 	VirtualPlacement     map[api.CellAddress][]api.CellAddress `json:"virtualPlacement,omitempty"`  // preassigned cell -> leaf cells
 	AllocatedPods        []types.UID                           `json:"allocatedPods,omitempty"`
@@ -242,15 +241,15 @@ func (obj *PodSchedulingSpec) Validate() (msg string, ok bool) {
 }
 
 type PodBindingInfo struct {
-	Node                    string               `yaml:"node"`              // node to bind
-	LeafCellIsolation       []int32              `yaml:"leafCellIsolation"` // leaf cells to bind
-	CellChain               string               `yaml:"cellChain"`         // cell chain selected
-	PodRootGroupBindingInfo *PodGroupBindingInfo `yaml:"PodRootGroupBindingInfo"`
+	Node                    string               `yaml:"node"`                    // k8s node name to bind
+	LeafCellIsolation       []int32              `yaml:"leafCellIsolation"`       // leaf cells for current pod's placement to bind
+	CellChain               string               `yaml:"cellChain"`               // cell chain selected
+	PodRootGroupBindingInfo *PodGroupBindingInfo `yaml:"PodRootGroupBindingInfo"` // whole pod group bind info
 }
 
 type PodGroupBindingInfo struct {
-	PodPlacements         []PodPlacementsInfo    `yaml:"podPlacements"`
-	ChildGroupBindingInfo []*PodGroupBindingInfo `yaml:"childGroupBindingInfo"`
+	PodPlacements         []PodPlacementsInfo    `yaml:"podPlacements"`         // pod placements in current group
+	ChildGroupBindingInfo []*PodGroupBindingInfo `yaml:"childGroupBindingInfo"` // child pod group bind info
 }
 
 type PodPlacementsInfo struct {

@@ -62,7 +62,7 @@ func (podGroupSchedStatus *PodGroupSchedulingStatus) DumpPodGroup() apiv2.PodGro
 		Status: apiv2.PodGroupStatus{
 			VC:                   podGroupSchedStatus.vc,
 			Priority:             int32(podGroupSchedStatus.priority),
-			State:                string(podGroupSchedStatus.state),
+			State:                apiv2.PodGroupState(podGroupSchedStatus.state),
 			LazyPreemptionStatus: podGroupSchedStatus.lazyPreemptionStatus,
 		},
 	}

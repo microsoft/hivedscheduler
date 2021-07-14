@@ -38,6 +38,9 @@ type (
 	PinnedCellId string
 )
 
+// GeneralSpec represents a generic key-value spec.
+type GeneralSpec map[string]interface{}
+
 // Physical cluster definition
 type PhysicalClusterSpec struct {
 	CellTypes     map[CellType]CellTypeSpec `yaml:"cellTypes"`
