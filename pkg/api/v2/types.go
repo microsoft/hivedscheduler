@@ -54,8 +54,8 @@ type PodGroupSpec struct {
 // PodGroupMemberSpec represents content of each node in tree stucture pod group.
 // It contains pod number and cell spec for the pod.
 type PodGroupMemberSpec struct {
-	PodMinNumber       int32                  `yaml:"podMinNumber"`       // minumum number of pods to be gang scheduled in the group, TODO: not support yet
-	PodMaxNumber       int32                  `yaml:"podMaxNumber"`       // maximum number of pods to be gang scheduled in the group
+	PodMinNumber       int32                  `yaml:"podMinNumber"`       // minumum number of pods to be gang scheduled in the group, TODO: only PodMinNumber=PodMaxNumber is supported currently
+	PodMaxNumber       int32                  `yaml:"podMaxNumber"`       // total number of pods to be scheduled in the group, may not be gang scheduled
 	CellsPerPod        PodGroupMemberCellSpec `yaml:"cellsPerPod"`        // number of cells in each k8s pod
 	ContainsCurrentPod bool                   `yaml:"containsCurrentPod"` // whether current pod group member contains current pod request
 }
