@@ -130,7 +130,7 @@ func generatePodGroupBindInfo(
 		newVirtualPlacementQueue := []*PodGroupPlacement{}
 		newPodGroupBindInfoQueue := []*apiv2.PodGroupBindInfo{}
 		for index, placement := range physicalPlacementQueue {
-			podGroupBindInfoQueue[index].PodPlacements = make([]apiv2.PodPlacementsInfo, len(placement.podsPlacement))
+			podGroupBindInfoQueue[index].PodPlacements = make([]apiv2.PodPlacementInfo, len(placement.podsPlacement))
 			for podIndex, podPlacement := range placement.podsPlacement {
 				podLeafCellNum := len(podPlacement)
 				podGroupBindInfoQueue[index].PodPlacements[podIndex].PhysicalLeafCellIndices = make([]int32, podLeafCellNum)
@@ -264,16 +264,16 @@ func victimsToString(victimPods map[string]common.Set) string {
 
 // retrieveMissingPodPlacement finds the placement of a pod from the annotation of other pods in the same pod group
 // when the pod's placement has been invalid (i.e., not found in the spec).
-func retrieveMissingPodPlacement(podGroupSchedStatus *PodGroupSchedulingStatus, podGroupIndex int32, podIndex int32) (apiv2.PodPlacementsInfo, string) {
+func retrieveMissingPodPlacement(podGroupSchedStatus *PodGroupSchedulingStatus, podGroupIndex int32, podIndex int32) (apiv2.PodPlacementInfo, string) {
 	for iter := podGroupSchedStatus.allocatedPodGroup.Iterator(); iter.HasNext(); {
 		pod := iter.Next()
 		if pod != nil {
 			info := internal.ExtractPodBindInfo(pod)
 			index := int32(0)
 			for infoIter := info.PodRootGroupBindInfo.Iterator(podGroupIndex); infoIter.HasNext(); {
-				podPlacementsInfo := infoIter.Next()
+				podPlacementInfo := infoIter.Next()
 				if index == podIndex {
-					return *podPlacementsInfo, info.CellChain
+					return *podPlacementInfo, info.CellChain
 				}
 				index++
 			}
@@ -319,9 +319,9 @@ func getNewPodIndex(allocatedPodGroup AllocatedPodGroup, podGroupIndex int32) in
 func getAllocatedPodIndex(info *apiv2.PodBindInfo, podGroupIndex int32) int32 {
 	podIndex := int32(0)
 	for iter := info.PodRootGroupBindInfo.Iterator(podGroupIndex); iter.HasNext(); {
-		podPlacementsInfo := iter.Next()
-		if podPlacementsInfo.PhysicalNode == info.Node && common.Int32SliceContains(
-			podPlacementsInfo.PhysicalLeafCellIndices, info.LeafCellIsolation[0]) {
+		podPlacementInfo := iter.Next()
+		if podPlacementInfo.PhysicalNode == info.Node && common.Int32SliceContains(
+			podPlacementInfo.PhysicalLeafCellIndices, info.LeafCellIsolation[0]) {
 			return podIndex
 		}
 		podIndex++

@@ -996,17 +996,17 @@ func (h *HivedAlgorithm) createAllocatedPodGroup(podSchedSpec *apiv2.PodScheduli
 	pIter := PodGroupPlacement(newPodGroupSchedStatus.physicalPlacement).Iterator()
 	vIter := PodGroupPlacement(newPodGroupSchedStatus.virtualPlacement).Iterator()
 	for infoIter.HasNext() {
-		podPlacementsInfo := infoIter.Next()
+		podPlacementInfo := infoIter.Next()
 		pLeafCells := *pIter.Next()
 		vLeafCells := *vIter.Next()
 
-		node := podPlacementsInfo.PhysicalNode
+		node := podPlacementInfo.PhysicalNode
 		for leafCellIndex := int32(0); leafCellIndex < int32(
-			len(podPlacementsInfo.PhysicalLeafCellIndices)); leafCellIndex++ {
+			len(podPlacementInfo.PhysicalLeafCellIndices)); leafCellIndex++ {
 			pLeafCell, vLeafCell, lazyPreempt := h.findAllocatedLeafCell(
 				leafCellIndex,
-				podPlacementsInfo.PhysicalLeafCellIndices,
-				podPlacementsInfo.PreassignedCellTypes,
+				podPlacementInfo.PhysicalLeafCellIndices,
+				podPlacementInfo.PreassignedCellTypes,
 				CellChain(info.CellChain), node, shouldLazyPreempt,
 				podSchedSpec, newPodGroupSchedStatus, pod)
 			if pLeafCell == nil {

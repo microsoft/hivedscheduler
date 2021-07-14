@@ -248,11 +248,11 @@ type PodBindInfo struct {
 }
 
 type PodGroupBindInfo struct {
-	PodPlacements         []PodPlacementsInfo `yaml:"podPlacements"`         // pod placements in current group
+	PodPlacements         []PodPlacementInfo  `yaml:"podPlacements"`         // pod placements in current group
 	ChildGroupBindingInfo []*PodGroupBindInfo `yaml:"childGroupBindingInfo"` // child pod group bind info
 }
 
-type PodPlacementsInfo struct {
+type PodPlacementInfo struct {
 	PhysicalNode            string  `yaml:"physicalNode"`
 	PhysicalLeafCellIndices []int32 `yaml:"physicalLeafCellIndices"`
 	// preassigned cell types used by the pods. used to locate the virtual cells
@@ -261,15 +261,15 @@ type PodPlacementsInfo struct {
 }
 
 type podGroupBindInfoIterator struct {
-	podPlacementsInfoList []*PodPlacementsInfo
-	index                 int
-	length                int
+	podPlacements []*PodPlacementInfo
+	index         int
+	length        int
 }
 
 // Next returns the next item in iteration.
-func (i *podGroupBindInfoIterator) Next() *PodPlacementsInfo {
+func (i *podGroupBindInfoIterator) Next() *PodPlacementInfo {
 	i.index++
-	return i.podPlacementsInfoList[i.index-1]
+	return i.podPlacements[i.index-1]
 }
 
 // HasNext return true if iteration not finishes.
@@ -280,26 +280,26 @@ func (i *podGroupBindInfoIterator) HasNext() bool {
 // Iterator returns a stateful iterator for PodGroupBindInfo
 func (podRootGroupBindInfo *PodGroupBindInfo) Iterator(args ...int32) *podGroupBindInfoIterator {
 	index := int32(0)
-	podPlacementsInfoList := []*PodPlacementsInfo{}
+	podPlacements := []*PodPlacementInfo{}
 	queue := []*PodGroupBindInfo{podRootGroupBindInfo}
 	for len(queue) > 0 {
 		newQueue := []*PodGroupBindInfo{}
 		for _, podGroupBindInfo := range queue {
 			if len(args) == 1 && args[0] == index {
-				podPlacementsInfoList = []*PodPlacementsInfo{}
+				podPlacements = []*PodPlacementInfo{}
 			}
 			for podIndex := range podGroupBindInfo.PodPlacements {
-				podPlacementsInfoList = append(podPlacementsInfoList, &podGroupBindInfo.PodPlacements[podIndex])
+				podPlacements = append(podPlacements, &podGroupBindInfo.PodPlacements[podIndex])
 			}
 			if len(args) == 1 && args[0] == index {
-				return &podGroupBindInfoIterator{podPlacementsInfoList, 0, len(podPlacementsInfoList)}
+				return &podGroupBindInfoIterator{podPlacements, 0, len(podPlacements)}
 			}
 			index++
 			newQueue = append(newQueue, podGroupBindInfo.ChildGroupBindingInfo...)
 		}
 		queue = newQueue
 	}
-	return &podGroupBindInfoIterator{podPlacementsInfoList, 0, len(podPlacementsInfoList)}
+	return &podGroupBindInfoIterator{podPlacements, 0, len(podPlacements)}
 }
 
 type PodGroupList struct {
