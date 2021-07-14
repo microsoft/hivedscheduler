@@ -324,7 +324,7 @@ func (h *HivedAlgorithm) GetAllPodGroups() apiv2.PodGroupList {
 	return podGroupList
 }
 
-func (h *HivedAlgorithm) GetPodGroup(name string) apiv2.PodGroupItem {
+func (h *HivedAlgorithm) GetPodGroup(name string) apiv2.PodGroup {
 	h.algorithmLock.RLock()
 	defer h.algorithmLock.RUnlock()
 
@@ -986,13 +986,13 @@ func (h *HivedAlgorithm) scheduleOpportunisticPodGroup(
 }
 
 // createAllocatedPodGroup creates a new pod group and allocate the resources.
-func (h *HivedAlgorithm) createAllocatedPodGroup(podSchedSpec *apiv2.PodSchedulingSpec, info *apiv2.PodBindingInfo, pod *core.Pod) {
+func (h *HivedAlgorithm) createAllocatedPodGroup(podSchedSpec *apiv2.PodSchedulingSpec, info *apiv2.PodBindInfo, pod *core.Pod) {
 	klog.Infof("[%v]: Creating new allocated pod group: %v", internal.Key(pod), podSchedSpec.PodRootGroup.Name)
 	newPodGroupSchedStatus := newPodGroupSchedulingStatus(
 		podSchedSpec, h.leafCellNums[CellChain(info.CellChain)], h.cellLevels[CellChain(info.CellChain)], podGroupAllocated)
 	shouldLazyPreempt := false
 
-	infoIter := info.PodRootGroupBindingInfo.Iterator()
+	infoIter := info.PodRootGroupBindInfo.Iterator()
 	pIter := PodGroupPlacement(newPodGroupSchedStatus.physicalPlacement).Iterator()
 	vIter := PodGroupPlacement(newPodGroupSchedStatus.virtualPlacement).Iterator()
 	for infoIter.HasNext() {

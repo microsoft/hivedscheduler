@@ -240,16 +240,16 @@ func (obj *PodSchedulingSpec) Validate() (msg string, ok bool) {
 	return "", true
 }
 
-type PodBindingInfo struct {
-	Node                    string               `yaml:"node"`                    // k8s node name to bind
-	LeafCellIsolation       []int32              `yaml:"leafCellIsolation"`       // leaf cells for current pod's placement to bind
-	CellChain               string               `yaml:"cellChain"`               // cell chain selected
-	PodRootGroupBindingInfo *PodGroupBindingInfo `yaml:"PodRootGroupBindingInfo"` // whole pod group bind info
+type PodBindInfo struct {
+	Node                 string            `yaml:"node"`                 // k8s node name to bind
+	LeafCellIsolation    []int32           `yaml:"leafCellIsolation"`    // leaf cells for current pod's placement to bind
+	CellChain            string            `yaml:"cellChain"`            // cell chain selected
+	PodRootGroupBindInfo *PodGroupBindInfo `yaml:"PodRootGroupBindInfo"` // whole pod group bind info
 }
 
-type PodGroupBindingInfo struct {
-	PodPlacements         []PodPlacementsInfo    `yaml:"podPlacements"`         // pod placements in current group
-	ChildGroupBindingInfo []*PodGroupBindingInfo `yaml:"childGroupBindingInfo"` // child pod group bind info
+type PodGroupBindInfo struct {
+	PodPlacements         []PodPlacementsInfo `yaml:"podPlacements"`         // pod placements in current group
+	ChildGroupBindingInfo []*PodGroupBindInfo `yaml:"childGroupBindingInfo"` // child pod group bind info
 }
 
 type PodPlacementsInfo struct {
@@ -260,53 +260,53 @@ type PodPlacementsInfo struct {
 	PreassignedCellTypes []api.CellType `yaml:"preassignedCellTypes"`
 }
 
-type podGroupBindingInfoIterator struct {
+type podGroupBindInfoIterator struct {
 	podPlacementsInfoList []*PodPlacementsInfo
 	index                 int
 	length                int
 }
 
 // Next returns the next item in iteration.
-func (i *podGroupBindingInfoIterator) Next() *PodPlacementsInfo {
+func (i *podGroupBindInfoIterator) Next() *PodPlacementsInfo {
 	i.index++
 	return i.podPlacementsInfoList[i.index-1]
 }
 
 // HasNext return true if iteration not finishes.
-func (i *podGroupBindingInfoIterator) HasNext() bool {
+func (i *podGroupBindInfoIterator) HasNext() bool {
 	return i.index < i.length
 }
 
-// Iterator returns a stateful iterator for PodGroupBindingInfo
-func (podRootGroupBindingInfo *PodGroupBindingInfo) Iterator(args ...int32) *podGroupBindingInfoIterator {
+// Iterator returns a stateful iterator for PodGroupBindInfo
+func (podRootGroupBindInfo *PodGroupBindInfo) Iterator(args ...int32) *podGroupBindInfoIterator {
 	index := int32(0)
 	podPlacementsInfoList := []*PodPlacementsInfo{}
-	queue := []*PodGroupBindingInfo{podRootGroupBindingInfo}
+	queue := []*PodGroupBindInfo{podRootGroupBindInfo}
 	for len(queue) > 0 {
-		newQueue := []*PodGroupBindingInfo{}
-		for _, podGroupBindingInfo := range queue {
+		newQueue := []*PodGroupBindInfo{}
+		for _, podGroupBindInfo := range queue {
 			if len(args) == 1 && args[0] == index {
 				podPlacementsInfoList = []*PodPlacementsInfo{}
 			}
-			for podIndex := range podGroupBindingInfo.PodPlacements {
-				podPlacementsInfoList = append(podPlacementsInfoList, &podGroupBindingInfo.PodPlacements[podIndex])
+			for podIndex := range podGroupBindInfo.PodPlacements {
+				podPlacementsInfoList = append(podPlacementsInfoList, &podGroupBindInfo.PodPlacements[podIndex])
 			}
 			if len(args) == 1 && args[0] == index {
-				return &podGroupBindingInfoIterator{podPlacementsInfoList, 0, len(podPlacementsInfoList)}
+				return &podGroupBindInfoIterator{podPlacementsInfoList, 0, len(podPlacementsInfoList)}
 			}
 			index++
-			newQueue = append(newQueue, podGroupBindingInfo.ChildGroupBindingInfo...)
+			newQueue = append(newQueue, podGroupBindInfo.ChildGroupBindingInfo...)
 		}
 		queue = newQueue
 	}
-	return &podGroupBindingInfoIterator{podPlacementsInfoList, 0, len(podPlacementsInfoList)}
+	return &podGroupBindInfoIterator{podPlacementsInfoList, 0, len(podPlacementsInfoList)}
 }
 
 type PodGroupList struct {
-	Items []PodGroupItem `json:"items"`
+	Items []PodGroup `json:"items"`
 }
 
-type PodGroupItem struct {
+type PodGroup struct {
 	api.ObjectMeta `json:"metadata"`
 	Status         PodGroupStatus `json:"status"`
 }

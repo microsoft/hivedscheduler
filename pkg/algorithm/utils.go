@@ -65,16 +65,16 @@ func generatePodScheduleResult(
 	}
 	// we find the selected node after the preemption is done, otherwise the preemption victims
 	// may cause the selected node to be excluded from the suggested nodes
-	podRootGroupBindingInfo, selectedNode, selectedLeafCellIndices, cellChain := generatePodGroupBindInfo(
+	podRootGroupBindInfo, selectedNode, selectedLeafCellIndices, cellChain := generatePodGroupBindInfo(
 		physicalPlacement, virtualPlacement, cellLevelToType, currentCellNum, currentPodGroupIndex, currentPodIndex, podGroupSchedStatus)
 	klog.Infof("[%v]: pod is decided to be scheduled to node %v, leaf cells %v",
 		internal.Key(pod), selectedNode, common.ToJson(selectedLeafCellIndices))
 	return internal.PodScheduleResult{
-		PodBindInfo: &apiv2.PodBindingInfo{
-			Node:                    selectedNode,
-			LeafCellIsolation:       selectedLeafCellIndices,
-			CellChain:               cellChain,
-			PodRootGroupBindingInfo: podRootGroupBindingInfo,
+		PodBindInfo: &apiv2.PodBindInfo{
+			Node:                 selectedNode,
+			LeafCellIsolation:    selectedLeafCellIndices,
+			CellChain:            cellChain,
+			PodRootGroupBindInfo: podRootGroupBindInfo,
 		},
 	}
 }
@@ -104,7 +104,7 @@ func generatePodPreemptInfo(preemptionVictims map[string]common.Set, pod *core.P
 }
 
 // generatePodGroupBindInfo translates the physical and virtual placements of a pod group
-// into PodGroupBindingInfo, and also returns the allocated node and leaf cell addresses
+// into PodGroupBindInfo, and also returns the allocated node and leaf cell addresses
 // of the current pod.
 func generatePodGroupBindInfo(
 	physicalPlacement PodGroupPhysicalPlacement,
@@ -114,27 +114,27 @@ func generatePodGroupBindInfo(
 	currentPodGroupIndex int32,
 	currentPodIndex int32,
 	podGroupSchedStatus *PodGroupSchedulingStatus) (
-	podRootGroupBindingInfo *apiv2.PodGroupBindingInfo,
+	podRootGroupBindInfo *apiv2.PodGroupBindInfo,
 	selectedNode string,
 	selectedLeafCellIndices []int32,
 	chain string) {
 
 	podGroupIndex := int32(0)
-	podRootGroupBindingInfo = &apiv2.PodGroupBindingInfo{}
+	podRootGroupBindInfo = &apiv2.PodGroupBindInfo{}
 
 	physicalPlacementQueue := []*PodGroupPlacement{(*PodGroupPlacement)(&physicalPlacement)}
 	virtualPlacementQueue := []*PodGroupPlacement{(*PodGroupPlacement)(&virtualPlacement)}
-	podGroupBindingInfoQueue := []*apiv2.PodGroupBindingInfo{podRootGroupBindingInfo}
+	podGroupBindInfoQueue := []*apiv2.PodGroupBindInfo{podRootGroupBindInfo}
 	for len(physicalPlacementQueue) > 0 {
 		newPhysicalPlacementQueue := []*PodGroupPlacement{}
 		newVirtualPlacementQueue := []*PodGroupPlacement{}
-		newPodGroupBindingInfoQueue := []*apiv2.PodGroupBindingInfo{}
+		newPodGroupBindInfoQueue := []*apiv2.PodGroupBindInfo{}
 		for index, placement := range physicalPlacementQueue {
-			podGroupBindingInfoQueue[index].PodPlacements = make([]apiv2.PodPlacementsInfo, len(placement.podsPlacement))
+			podGroupBindInfoQueue[index].PodPlacements = make([]apiv2.PodPlacementsInfo, len(placement.podsPlacement))
 			for podIndex, podPlacement := range placement.podsPlacement {
 				podLeafCellNum := len(podPlacement)
-				podGroupBindingInfoQueue[index].PodPlacements[podIndex].PhysicalLeafCellIndices = make([]int32, podLeafCellNum)
-				podGroupBindingInfoQueue[index].PodPlacements[podIndex].PreassignedCellTypes = make([]api.CellType, podLeafCellNum)
+				podGroupBindInfoQueue[index].PodPlacements[podIndex].PhysicalLeafCellIndices = make([]int32, podLeafCellNum)
+				podGroupBindInfoQueue[index].PodPlacements[podIndex].PreassignedCellTypes = make([]api.CellType, podLeafCellNum)
 				for leafCellIndex, pLeafCell := range podPlacement {
 					if pLeafCell == nil {
 						if podGroupSchedStatus == nil || podGroupSchedStatus.state == podGroupPreempting {
@@ -142,54 +142,54 @@ func generatePodGroupBindInfo(
 						}
 						// if the physical placement of this pod is not found (e.g., removed due to reconfiguration),
 						// we will insist the decision by retrieving it from other pods
-						podGroupBindingInfoQueue[index].PodPlacements[podIndex], chain =
+						podGroupBindInfoQueue[index].PodPlacements[podIndex], chain =
 							retrieveMissingPodPlacement(podGroupSchedStatus, podGroupIndex, int32(podIndex))
 						klog.Warningf(
 							"pod placement has been invalid and is retrieved from annotation of other pods: node %v, leaf cell %v",
-							podGroupBindingInfoQueue[index].PodPlacements[podIndex].PhysicalNode,
-							podGroupBindingInfoQueue[index].PodPlacements[podIndex].PhysicalLeafCellIndices[leafCellIndex])
+							podGroupBindInfoQueue[index].PodPlacements[podIndex].PhysicalNode,
+							podGroupBindInfoQueue[index].PodPlacements[podIndex].PhysicalLeafCellIndices[leafCellIndex])
 					} else {
 						nodes, leafCellIndices := pLeafCell.(*PhysicalCell).GetPhysicalPlacement()
 						// here each cell (i.e., pLeafCell) is only one leaf cell, hence we takes the first element
 						// in its "nodes" and "leafCellIndices" as the node and leaf cell address
-						if podGroupBindingInfoQueue[index].PodPlacements[podIndex].PhysicalNode == "" {
-							podGroupBindingInfoQueue[index].PodPlacements[podIndex].PhysicalNode = nodes[0]
+						if podGroupBindInfoQueue[index].PodPlacements[podIndex].PhysicalNode == "" {
+							podGroupBindInfoQueue[index].PodPlacements[podIndex].PhysicalNode = nodes[0]
 						}
-						podGroupBindingInfoQueue[index].PodPlacements[podIndex].PhysicalLeafCellIndices[leafCellIndex] = leafCellIndices[0]
+						podGroupBindInfoQueue[index].PodPlacements[podIndex].PhysicalLeafCellIndices[leafCellIndex] = leafCellIndices[0]
 						if !PodGroupPlacement(virtualPlacement).IsEmpty() {
 							vLeafCell := virtualPlacementQueue[index].podsPlacement[podIndex][leafCellIndex].(*VirtualCell)
-							podGroupBindingInfoQueue[index].PodPlacements[podIndex].PreassignedCellTypes[leafCellIndex] =
+							podGroupBindInfoQueue[index].PodPlacements[podIndex].PreassignedCellTypes[leafCellIndex] =
 								cellLevelToType[vLeafCell.GetChain()][vLeafCell.GetPreassignedCell().GetLevel()]
 						} else {
-							podGroupBindingInfoQueue[index].PodPlacements[podIndex].PreassignedCellTypes[leafCellIndex] = ""
+							podGroupBindInfoQueue[index].PodPlacements[podIndex].PreassignedCellTypes[leafCellIndex] = ""
 						}
 					}
 				}
 			}
 			if podGroupIndex == currentPodGroupIndex {
-				selectedNode = podGroupBindingInfoQueue[index].PodPlacements[currentPodIndex].PhysicalNode
-				selectedLeafCellIndices = podGroupBindingInfoQueue[index].PodPlacements[currentPodIndex].PhysicalLeafCellIndices
+				selectedNode = podGroupBindInfoQueue[index].PodPlacements[currentPodIndex].PhysicalNode
+				selectedLeafCellIndices = podGroupBindInfoQueue[index].PodPlacements[currentPodIndex].PhysicalLeafCellIndices
 				if pLeafCell := physicalPlacementQueue[index].podsPlacement[currentPodIndex][0]; pLeafCell != nil {
 					chain = string(pLeafCell.GetChain())
 				}
 			}
 			if placement.childGroupsPlacement != nil {
-				podGroupBindingInfoQueue[index].ChildGroupBindingInfo = make([]*apiv2.PodGroupBindingInfo, len(placement.childGroupsPlacement))
+				podGroupBindInfoQueue[index].ChildGroupBindingInfo = make([]*apiv2.PodGroupBindInfo, len(placement.childGroupsPlacement))
 				for childIndex := range placement.childGroupsPlacement {
-					podGroupBindingInfoQueue[index].ChildGroupBindingInfo[childIndex] = &apiv2.PodGroupBindingInfo{}
+					podGroupBindInfoQueue[index].ChildGroupBindingInfo[childIndex] = &apiv2.PodGroupBindInfo{}
 				}
 			}
 			podGroupIndex++
 			newPhysicalPlacementQueue = append(newPhysicalPlacementQueue, physicalPlacementQueue[index].childGroupsPlacement...)
 			newVirtualPlacementQueue = append(newVirtualPlacementQueue, virtualPlacementQueue[index].childGroupsPlacement...)
-			newPodGroupBindingInfoQueue = append(newPodGroupBindingInfoQueue, podGroupBindingInfoQueue...)
+			newPodGroupBindInfoQueue = append(newPodGroupBindInfoQueue, podGroupBindInfoQueue...)
 		}
 		physicalPlacementQueue = newPhysicalPlacementQueue
 		virtualPlacementQueue = newVirtualPlacementQueue
-		podGroupBindingInfoQueue = newPodGroupBindingInfoQueue
+		podGroupBindInfoQueue = newPodGroupBindInfoQueue
 	}
 
-	return podRootGroupBindingInfo, selectedNode, selectedLeafCellIndices, chain
+	return podRootGroupBindInfo, selectedNode, selectedLeafCellIndices, chain
 }
 
 // collectBadOrNonSuggestedNodes collects all the nodes that are not within the suggested nodes
@@ -270,7 +270,7 @@ func retrieveMissingPodPlacement(podGroupSchedStatus *PodGroupSchedulingStatus, 
 		if pod != nil {
 			info := internal.ExtractPodBindInfo(pod)
 			index := int32(0)
-			for infoIter := info.PodRootGroupBindingInfo.Iterator(podGroupIndex); infoIter.HasNext(); {
+			for infoIter := info.PodRootGroupBindInfo.Iterator(podGroupIndex); infoIter.HasNext(); {
 				podPlacementsInfo := infoIter.Next()
 				if index == podIndex {
 					return *podPlacementsInfo, info.CellChain
@@ -316,9 +316,9 @@ func getNewPodIndex(allocatedPodGroup AllocatedPodGroup, podGroupIndex int32) in
 }
 
 // getAllocatedPodIndex finds the index of an allocated pod in its group according to its placement.
-func getAllocatedPodIndex(info *apiv2.PodBindingInfo, podGroupIndex int32) int32 {
+func getAllocatedPodIndex(info *apiv2.PodBindInfo, podGroupIndex int32) int32 {
 	podIndex := int32(0)
-	for iter := info.PodRootGroupBindingInfo.Iterator(podGroupIndex); iter.HasNext(); {
+	for iter := info.PodRootGroupBindInfo.Iterator(podGroupIndex); iter.HasNext(); {
 		podPlacementsInfo := iter.Next()
 		if podPlacementsInfo.PhysicalNode == info.Node && common.Int32SliceContains(
 			podPlacementsInfo.PhysicalLeafCellIndices, info.LeafCellIsolation[0]) {

@@ -56,8 +56,8 @@ type PodGroupSchedulingStatus struct {
 	lazyPreemptionStatus *api.LazyPreemptionStatus
 }
 
-func (podGroupSchedStatus *PodGroupSchedulingStatus) DumpPodGroup() apiv2.PodGroupItem {
-	podGroupItem := apiv2.PodGroupItem{
+func (podGroupSchedStatus *PodGroupSchedulingStatus) DumpPodGroup() apiv2.PodGroup {
+	podGroup := apiv2.PodGroup{
 		ObjectMeta: api.ObjectMeta{Name: podGroupSchedStatus.name},
 		Status: apiv2.PodGroupStatus{
 			VC:                   podGroupSchedStatus.vc,
@@ -67,21 +67,21 @@ func (podGroupSchedStatus *PodGroupSchedulingStatus) DumpPodGroup() apiv2.PodGro
 		},
 	}
 	if !PodGroupPlacement(podGroupSchedStatus.physicalPlacement).IsEmpty() {
-		podGroupItem.Status.PhysicalPlacement = podGroupSchedStatus.physicalPlacement.nodeToLeafCellIndices()
+		podGroup.Status.PhysicalPlacement = podGroupSchedStatus.physicalPlacement.nodeToLeafCellIndices()
 	}
 	if !PodGroupPlacement(podGroupSchedStatus.virtualPlacement).IsEmpty() {
-		podGroupItem.Status.VirtualPlacement = podGroupSchedStatus.virtualPlacement.preassignedCellToLeafCells()
+		podGroup.Status.VirtualPlacement = podGroupSchedStatus.virtualPlacement.preassignedCellToLeafCells()
 	}
 	for iter := podGroupSchedStatus.allocatedPodGroup.Iterator(); iter.HasNext(); {
 		pod := iter.Next()
 		if pod != nil {
-			podGroupItem.Status.AllocatedPods = append(podGroupItem.Status.AllocatedPods, pod.UID)
+			podGroup.Status.AllocatedPods = append(podGroup.Status.AllocatedPods, pod.UID)
 		}
 	}
 	for uid := range podGroupSchedStatus.preemptingPods {
-		podGroupItem.Status.PreemptingPods = append(podGroupItem.Status.PreemptingPods, uid)
+		podGroup.Status.PreemptingPods = append(podGroup.Status.PreemptingPods, uid)
 	}
-	return podGroupItem
+	return podGroup
 }
 
 func newPodGroupSchedulingStatus(

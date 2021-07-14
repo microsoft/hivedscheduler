@@ -384,7 +384,7 @@ func (s *HivedScheduler) generalScheduleAdmissionCheck(
 }
 
 func (s *HivedScheduler) validatePodBindInfo(
-	podBindInfo *apiv2.PodBindingInfo, suggestedNodes []string) error {
+	podBindInfo *apiv2.PodBindInfo, suggestedNodes []string) error {
 	node := podBindInfo.Node
 
 	// Check against existing nodes
@@ -725,7 +725,7 @@ func (s *HivedScheduler) getAllPodGroups() apiv2.PodGroupList {
 	return s.schedulerAlgorithm.GetAllPodGroups()
 }
 
-func (s *HivedScheduler) getPodGroup(name string) apiv2.PodGroupItem {
+func (s *HivedScheduler) getPodGroup(name string) apiv2.PodGroup {
 	return s.schedulerAlgorithm.GetPodGroup(name)
 }
 

@@ -49,7 +49,7 @@ type ExtenderHandlers struct {
 
 type InspectHandlers struct {
 	GetAllPodGroupsHandler             func() apiv2.PodGroupList
-	GetPodGroupHandler                 func(groupName string) apiv2.PodGroupItem
+	GetPodGroupHandler                 func(groupName string) apiv2.PodGroup
 	GetClusterStatusHandler            func() si.ClusterStatus
 	GetPhysicalClusterStatusHandler    func() si.PhysicalClusterStatus
 	GetAllVirtualClustersStatusHandler func() map[si.VirtualClusterName]si.VirtualClusterStatus
@@ -94,7 +94,7 @@ type SchedulerAlgorithm interface {
 
 	// Expose current scheduling status
 	GetAllPodGroups() apiv2.PodGroupList
-	GetPodGroup(name string) apiv2.PodGroupItem
+	GetPodGroup(name string) apiv2.PodGroup
 	GetClusterStatus() si.ClusterStatus
 	GetPhysicalClusterStatus() si.PhysicalClusterStatus
 	GetAllVirtualClustersStatus() map[si.VirtualClusterName]si.VirtualClusterStatus
@@ -134,7 +134,7 @@ const (
 type PodScheduleResult struct {
 	PodWaitInfo    *PodWaitInfo
 	PodPreemptInfo *PodPreemptInfo
-	PodBindInfo    *apiv2.PodBindingInfo
+	PodBindInfo    *apiv2.PodBindInfo
 }
 
 // PodUID -> PodScheduleStatus
