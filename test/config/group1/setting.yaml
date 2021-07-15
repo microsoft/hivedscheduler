@@ -1,0 +1,34 @@
+kubeApiServerAddress: http://10.10.10.10:8080
+
+physicalCluster:
+
+  cellTypes:
+    V100-SWITCH:
+      childCellType: V100
+      childCellNumber: 2
+    V100-SOCKET:
+      childCellType: V100-SWITCH
+      childCellNumber: 2
+    V100-NODE:
+      childCellType: V100-SOCKET
+      childCellNumber: 2
+      isNodeLevel: true
+    V100-RACK:
+      childCellType: V100-NODE
+      childCellNumber: 2
+
+  physicalCells:
+  - cellType: V100-RACK
+    cellChildren:
+    - cellAddress: 0.0.0.1
+    - cellAddress: 0.0.0.2
+  - cellType: V100-RACK
+    cellChildren:
+    - cellAddress: 0.0.0.3
+    - cellAddress: 0.0.0.4
+
+virtualClusters:
+  VC1:
+    virtualCells:
+    - cellType: V100-RACK
+      cellNumber: 2
