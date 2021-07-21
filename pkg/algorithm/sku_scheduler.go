@@ -169,6 +169,8 @@ func (s *skuScheduler) findCellsForPodGroup(
 	cv := skuClusterView{nil}
 	if level, ok := s.cellLevels[podGroup.WithinOneCell]; ok {
 		cv = s.createSkuClusterView(within, level, priority)
+	} else if within != nil {
+		cv = s.createSkuClusterView(within, within.cell.GetLevel(), priority)
 	}
 
 	for _, withinCell := range cv {

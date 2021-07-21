@@ -166,7 +166,7 @@ func generatePodGroupBindInfo(
 					}
 				}
 			}
-			if podGroupIndex == currentPodGroupIndex {
+			if podGroupIndex == currentPodGroupIndex && len(podGroupBindInfoQueue[index].PodPlacements) > 0 {
 				selectedNode = podGroupBindInfoQueue[index].PodPlacements[currentPodIndex].PhysicalNode
 				selectedLeafCellIndices = podGroupBindInfoQueue[index].PodPlacements[currentPodIndex].PhysicalLeafCellIndices
 				if pLeafCell := physicalPlacementQueue[index].podsPlacement[currentPodIndex][0]; pLeafCell != nil {
@@ -182,7 +182,7 @@ func generatePodGroupBindInfo(
 			podGroupIndex++
 			newPhysicalPlacementQueue = append(newPhysicalPlacementQueue, physicalPlacementQueue[index].childGroupsPlacement...)
 			newVirtualPlacementQueue = append(newVirtualPlacementQueue, virtualPlacementQueue[index].childGroupsPlacement...)
-			newPodGroupBindInfoQueue = append(newPodGroupBindInfoQueue, podGroupBindInfoQueue...)
+			newPodGroupBindInfoQueue = append(newPodGroupBindInfoQueue, podGroupBindInfoQueue[index].ChildGroupBindingInfo...)
 		}
 		physicalPlacementQueue = newPhysicalPlacementQueue
 		virtualPlacementQueue = newVirtualPlacementQueue

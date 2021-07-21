@@ -151,7 +151,7 @@ func newPodGroupSchedulingStatus(
 		podGroupSpecQueue = newPodGroupSpecQueue
 		allocatedPodGroupQueue = newAllocatedPodGroupQueue
 		virtualPlacementQueue = newVirtualPlacementQueue
-		newPhysicalPlacementQueue = physicalPlacementQueue
+		physicalPlacementQueue = newPhysicalPlacementQueue
 	}
 	return podGroupSchedStatus
 }
@@ -337,7 +337,7 @@ func (virtualPlacement PodGroupVirtualPlacement) toPhysicalPlacement(
 			newPhysicalPlacementQueue = append(newPhysicalPlacementQueue, physicalPlacementQueue[index].childGroupsPlacement...)
 		}
 		virtualPlacementQueue = newVirtualPlacementQueue
-		newPhysicalPlacementQueue = physicalPlacementQueue
+		physicalPlacementQueue = newPhysicalPlacementQueue
 	}
 	return physicalPlacement
 }

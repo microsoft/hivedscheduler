@@ -220,6 +220,7 @@ func (h *HivedAlgorithm) Schedule(
 	if podGroupSchedStatus == nil {
 		physicalPlacement, virtualPlacement, preemptionVictims, waitReason =
 			h.schedulePodFromNewGroup(podSchedSpec, suggestedNodeSet, phase, pod)
+		podGroupIndex, _ = podSchedSpec.GetCurrentPod()
 	}
 	return generatePodScheduleResult(
 		physicalPlacement,
