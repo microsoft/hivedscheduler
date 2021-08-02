@@ -241,10 +241,11 @@ func (obj *PodSchedulingSpec) Validate() (msg string, ok bool) {
 }
 
 type PodBindInfo struct {
+	Version              string            `yaml:"version"`              // version of HiveD PodBindInfo, currently supports v1, v2.
 	Node                 string            `yaml:"node"`                 // k8s node name to bind
 	LeafCellIsolation    []int32           `yaml:"leafCellIsolation"`    // leaf cells for current pod's placement to bind
 	CellChain            string            `yaml:"cellChain"`            // cell chain selected
-	PodRootGroupBindInfo *PodGroupBindInfo `yaml:"PodRootGroupBindInfo"` // whole pod group bind info
+	PodRootGroupBindInfo *PodGroupBindInfo `yaml:"podRootGroupBindInfo"` // whole pod group bind info
 }
 
 type PodGroupBindInfo struct {
@@ -300,6 +301,24 @@ func (podRootGroupBindInfo *PodGroupBindInfo) Iterator(args ...int32) *podGroupB
 		queue = newQueue
 	}
 	return &podGroupBindInfoIterator{podPlacements, 0, len(podPlacements)}
+}
+
+// ConvertFromV1 converts a v1 pod bind info to v2 spec.
+func (obj *PodBindInfo) ConvertFromV1(objV1 *api.PodBindInfo) {
+	obj.Version = "v2"
+	obj.Node = objV1.Node
+	obj.LeafCellIsolation = append([]int32{}, objV1.LeafCellIsolation...)
+	obj.CellChain = objV1.CellChain
+	obj.PodRootGroupBindInfo = &PodGroupBindInfo{
+		PodPlacements:         []PodPlacementInfo{},
+		ChildGroupBindingInfo: []*PodGroupBindInfo{},
+	}
+	for _, affinityGroupMemberBindInfo := range objV1.AffinityGroupBindInfo {
+		for _, podPlacementInfo := range affinityGroupMemberBindInfo.PodPlacements {
+			obj.PodRootGroupBindInfo.PodPlacements =
+				append(obj.PodRootGroupBindInfo.PodPlacements, PodPlacementInfo(podPlacementInfo))
+		}
+	}
 }
 
 type PodGroupList struct {

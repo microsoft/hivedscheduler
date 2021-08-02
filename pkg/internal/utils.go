@@ -199,17 +199,31 @@ func convertOldAnnotation(annotation string) string {
 
 // PodBindInfo comes from internal, so just need to assert when deserialization.
 func ExtractPodBindInfo(allocatedPod *core.Pod) *apiv2.PodBindInfo {
-	podBindInfo := apiv2.PodBindInfo{}
+	podBindInfo := apiv2.PodBindInfo{Version: "v2"}
 
 	annotation := convertOldAnnotation(allocatedPod.Annotations[si.AnnotationKeyPodBindInfo])
-	// TODO: backward compatibility
 	if annotation == "" {
 		panic(fmt.Errorf(
 			"Pod does not contain or contains empty annotation: %v",
 			si.AnnotationKeyPodBindInfo))
 	}
 
-	common.FromYaml(annotation, &podBindInfo)
+	generalSpec := si.GeneralSpec{"version": "v1"}
+	common.FromYaml(annotation, &generalSpec)
+	switch generalSpec["version"] {
+	case "v1":
+		podBindInfoV1 := si.PodBindInfo{}
+		common.FromYaml(annotation, &podBindInfoV1)
+		// convert to v2
+		podBindInfo.ConvertFromV1(&podBindInfoV1)
+	case "v2":
+		common.FromYaml(annotation, &podBindInfo)
+	default:
+		panic(fmt.Errorf(
+			"Pod contains unknown version %v in annotation: %v",
+			generalSpec["version"], si.AnnotationKeyPodBindInfo))
+	}
+
 	return &podBindInfo
 }
 

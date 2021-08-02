@@ -71,6 +71,7 @@ func generatePodScheduleResult(
 		internal.Key(pod), selectedNode, common.ToJson(selectedLeafCellIndices))
 	return internal.PodScheduleResult{
 		PodBindInfo: &apiv2.PodBindInfo{
+			Version:              "v2",
 			Node:                 selectedNode,
 			LeafCellIsolation:    selectedLeafCellIndices,
 			CellChain:            cellChain,
