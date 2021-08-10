@@ -24,11 +24,12 @@ spec:
         metadata:
           annotations:
             hivedscheduler.microsoft.com/pod-scheduling-spec: |-
+              version: v2
               virtualCluster: VC2
               priority: 1000
-              leafCellType: K80
-              leafCellNumber: 1
-              affinityGroup: null
+              cellType: K80
+              cellNumber: 1
+              podRootGroup: null
         spec:
           schedulerName: hivedscheduler
           restartPolicy: Never
@@ -93,11 +94,12 @@ spec:
         metadata:
           annotations:
             hivedscheduler.microsoft.com/pod-scheduling-spec: |-
+              version: v2
               virtualCluster: VC2
               priority: 1000
-              leafCellType: K80
-              leafCellNumber: 1
-              affinityGroup: null
+              cellType: K80
+              cellNumber: 1
+              podRootGroup: null
         spec:
           schedulerName: hivedscheduler
           restartPolicy: Never

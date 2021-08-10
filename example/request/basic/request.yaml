@@ -7,9 +7,10 @@ jobPriorityClass: PROD
 taskRoles:
   a:
     taskNumber: 5
-    leafCellType: K80
-    leafCellNumber: 1
-    affinityGroupName: null
+    resourcePerInstance:
+      skuNum: 1
+      skuType: K80
+    withinOne: null
 ---
 jobVC: VC2
 jobName: demo2nopinned
@@ -17,9 +18,10 @@ jobPriorityClass: PROD
 taskRoles:
   a:
     taskNumber: 5
-    leafCellType: K80
-    leafCellNumber: 1
-    affinityGroupName: null
+    resourcePerInstance:
+      skuNum: 1
+      skuType: K80
+    withinOne: null
 ---
 jobVC: VC2
 jobName: demo2pinned
@@ -28,8 +30,31 @@ taskRoles:
   a:
     taskNumber: 5
     pinnedCellId: VC2-K80
-    leafCellNumber: 1
-    affinityGroupName: null
+    resourcePerInstance:
+      skuNum: 1
+    withinOne: null
+---
+jobVC: VC3
+jobName: demo3within
+jobPriorityClass: PROD
+taskRoles:
+  a:
+    taskNumber: 1
+    resourcePerInstance:
+      skuNum: 2
+      skuType: K80
+    withinOne: K80-SWITCH
+  b:
+    taskNumber: 1
+    resourcePerInstance:
+      skuNum: 1
+      skuType: K80
+    withinOne: null
+taskRoleGroups:
+  - taskRoles:
+    - a
+    - b
+    withinOne: K80-NODE
 
 ---
 ################################################################################
@@ -69,11 +94,12 @@ spec:
           metadata:
             annotations:
               hivedscheduler.microsoft.com/pod-scheduling-spec: |-
+                version: v2
                 virtualCluster: VC1
                 priority: 1000
-                leafCellType: K80
-                leafCellNumber: 1
-                affinityGroup: null
+                cellType: K80
+                cellNumber: 1
+                podRootGroup: null
           spec:
             schedulerName: hivedscheduler
             restartPolicy: Never
@@ -116,11 +142,12 @@ spec:
           metadata:
             annotations:
               hivedscheduler.microsoft.com/pod-scheduling-spec: |-
+                version: v2
                 virtualCluster: VC2
                 priority: 1000
-                leafCellType: K80
-                leafCellNumber: 1
-                affinityGroup: null
+                cellType: K80
+                cellNumber: 1
+                podRootGroup: null
           spec:
             schedulerName: hivedscheduler
             restartPolicy: Never
@@ -163,11 +190,141 @@ spec:
           metadata:
             annotations:
               hivedscheduler.microsoft.com/pod-scheduling-spec: |-
+                version: v2
                 virtualCluster: VC2
                 priority: 1000
                 pinnedCellId: VC2-K80
-                leafCellNumber: 1
-                affinityGroup: null
+                cellNumber: 1
+                podRootGroup: null
+          spec:
+            schedulerName: hivedscheduler
+            restartPolicy: Never
+            priority: 1000
+            containers:
+            - name: ubuntu
+              image: ubuntu:trusty
+              command: ["sh", "-c", "nvidia-smi -L ; printenv ; sleep infinity"]
+              resources:
+                limits:
+                  hivedscheduler.microsoft.com/pod-scheduling-enable: 1
+                  cpu: 4
+                  memory: 8Gi
+              env:
+              - name: NVIDIA_VISIBLE_DEVICES
+                valueFrom:
+                  fieldRef:
+                    fieldPath: metadata.annotations['hivedscheduler.microsoft.com/pod-leaf-cell-isolation']
+---
+apiVersion: frameworkcontroller.microsoft.com/v1
+kind: Framework
+metadata:
+  name: demo3within
+spec:
+  executionType: Start
+  retryPolicy:
+    fancyRetryPolicy: true
+    maxRetryCount: 0
+  taskRoles:
+    - name: a
+      taskNumber: 1
+      frameworkAttemptCompletionPolicy:
+        minFailedTaskCount: 1
+        minSucceededTaskCount: 1
+      task:
+        retryPolicy:
+          fancyRetryPolicy: false
+          maxRetryCount: 0
+        pod:
+          metadata:
+            annotations:
+              hivedscheduler.microsoft.com/pod-scheduling-spec: |-
+                version: v2
+                virtualCluster: VC3
+                priority: 1000
+                cellType: K80
+                cellNumber: 2
+                podRootGroup:
+                  name: demo3within/group_0
+                  withinOneCell: K80-NODE
+                  pods: null
+                  childGroups:
+                  - withinOneCell: K80-SWITCH
+                    pods:
+                    - podMinNumber: 1
+                      podMaxNumber: 1
+                      cellsPerPod:
+                        cellType: K80
+                        cellNumber: 2
+                      containsCurrentPod: true
+                    childGroups: null
+                  - withinOneCell: null
+                    pods:
+                    - podMinNumber: 1
+                      podMaxNumber: 1
+                      cellsPerPod:
+                        cellType: K80
+                        cellNumber: 1
+                      containsCurrentPod: false
+                    childGroups: null
+          spec:
+            schedulerName: hivedscheduler
+            restartPolicy: Never
+            priority: 1000
+            containers:
+            - name: ubuntu
+              image: ubuntu:trusty
+              command: ["sh", "-c", "nvidia-smi -L ; printenv ; sleep infinity"]
+              resources:
+                limits:
+                  hivedscheduler.microsoft.com/pod-scheduling-enable: 1
+                  cpu: 4
+                  memory: 8Gi
+              env:
+              - name: NVIDIA_VISIBLE_DEVICES
+                valueFrom:
+                  fieldRef:
+                    fieldPath: metadata.annotations['hivedscheduler.microsoft.com/pod-leaf-cell-isolation']
+    - name: b
+      taskNumber: 1
+      frameworkAttemptCompletionPolicy:
+        minFailedTaskCount: 1
+        minSucceededTaskCount: 1
+      task:
+        retryPolicy:
+          fancyRetryPolicy: false
+          maxRetryCount: 0
+        pod:
+          metadata:
+            annotations:
+              hivedscheduler.microsoft.com/pod-scheduling-spec: |-
+                version: v2
+                virtualCluster: VC3
+                priority: 1000
+                cellType: K80
+                cellNumber: 1
+                podRootGroup:
+                  name: demo3within/group_0
+                  withinOneCell: K80-NODE
+                  pods: null
+                  childGroups:
+                  - withinOneCell: K80-SWITCH
+                    pods:
+                    - podMinNumber: 1
+                      podMaxNumber: 1
+                      cellsPerPod:
+                        cellType: K80
+                        cellNumber: 2
+                      containsCurrentPod: false
+                    childGroups: null
+                  - withinOneCell: null
+                    pods:
+                    - podMinNumber: 1
+                      podMaxNumber: 1
+                      cellsPerPod:
+                        cellType: K80
+                        cellNumber: 1
+                      containsCurrentPod: true
+                    childGroups: null
           spec:
             schedulerName: hivedscheduler
             restartPolicy: Never
@@ -198,11 +355,12 @@ metadata:
   name: demo1-a-0
   annotations:
     hivedscheduler.microsoft.com/pod-scheduling-spec: |-
+      version: v2
       virtualCluster: VC1
       priority: 1000
-      leafCellType: K80
-      leafCellNumber: 1
-      affinityGroup: null
+      cellType: K80
+      cellNumber: 1
+      podRootGroup: null
 spec:
   schedulerName: hivedscheduler
   restartPolicy: Never
@@ -229,11 +387,12 @@ metadata:
   name: demo2nopinned-a-0
   annotations:
     hivedscheduler.microsoft.com/pod-scheduling-spec: |-
+      version: v2
       virtualCluster: VC2
       priority: 1000
-      leafCellType: K80
-      leafCellNumber: 1
-      affinityGroup: null
+      cellType: K80
+      cellNumber: 1
+      podRootGroup: null
 spec:
   schedulerName: hivedscheduler
   restartPolicy: Never
@@ -260,11 +419,118 @@ metadata:
   name: demo2pinned-a-0
   annotations:
     hivedscheduler.microsoft.com/pod-scheduling-spec: |-
+      version: v2
       virtualCluster: VC2
       priority: 1000
       pinnedCellId: VC2-K80
-      leafCellNumber: 1
-      affinityGroup: null
+      cellNumber: 1
+      podRootGroup: null
+spec:
+  schedulerName: hivedscheduler
+  restartPolicy: Never
+  priority: 1000
+  containers:
+  - name: ubuntu
+    image: ubuntu:trusty
+    command: ["sh", "-c", "nvidia-smi -L ; printenv ; sleep infinity"]
+    resources:
+      limits:
+        hivedscheduler.microsoft.com/pod-scheduling-enable: 1
+        cpu: 4
+        memory: 8Gi
+    env:
+    - name: NVIDIA_VISIBLE_DEVICES
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.annotations['hivedscheduler.microsoft.com/pod-leaf-cell-isolation']
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: demo3within-a-0
+  annotations:
+    hivedscheduler.microsoft.com/pod-scheduling-spec: |-
+      version: v2
+      virtualCluster: VC3
+      priority: 1000
+      cellType: K80
+      cellNumber: 2
+      podRootGroup:
+        name: demo3within/group_0
+        withinOneCell: K80-NODE
+        pods: null
+        childGroups:
+        - withinOneCell: K80-SWITCH
+          pods:
+          - podMinNumber: 1
+            podMaxNumber: 1
+            cellsPerPod:
+              cellType: K80
+              cellNumber: 2
+            containsCurrentPod: true
+          childGroups: null
+        - withinOneCell: null
+          pods:
+          - podMinNumber: 1
+            podMaxNumber: 1
+            cellsPerPod:
+              cellType: K80
+              cellNumber: 1
+            containsCurrentPod: false
+          childGroups: null
+spec:
+  schedulerName: hivedscheduler
+  restartPolicy: Never
+  priority: 1000
+  containers:
+  - name: ubuntu
+    image: ubuntu:trusty
+    command: ["sh", "-c", "nvidia-smi -L ; printenv ; sleep infinity"]
+    resources:
+      limits:
+        hivedscheduler.microsoft.com/pod-scheduling-enable: 1
+        cpu: 4
+        memory: 8Gi
+    env:
+    - name: NVIDIA_VISIBLE_DEVICES
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.annotations['hivedscheduler.microsoft.com/pod-leaf-cell-isolation']
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: demo3within-b-0
+  annotations:
+    hivedscheduler.microsoft.com/pod-scheduling-spec: |-
+      version: v2
+      virtualCluster: VC3
+      priority: 1000
+      cellType: K80
+      cellNumber: 1
+      podRootGroup:
+        name: demo3within/group_0
+        withinOneCell: K80-NODE
+        pods: null
+        childGroups:
+        - withinOneCell: K80-SWITCH
+          pods:
+          - podMinNumber: 1
+            podMaxNumber: 1
+            cellsPerPod:
+              cellType: K80
+              cellNumber: 2
+            containsCurrentPod: false
+          childGroups: null
+        - withinOneCell: null
+          pods:
+          - podMinNumber: 1
+            podMaxNumber: 1
+            cellsPerPod:
+              cellType: K80
+              cellNumber: 1
+            containsCurrentPod: true
+          childGroups: null
 spec:
   schedulerName: hivedscheduler
   restartPolicy: Never

@@ -53,9 +53,9 @@ This is similar to [K8S Labels and Selectors](https://kubernetes.io/docs/concept
 ### Description
 A set of pods is scheduled as a gang, i.e. in an all-or-nothing fashion.
 
-The gang is treated as an `AffinityGroup`, the scheduling unit of HiveD.
+The gang is treated as an `PodGroup`, the scheduling unit of HiveD.
 
-A job can specify all its pods are in the same `AffinityGroup`, so the whole job is gang scheduled.
+A job can specify all its pods are in the same `PodGroup`, so the whole job is gang scheduled.
 
 This is useful for jobs that cannot perform any useful work, such as making progress or serving, until all pods are running. A typical example in deep learning workloads is [distributed training](#TensorFlow-Distributed-Training).
 
@@ -76,7 +76,7 @@ This is useful for jobs that cannot perform any useful work, such as making prog
 ### Description
 A set of pods is scheduled regardless of each other, i.e. does not require [Gang Scheduling](#Gang-Scheduling).
 
-A job can specify its pods in different `AffinityGroups`, so the whole job is incrementally scheduled (one `AffinityGroup` each time).
+A job can specify its pods in different `PodGroups`, so the whole job is incrementally scheduled (one `PodRootGroup` each time).
 
 This is used for jobs that can still perform useful works, such as making progress or serving, even if only one pod is running.
 
@@ -138,11 +138,11 @@ One VC's [Guaranteed Job](#Guaranteed-Job) can preempt other VCs' [Opportunistic
 
 ## Topology-Aware Intra-VC Scheduling
 ### Description
-Within one VC, HiveD chooses nearest leaf cells for one `AffinityGroup` in best effort.
+Within one VC, HiveD chooses nearest leaf cells for one `PodGroup` in best effort.
 
 ### Reproduce Steps
 1. Use [hived-config-2](file/hived-config-2.yaml).
-2. Submit job [itc-buddy](file/itc-buddy.yaml), which requests for 2 single GPU tasks in the same `AffinityGroup`, tasks will be allocated to 2 buddy GPUs.
+2. Submit job [itc-buddy](file/itc-buddy.yaml), which requests for 2 single GPU tasks in the same `PodGroup`, tasks will be allocated to 2 buddy GPUs.
 
    <img src="file/itc-buddy-1.png" width="600"/>
    <img src="file/itc-buddy-2.png" width="600"/>
