@@ -166,6 +166,10 @@ func (s *topologyGuaranteeScheduler) findCellsForPodGroup(
 	failedReason string) {
 
 	placement, failedReason = PodGroupPlacement{}, "no matched cells in vc"
+	if _, ok := s.cellLevels[podGroup.WithinOneCell]; !ok && podGroup.WithinOneCell != "" {
+		return placement, fmt.Sprintf(
+			"%v, unknown withinOneCell %v", failedReason, podGroup.WithinOneCell)
+	}
 
 	cv := skuClusterView{nil}
 	if level, ok := s.cellLevels[podGroup.WithinOneCell]; ok {
@@ -209,6 +213,9 @@ func (s *topologyGuaranteeScheduler) findCellsForPods(
 	failedReason string) {
 
 	placement, failedReason = []CellList{}, ""
+	if pods == nil || len(pods) == 0 {
+		return placement, failedReason
+	}
 
 	allocatedCells := CellList{}
 	for iter := allocated.Iterator(); iter.HasNext(); {
@@ -342,6 +349,7 @@ func (s *topologyGuaranteeScheduler) getNodeLevel() CellLevel {
 }
 
 // getFreeCellsAtLevel collects free cells and preemptible cells at given level according to the priority.
+// Sort cells when splitting so that cells need higher level split can be used later.
 func getFreeCellsAtLevel(
 	cell Cell,
 	level CellLevel,
@@ -352,7 +360,20 @@ func getFreeCellsAtLevel(
 	CellList, CellList) {
 
 	if cell.GetLevel() > level {
-		for _, c := range cell.GetChildren() {
+		cellChildren := cell.GetChildren()
+		usedCellNums := make([]int32, len(cellChildren))
+		for i, c := range cellChildren {
+			usedCellNums[i] = 0
+			for p, num := range c.GetUsedLeafCellNumAtPriorities() {
+				if p >= priority {
+					usedCellNums[i] += num
+				}
+			}
+		}
+		sort.SliceStable(cellChildren, func(i, j int) bool {
+			return usedCellNums[i] > usedCellNums[j]
+		})
+		for _, c := range cellChildren {
 			availableCells, preemptibleCells = getFreeCellsAtLevel(
 				c, level, priority, allocatedCells, availableCells, preemptibleCells)
 		}
@@ -466,6 +487,17 @@ func (cv skuClusterView) Len() int {
 // 3. usedLeafCellNumAtPriority (prefer higher)
 // 4. usedLeafCellNumHigherPriority (prefer lower)
 // 5. cell physical/virtual address (prefer lower)
+//
+// When crossPriorityPack is not enabled, we count the cell numbers used by the current
+// priority (usedLeafCellNumAtPriority), and the higher priorities (usedLeafCellNumHigherPriority), respectively.
+// When sorting the sku cells, cells with higher usedLeafCellNumAtPriority and lower usedLeafCellNumHigherPriority
+// will be preferred (i.e., pack pods inside the same priority, and stay from higher priorities).
+// Note that in this case, the sku cells may NOT be ordered in term of total used leaf cell number,
+// which may result in feasible pod placements being not found.
+//
+// Otherwise, usedLeafCellNumAtPriority is set to the total used leaf cell number,
+// so that nodes with more used leaf cells will be preferred (i.e., pack pods globally across priorities).
+// In this case a feasible pod placement is guaranteed to be found (as long as all nodes are in suggested nodes).
 func (cv skuClusterView) Less(i, j int) bool {
 	if cv[i].healthy != cv[j].healthy {
 		return cv[i].healthy
