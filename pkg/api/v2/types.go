@@ -47,8 +47,9 @@ type PodSchedulingSpec struct {
 type PodGroupSpec struct {
 	Name          string               `yaml:"name"`          // pod group name
 	WithinOneCell api.CellType         `yaml:"withinOneCell"` // within cell for all cells in current group, e.g., two GPU-cell within one numa-cell, two node-cell within one rack-cell
-	Pods          []PodGroupMemberSpec `yaml:"pods"`          // pod list for current group, any two pods in the group are always gang with each other, Pods are order sensitive
+	Pod           *PodGroupMemberSpec  `yaml:"pod"`           // pod for current group, PodMinNumber instances of pod are gang with each other
 	ChildGroups   []*PodGroupSpec      `yaml:"childGroups"`   // child group in the hierarchical structure, any two child groups in the list and pods in them are always gang with each other, ChildGroups are order sensitive
+	Pods          []PodGroupMemberSpec // internal structure for PodGroupMemberSpec, flattened Pod in a list
 }
 
 // PodGroupMemberSpec represents content of each node in tree stucture pod group.
@@ -151,9 +152,9 @@ func (obj *PodSchedulingSpec) ConvertFromV1(objV1 *api.PodSchedulingSpec) {
 	obj.GangReleaseEnable = objV1.GangReleaseEnable
 	obj.LazyPreemptionEnable = objV1.LazyPreemptionEnable
 	if objV1.AffinityGroup != nil {
-		var pods []PodGroupMemberSpec
+		childGroups := []*PodGroupSpec{}
 		for _, memberV1 := range objV1.AffinityGroup.Members {
-			member := PodGroupMemberSpec{
+			member := &PodGroupMemberSpec{
 				PodMinNumber: memberV1.PodNumber,
 				PodMaxNumber: memberV1.PodNumber,
 				CellsPerPod: PodGroupMemberCellSpec{
@@ -162,11 +163,11 @@ func (obj *PodSchedulingSpec) ConvertFromV1(objV1 *api.PodSchedulingSpec) {
 				},
 				ContainsCurrentPod: bool(obj.CellNumber == memberV1.LeafCellNumber),
 			}
-			pods = append(pods, member)
+			childGroups = append(childGroups, &PodGroupSpec{Pod: member})
 		}
 		obj.PodRootGroup = &PodGroupSpec{
-			Name: objV1.AffinityGroup.Name,
-			Pods: pods,
+			Name:        objV1.AffinityGroup.Name,
+			ChildGroups: childGroups,
 		}
 	}
 }
@@ -176,7 +177,7 @@ func (obj *PodSchedulingSpec) SetDefaults(pod *core.Pod) {
 	if obj.PodRootGroup == nil {
 		obj.PodRootGroup = &PodGroupSpec{
 			Name: fmt.Sprintf("%v/%v", pod.Namespace, pod.Name),
-			Pods: []PodGroupMemberSpec{{
+			Pod: &PodGroupMemberSpec{
 				PodMinNumber: 1,
 				PodMaxNumber: 1,
 				CellsPerPod: PodGroupMemberCellSpec{
@@ -184,7 +185,7 @@ func (obj *PodSchedulingSpec) SetDefaults(pod *core.Pod) {
 					CellNumber: obj.CellNumber,
 				},
 				ContainsCurrentPod: true,
-			}},
+			},
 		}
 	}
 }
@@ -212,30 +213,34 @@ func (obj *PodSchedulingSpec) Validate() (msg string, ok bool) {
 	for len(queue) > 0 {
 		newQueue := []*PodGroupSpec{}
 		for _, podGroup := range queue {
-			for _, pod := range podGroup.Pods {
-				if pod.PodMinNumber <= 0 {
-					return "PodGroup.Pods have non-positive PodMinNumber", false
+			if podGroup.Pods != nil && len(podGroup.Pods) > 0 {
+				return "Do not support PodGroup.Pods field, please specify PodGroup.Pod", false
+			}
+			if p := podGroup.Pod; p != nil {
+				if p.PodMinNumber <= 0 {
+					return "PodGroup.Pod have non-positive PodMinNumber", false
 				}
-				if pod.PodMaxNumber <= 0 {
-					return "PodGroup.Pods have non-positive PodMaxNumber", false
+				if p.PodMaxNumber <= 0 {
+					return "PodGroup.Pod have non-positive PodMaxNumber", false
 				}
-				if pod.CellsPerPod.CellNumber <= 0 {
-					return "PodGroup.Pods have non-positive CellsPerPod.CellNumber", false
+				if p.CellsPerPod.CellNumber <= 0 {
+					return "PodGroup.Pod have non-positive CellsPerPod.CellNumber", false
 				}
-				if pod.ContainsCurrentPod == true {
+				if p.ContainsCurrentPod == true {
 					if isPodInGroup == false {
 						isPodInGroup = true
 					} else {
-						return "PodGroup.Pods have multiple ContainsCurrentPod", false
+						return "PodGroup.Pod have multiple ContainsCurrentPod", false
 					}
 				}
+				podGroup.Pods = []PodGroupMemberSpec{*p}
 			}
 			newQueue = append(newQueue, podGroup.ChildGroups...)
 		}
 		queue = newQueue
 	}
 	if !isPodInGroup {
-		return "PodGroup.Pods does not contain current Pod", false
+		return "PodGroup.Pod does not contain current Pod", false
 	}
 	return "", true
 }

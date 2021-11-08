@@ -14,8 +14,8 @@
       podRootGroup:
         name: group1
         withinOneCell: ""
-        pods:
-        - podMinNumber: 1
+        pod:
+          podMinNumber: 1
           podMaxNumber: 1
           cellsPerPod:
             cellType: V100
@@ -44,8 +44,8 @@
       podRootGroup:
         name: group2
         withinOneCell: ""
-        pods:
-        - podMinNumber: 1
+        pod:
+          podMinNumber: 1
           podMaxNumber: 1
           cellsPerPod:
             cellType: V100
@@ -74,8 +74,8 @@
       podRootGroup:
         name: group3
         withinOneCell: ""
-        pods:
-        - podMinNumber: 1
+        pod:
+          podMinNumber: 1
           podMaxNumber: 1
           cellsPerPod:
             cellType: V100
@@ -107,8 +107,8 @@
       podRootGroup:
         name: group4
         withinOneCell: "V100-RACK"
-        pods:
-        - podMinNumber: 2
+        pod:
+          podMinNumber: 2
           podMaxNumber: 2
           cellsPerPod:
             cellType: V100-NODE

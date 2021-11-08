@@ -79,8 +79,8 @@ var podSchedulingSpecTestData = `pod1:
   podRootGroup:
     name: group1
     withinOneCell: ""
-    pods:
-    - podMinNumber: 1
+    pod:
+      podMinNumber: 1
       podMaxNumber: 1
       cellsPerPod:
         cellType: DGX2-V100
@@ -99,8 +99,8 @@ pod2:
   podRootGroup:
     name: group2
     withinOneCell: ""
-    pods:
-    - podMinNumber: 1
+    pod:
+      podMinNumber: 1
       podMaxNumber: 1
       cellsPerPod:
         cellType: DGX2-V100
@@ -119,8 +119,8 @@ pod3:
   podRootGroup:
     name: group3
     withinOneCell: ""
-    pods:
-    - podMinNumber: 1
+    pod:
+      podMinNumber: 1
       podMaxNumber: 1
       cellsPerPod:
         cellType: DGX2-V100
@@ -139,8 +139,8 @@ pod4:
   podRootGroup:
     name: group4
     withinOneCell: ""
-    pods:
-    - podMinNumber: 1
+    pod:
+      podMinNumber: 1
       podMaxNumber: 1
       cellsPerPod:
         cellType: DGX2-V100
@@ -159,8 +159,8 @@ pod5:
   podRootGroup:
     name: group5
     withinOneCell: ""
-    pods:
-    - podMinNumber: 2
+    pod:
+      podMinNumber: 2
       podMaxNumber: 2
       cellsPerPod:
         cellType: DGX2-V100
@@ -179,8 +179,8 @@ pod6:
   podRootGroup:
     name: group5
     withinOneCell: ""
-    pods:
-    - podMinNumber: 2
+    pod:
+      podMinNumber: 2
       podMaxNumber: 2
       cellsPerPod:
         cellType: DGX2-V100
@@ -199,8 +199,8 @@ pod7:
   podRootGroup:
     name: group7
     withinOneCell: ""
-    pods:
-    - podMinNumber: 3
+    pod:
+      podMinNumber: 3
       podMaxNumber: 3
       cellsPerPod:
         cellType: DGX1-P100
@@ -219,20 +219,21 @@ pod8:
   podRootGroup:
     name: group9
     withinOneCell: ""
-    pods:
-    - podMinNumber: 1
-      podMaxNumber: 1
-      cellsPerPod:
-        cellType: ""
-        cellNumber: 7
-      containsCurrentPod: true
-    - podMinNumber: 1
-      podMaxNumber: 1
-      cellsPerPod:
-        cellType: ""
-        cellNumber: 5
-      containsCurrentPod: false
-    childGroups: []
+    childGroups:
+    - pod:
+        podMinNumber: 1
+        podMaxNumber: 1
+        cellsPerPod:
+          cellType: ""
+          cellNumber: 7
+        containsCurrentPod: true
+    - pod:
+        podMinNumber: 1
+        podMaxNumber: 1
+        cellsPerPod:
+          cellType: ""
+          cellNumber: 5
+        containsCurrentPod: false
 pod9:
   version: v2
   virtualCluster: VC2
@@ -245,20 +246,21 @@ pod9:
   podRootGroup:
     name: group9
     withinOneCell: ""
-    pods:
-    - podMinNumber: 1
-      podMaxNumber: 1
-      cellsPerPod:
-        cellType: ""
-        cellNumber: 7
-      containsCurrentPod: false
-    - podMinNumber: 1
-      podMaxNumber: 1
-      cellsPerPod:
-        cellType: ""
-        cellNumber: 5
-      containsCurrentPod: true
-    childGroups: []
+    childGroups:
+    - pod:
+        podMinNumber: 1
+        podMaxNumber: 1
+        cellsPerPod:
+          cellType: ""
+          cellNumber: 7
+        containsCurrentPod: false
+    - pod:
+        podMinNumber: 1
+        podMaxNumber: 1
+        cellsPerPod:
+          cellType: ""
+          cellNumber: 5
+        containsCurrentPod: true
 pod10:
   version: v2
   virtualCluster: VC2
@@ -271,8 +273,8 @@ pod10:
   podRootGroup:
     name: group6
     withinOneCell: ""
-    pods:
-    - podMinNumber: 1
+    pod:
+      podMinNumber: 1
       podMaxNumber: 1
       cellsPerPod:
         cellType: DGX2-V100
@@ -291,8 +293,8 @@ pod11:
   podRootGroup:
     name: group8
     withinOneCell: ""
-    pods:
-    - podMinNumber: 1
+    pod:
+      podMinNumber: 1
       podMaxNumber: 1
       cellsPerPod:
         cellType: DGX1-P100
@@ -311,8 +313,8 @@ pod12:
   podRootGroup:
     name: group8
     withinOneCell: ""
-    pods:
-    - podMinNumber: 1
+    pod:
+      podMinNumber: 1
       podMaxNumber: 1
       cellsPerPod:
         cellType: DGX1-P100
@@ -331,8 +333,8 @@ pod13:
   podRootGroup:
     name: group10
     withinOneCell: ""
-    pods:
-    - podMinNumber: 1
+    pod:
+      podMinNumber: 1
       podMaxNumber: 1
       cellsPerPod:
         cellType: DGX1-P100
@@ -351,8 +353,8 @@ pod14:
   podRootGroup:
     name: group10
     withinOneCell: ""
-    pods:
-    - podMinNumber: 1
+    pod:
+      podMinNumber: 1
       podMaxNumber: 1
       cellsPerPod:
         cellType: DGX1-P100
@@ -371,8 +373,8 @@ pod15:
   podRootGroup:
     name: group10
     withinOneCell: ""
-    pods:
-    - podMinNumber: 1
+    pod:
+      podMinNumber: 1
       podMaxNumber: 1
       cellsPerPod:
         cellType: DGX1-P100
@@ -391,8 +393,8 @@ pod16:
   podRootGroup:
     name: group11
     withinOneCell: ""
-    pods:
-    - podMinNumber: 2
+    pod:
+      podMinNumber: 2
       podMaxNumber: 2
       cellsPerPod:
         cellType: DGX2-V100
@@ -411,8 +413,8 @@ pod17:
   podRootGroup:
     name: group11
     withinOneCell: ""
-    pods:
-    - podMinNumber: 2
+    pod:
+      podMinNumber: 2
       podMaxNumber: 2
       cellsPerPod:
         cellType: DGX2-V100
@@ -431,8 +433,8 @@ pod18:
   podRootGroup:
     name: group12
     withinOneCell: ""
-    pods:
-    - podMinNumber: 2
+    pod:
+      podMinNumber: 2
       podMaxNumber: 2
       cellsPerPod:
         cellType: DGX2-V100
@@ -451,8 +453,8 @@ pod19:
   podRootGroup:
     name: group12
     withinOneCell: ""
-    pods:
-    - podMinNumber: 2
+    pod:
+      podMinNumber: 2
       podMaxNumber: 2
       cellsPerPod:
         cellType: DGX2-V100
@@ -471,8 +473,8 @@ pod20:
   podRootGroup:
     name: group13
     withinOneCell: ""
-    pods:
-    - podMinNumber: 2
+    pod:
+      podMinNumber: 2
       podMaxNumber: 2
       cellsPerPod:
         cellType: DGX2-V100
@@ -491,8 +493,8 @@ pod21:
   podRootGroup:
     name: group13
     withinOneCell: ""
-    pods:
-    - podMinNumber: 2
+    pod:
+      podMinNumber: 2
       podMaxNumber: 2
       cellsPerPod:
         cellType: DGX2-V100
@@ -511,8 +513,8 @@ pod22:
   podRootGroup:
     name: group14
     withinOneCell: ""
-    pods:
-    - podMinNumber: 2
+    pod:
+      podMinNumber: 2
       podMaxNumber: 2
       cellsPerPod:
         cellType: DGX2-V100
@@ -531,8 +533,8 @@ pod23:
   podRootGroup:
     name: group14
     withinOneCell: ""
-    pods:
-    - podMinNumber: 2
+    pod:
+      podMinNumber: 2
       podMaxNumber: 2
       cellsPerPod:
         cellType: DGX2-V100
@@ -551,8 +553,8 @@ pod24:
   podRootGroup:
     name: group15
     withinOneCell: ""
-    pods:
-    - podMinNumber: 1
+    pod:
+      podMinNumber: 1
       podMaxNumber: 1
       cellsPerPod:
         cellType: CT1
@@ -571,8 +573,8 @@ pod25:
   podRootGroup:
     name: group16
     withinOneCell: ""
-    pods:
-    - podMinNumber: 1
+    pod:
+      podMinNumber: 1
       podMaxNumber: 1
       cellsPerPod:
         cellType: CT1
@@ -591,8 +593,8 @@ pod26:
   podRootGroup:
     name: group17
     withinOneCell: ""
-    pods:
-    - podMinNumber: 1
+    pod:
+      podMinNumber: 1
       podMaxNumber: 1
       cellsPerPod:
         cellType: CT1
@@ -611,8 +613,8 @@ pod27:
   podRootGroup:
     name: group18
     withinOneCell: ""
-    pods:
-    - podMinNumber: 2
+    pod:
+      podMinNumber: 2
       podMaxNumber: 2
       cellsPerPod:
         cellType: DGX2-V100
@@ -631,8 +633,8 @@ pod28:
   podRootGroup:
     name: group19
     withinOneCell: ""
-    pods:
-    - podMinNumber: 2
+    pod:
+      podMinNumber: 2
       podMaxNumber: 2
       cellsPerPod:
         cellType: DGX2-V100
@@ -651,8 +653,8 @@ pod29:
   podRootGroup:
     name: group20
     withinOneCell: ""
-    pods:
-    - podMinNumber: 1
+    pod:
+      podMinNumber: 1
       podMaxNumber: 1
       cellsPerPod:
         cellType: DGX2-V100
@@ -671,8 +673,8 @@ pod30:
   podRootGroup:
     name: group21
     withinOneCell: ""
-    pods:
-    - podMinNumber: 1
+    pod:
+      podMinNumber: 1
       podMaxNumber: 1
       cellsPerPod:
         cellType: DGX2-V100
@@ -691,8 +693,8 @@ pod31:
   podRootGroup:
     name: group22
     withinOneCell: ""
-    pods:
-    - podMinNumber: 1
+    pod:
+      podMinNumber: 1
       podMaxNumber: 1
       cellsPerPod:
         cellType: DGX2-V100
@@ -711,8 +713,8 @@ pod32:
   podRootGroup:
     name: group23
     withinOneCell: ""
-    pods:
-    - podMinNumber: 1
+    pod:
+      podMinNumber: 1
       podMaxNumber: 1
       cellsPerPod:
         cellType: DGX2-V100
@@ -731,8 +733,8 @@ pod33:
   podRootGroup:
     name: group24
     withinOneCell: ""
-    pods:
-    - podMinNumber: 2
+    pod:
+      podMinNumber: 2
       podMaxNumber: 2
       cellsPerPod:
         cellType: DGX2-V100
@@ -751,8 +753,8 @@ pod34:
   podRootGroup:
     name: group25
     withinOneCell: ""
-    pods:
-    - podMinNumber: 1
+    pod:
+      podMinNumber: 1
       podMaxNumber: 1
       cellsPerPod:
         cellType: DGX2-V100
@@ -771,8 +773,8 @@ pod35:
   podRootGroup:
     name: group26
     withinOneCell: ""
-    pods:
-    - podMinNumber: 2
+    pod:
+      podMinNumber: 2
       podMaxNumber: 2
       cellsPerPod:
         cellType: DGX2-V100
@@ -791,8 +793,8 @@ pod36:
   podRootGroup:
     name: group1
     withinOneCell: ""
-    pods:
-    - podMinNumber: 1
+    pod:
+      podMinNumber: 1
       podMaxNumber: 1
       cellsPerPod:
         cellType: ""
@@ -811,8 +813,8 @@ pod37:
   podRootGroup:
     name: group1
     withinOneCell: ""
-    pods:
-    - podMinNumber: 1
+    pod:
+      podMinNumber: 1
       podMaxNumber: 1
       cellsPerPod:
         cellType: DGX2-V100
@@ -831,8 +833,8 @@ pod38:
   podRootGroup:
     name: group2
     withinOneCell: ""
-    pods:
-    - podMinNumber: 1
+    pod:
+      podMinNumber: 1
       podMaxNumber: 1
       cellsPerPod:
         cellType: DGX2-V100
@@ -851,8 +853,8 @@ pod39:
   podRootGroup:
     name: group27
     withinOneCell: ""
-    pods:
-    - podMinNumber: 2
+    pod:
+      podMinNumber: 2
       podMaxNumber: 2
       cellsPerPod:
         cellType: DGX2-V100
@@ -871,8 +873,8 @@ pod40:
   podRootGroup:
     name: group28
     withinOneCell: ""
-    pods:
-    - podMinNumber: 1
+    pod:
+      podMinNumber: 1
       podMaxNumber: 1
       cellsPerPod:
         cellType: DGX2-V100
@@ -891,8 +893,8 @@ pod41:
   podRootGroup:
     name: group29
     withinOneCell: ""
-    pods:
-    - podMinNumber: 4
+    pod:
+      podMinNumber: 4
       podMaxNumber: 4
       cellsPerPod:
         cellType: DGX2-V100
@@ -911,8 +913,8 @@ pod42:
   podRootGroup:
     name: group30
     withinOneCell: ""
-    pods:
-    - podMinNumber: 1
+    pod:
+      podMinNumber: 1
       podMaxNumber: 1
       cellsPerPod:
         cellType: DGX2-V100
@@ -931,8 +933,8 @@ pod43:
   podRootGroup:
     name: group31
     withinOneCell: ""
-    pods:
-    - podMinNumber: 1
+    pod:
+      podMinNumber: 1
       podMaxNumber: 1
       cellsPerPod:
         cellType: DGX2-V100
@@ -951,8 +953,8 @@ pod44:
   podRootGroup:
     name: group32
     withinOneCell: ""
-    pods:
-    - podMinNumber: 1
+    pod:
+      podMinNumber: 1
       podMaxNumber: 1
       cellsPerPod:
         cellType: DGX2-V100
@@ -971,8 +973,8 @@ pod45:
   podRootGroup:
     name: group33
     withinOneCell: ""
-    pods:
-    - podMinNumber: 1
+    pod:
+      podMinNumber: 1
       podMaxNumber: 1
       cellsPerPod:
         cellType: DGX2-V100
@@ -991,8 +993,8 @@ pod46:
   podRootGroup:
     name: group34
     withinOneCell: ""
-    pods:
-    - podMinNumber: 1
+    pod:
+      podMinNumber: 1
       podMaxNumber: 1
       cellsPerPod:
         cellType: DGX2-V100

@@ -23,8 +23,8 @@
       podRootGroup:
         name: group1
         withinOneCell: ""
-        pods:
-        - podMinNumber: 1
+        pod:
+          podMinNumber: 1
           podMaxNumber: 1
           cellsPerPod:
             cellType: V100
@@ -53,8 +53,8 @@
       podRootGroup:
         name: group2
         withinOneCell: ""
-        pods:
-        - podMinNumber: 1
+        pod:
+          podMinNumber: 1
           podMaxNumber: 1
           cellsPerPod:
             cellType: V100
@@ -83,8 +83,8 @@
       podRootGroup:
         name: group3
         withinOneCell: ""
-        pods:
-        - podMinNumber: 4
+        pod:
+          podMinNumber: 4
           podMaxNumber: 4
           cellsPerPod:
             cellType: V100-SOCKET

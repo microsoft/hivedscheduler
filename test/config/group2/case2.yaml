@@ -14,8 +14,8 @@
       podRootGroup:
         name: group1
         withinOneCell: ""
-        pods:
-        - podMinNumber: 1
+        pod:
+          podMinNumber: 1
           podMaxNumber: 1
           cellsPerPod:
             cellType: K80
@@ -44,8 +44,8 @@
       podRootGroup:
         name: group2
         withinOneCell: ""
-        pods:
-        - podMinNumber: 1
+        pod:
+          podMinNumber: 1
           podMaxNumber: 1
           cellsPerPod:
             cellType: K80

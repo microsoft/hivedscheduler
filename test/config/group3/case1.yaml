@@ -23,8 +23,8 @@
       podRootGroup:
         name: group1
         withinOneCell: V100-RACK
-        pods:
-        - podMinNumber: 11
+        pod:
+          podMinNumber: 11
           podMaxNumber: 11
           cellsPerPod:
             cellType: V100
@@ -53,8 +53,8 @@
       podRootGroup:
         name: group2
         withinOneCell: ""
-        pods:
-        - podMinNumber: 1
+        pod:
+          podMinNumber: 1
           podMaxNumber: 1
           cellsPerPod:
             cellType: V100
@@ -83,8 +83,8 @@
       podRootGroup:
         name: group3
         withinOneCell: ""
-        pods:
-        - podMinNumber: 1
+        pod:
+          podMinNumber: 1
           podMaxNumber: 1
           cellsPerPod:
             cellType: V100
@@ -119,31 +119,31 @@
         childGroups:
           - name: multi_cascade_subgroup1
             withinOneCell: V100-NODE
-            pods:
-              - podMinNumber: 3
-                podMaxNumber: 3
-                cellsPerPod:
-                  cellType: V100-SWITCH
-                  cellNumber: 1
-                containsCurrentPod: true
+            pod:
+              podMinNumber: 3
+              podMaxNumber: 3
+              cellsPerPod:
+                cellType: V100-SWITCH
+                cellNumber: 1
+              containsCurrentPod: true
           - name: multi_cascade_subgroup2
             withinOneCell: V100-NODE
-            pods:
-              - podMinNumber: 3
-                podMaxNumber: 3
-                cellsPerPod:
-                  cellType: V100-SWITCH
-                  cellNumber: 1
-                containsCurrentPod: false
+            pod:
+              podMinNumber: 3
+              podMaxNumber: 3
+              cellsPerPod:
+                cellType: V100-SWITCH
+                cellNumber: 1
+              containsCurrentPod: false
           - name: multi_cascade_subgroup3
             withinOneCell: V100-NODE
-            pods:
-              - podMinNumber: 2
-                podMaxNumber: 2
-                cellsPerPod:
-                  cellType: V100-SWITCH
-                  cellNumber: 1
-                containsCurrentPod: false
+            pod:
+              podMinNumber: 2
+              podMaxNumber: 2
+              cellsPerPod:
+                cellType: V100-SWITCH
+                cellNumber: 1
+              containsCurrentPod: false
 - method: AssertPodWait
   parameters:
     podName: multi_cascade_subgroup1_pod1
