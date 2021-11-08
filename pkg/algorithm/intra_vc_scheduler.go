@@ -38,7 +38,7 @@ type intraVCScheduler interface {
 	getNonPinnedPreassignedCells() map[CellChain]ChainCellList
 	getPinnedCells() map[api.PinnedCellId]ChainCellList
 
-	// Schedule a pod group inside a VC. We use skuScheduler.
+	// Schedule a pod group inside a VC. We use topologyGuaranteeScheduler.
 	schedule(PodGroupSchedulingRequest) (PodGroupVirtualPlacement, string)
 }
 
@@ -46,12 +46,12 @@ type defaultIntraVCScheduler struct {
 	nonPinnedFullCellList     map[CellChain]ChainCellList
 	nonPinnedPreassignedCells map[CellChain]ChainCellList
 	pinnedCells               map[api.PinnedCellId]ChainCellList
-	// Currently we create a skuScheduler for each cluster view (each chain, each pinned cell).
+	// Currently we create a topologyGuaranteeScheduler for each cluster view (each chain, each pinned cell).
 	// We plan to support multiple cluster views in one scheduler, and to support schedule pods
 	// across different cluster views.
 	// TODO: Support a pod group can relax to be allocated across multiple chains.
-	nonPinnedCellSchedulers map[CellChain]*skuScheduler
-	pinnedCellSchedulers    map[api.PinnedCellId]*skuScheduler
+	nonPinnedCellSchedulers map[CellChain]*topologyGuaranteeScheduler
+	pinnedCellSchedulers    map[api.PinnedCellId]*topologyGuaranteeScheduler
 }
 
 func newDefaultIntraVCScheduler(
@@ -61,13 +61,13 @@ func newDefaultIntraVCScheduler(
 	leafCellNums map[CellChain]map[CellLevel]int32,
 	cellLevels map[CellChain]map[api.CellType]CellLevel) *defaultIntraVCScheduler {
 
-	snr := map[CellChain]*skuScheduler{}
-	sr := map[api.PinnedCellId]*skuScheduler{}
+	snr := map[CellChain]*topologyGuaranteeScheduler{}
+	sr := map[api.PinnedCellId]*topologyGuaranteeScheduler{}
 	for chain, ccl := range nonPinnedFullList {
-		snr[chain] = NewSkuScheduler(ccl, leafCellNums[chain], cellLevels[chain], true)
+		snr[chain] = NewTopologyGuaranteeScheduler(ccl, leafCellNums[chain], cellLevels[chain], true)
 	}
 	for pid, ccl := range pinnedList {
-		sr[pid] = NewSkuScheduler(ccl, leafCellNums[ccl[CellLevel(1)][0].GetChain()], cellLevels[ccl[CellLevel(1)][0].GetChain()], true)
+		sr[pid] = NewTopologyGuaranteeScheduler(ccl, leafCellNums[ccl[CellLevel(1)][0].GetChain()], cellLevels[ccl[CellLevel(1)][0].GetChain()], true)
 	}
 	return &defaultIntraVCScheduler{
 		nonPinnedFullCellList:     nonPinnedFullList,

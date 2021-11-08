@@ -32,7 +32,7 @@ import (
 
 // skuCell type for selected level cell in virtual cluster view
 type skuCell struct {
-	cell                          Cell            // within cell level, maybe higher or lower than node level
+	cell                          Cell            // within cell, whose level maybe higher or lower than node level
 	freeLeafCellNumAtPriority     int32           // free leaf cell number at the priority of the pod to be scheduled (lower priority considered as free)
 	usedLeafCellNumAtPriority     int32           // used leaf cell number at the priority of the pod to be scheduler
 	usedLeafCellNumHigherPriority int32           // used leaf cell number by higher priorities than the pod to be scheduler
@@ -43,10 +43,11 @@ type skuCell struct {
 // virtual cluster view
 type skuClusterView []*skuCell
 
-// skuScheduler can schedule a pod group of pods with arbitrary cell types on a cluster view.
+// topologyGuaranteeScheduler can schedule a group of pods with guaranteed affinity requirement (withinOneCell, e.g., within one rack),
+// and each pod can specify arbitrary cell types (e.g., non-leaf cell).
 // It first tries to place pod group without preemption, then enable preemption if schedule failed.
 // For each try, it will find within cells for each pod group, then find cells for each pods with better affinity.
-type skuScheduler struct {
+type topologyGuaranteeScheduler struct {
 	// cell list for each level in a chain.
 	chainCellList ChainCellList
 	// leaf cell number at each level in the cell hierarchy. we use this to
@@ -63,14 +64,14 @@ type skuScheduler struct {
 	crossPriorityPack bool
 }
 
-// NewSkuScheduler initializes the scheduler
-func NewSkuScheduler(
+// NewTopologyGuaranteeScheduler initializes the scheduler
+func NewTopologyGuaranteeScheduler(
 	chainCellList ChainCellList,
 	levelLeafCellNum map[CellLevel]int32,
 	cellLevels map[api.CellType]CellLevel,
-	crossPriorityPack bool) *skuScheduler {
+	crossPriorityPack bool) *topologyGuaranteeScheduler {
 
-	return &skuScheduler{
+	return &topologyGuaranteeScheduler{
 		chainCellList:     chainCellList,
 		levelLeafCellNum:  levelLeafCellNum,
 		cellLevels:        cellLevels,
@@ -78,7 +79,7 @@ func NewSkuScheduler(
 	}
 }
 
-func (s *skuScheduler) Schedule(
+func (s *topologyGuaranteeScheduler) Schedule(
 	podRootGroup *apiv2.PodGroupSpec,
 	priority CellPriority) (
 	placement PodGroupPlacement,
@@ -117,7 +118,7 @@ func (s *skuScheduler) Schedule(
 	return placement, failedReason
 }
 
-func (s *skuScheduler) sortPodGroup(podGroup *apiv2.PodGroupSpec) {
+func (s *topologyGuaranteeScheduler) sortPodGroup(podGroup *apiv2.PodGroupSpec) {
 	sort.SliceStable(podGroup.Pods, func(i, j int) bool {
 		return s.countLeafCellNums(podGroup.Pods[i]) > s.countLeafCellNums(podGroup.Pods[j])
 	})
@@ -137,7 +138,7 @@ func (s *skuScheduler) sortPodGroup(podGroup *apiv2.PodGroupSpec) {
 	}
 }
 
-func (s *skuScheduler) countLeafCellNums(x interface{}) int32 {
+func (s *topologyGuaranteeScheduler) countLeafCellNums(x interface{}) int32 {
 	count := int32(0)
 	switch p := x.(type) {
 	case apiv2.PodGroupMemberSpec:
@@ -156,7 +157,7 @@ func (s *skuScheduler) countLeafCellNums(x interface{}) int32 {
 	return count
 }
 
-func (s *skuScheduler) findCellsForPodGroup(
+func (s *topologyGuaranteeScheduler) findCellsForPodGroup(
 	podGroup *apiv2.PodGroupSpec,
 	priority CellPriority,
 	within *skuCell,
@@ -199,7 +200,7 @@ func (s *skuScheduler) findCellsForPodGroup(
 	return placement, failedReason
 }
 
-func (s *skuScheduler) findCellsForPods(
+func (s *topologyGuaranteeScheduler) findCellsForPods(
 	pods []apiv2.PodGroupMemberSpec,
 	priority CellPriority,
 	within *skuCell,
@@ -245,19 +246,20 @@ func (s *skuScheduler) findCellsForPods(
 	return placement, failedReason
 }
 
-func (s *skuScheduler) findCellsForSinglePod(
+// findCellsForSinglePod finds a set of cells with the best affinity in a node for a pod in best effort.
+func (s *topologyGuaranteeScheduler) findCellsForSinglePod(
 	pod apiv2.PodGroupMemberSpec,
 	priority CellPriority,
-	within *skuCell,
+	withinCell *skuCell,
 	allocatedCells CellList) CellList {
 
 	currLevel := s.cellLevels[pod.CellsPerPod.CellType]
-	freeCells, preemptibleCells := CellList{}, CellList{}
-	freeCells, preemptibleCells = getFreeCellsAtLevel(
-		within.cell, currLevel, priority, allocatedCells, freeCells, preemptibleCells)
+	availableCells, preemptibleCells := CellList{}, CellList{}
+	availableCells, preemptibleCells = getFreeCellsAtLevel(
+		withinCell.cell, currLevel, priority, allocatedCells, availableCells, preemptibleCells)
 	// free leaf cells will be used first (before preemptible leaf cells)
-	freeCells = append(freeCells, preemptibleCells...)
-	if pod.CellsPerPod.CellNumber > int32(len(freeCells)) {
+	availableCells = append(availableCells, preemptibleCells...)
+	if pod.CellsPerPod.CellNumber > int32(len(availableCells)) {
 		return nil
 	}
 
@@ -284,8 +286,8 @@ func (s *skuScheduler) findCellsForSinglePod(
 	}
 
 	for {
-		for freeCellIndex < int32(len(freeCells)) {
-			freeCell = freeCells[freeCellIndex]
+		for freeCellIndex < int32(len(availableCells)) {
+			freeCell = availableCells[freeCellIndex]
 			currentCellIndices[searchCellIndex] = freeCellIndex
 			if searchCellIndex == 0 {
 				currentAffinity[searchCellIndex] = freeCell
@@ -303,7 +305,7 @@ func (s *skuScheduler) findCellsForSinglePod(
 				foundOptimalAffinity := false
 				bestAffinity, foundOptimalAffinity = checkOptimalAffinityForCells(
 					currentAffinity[len(currentAffinity)-1].GetLevel(),
-					freeCells,
+					availableCells,
 					currentCellIndices,
 					bestAffinity,
 					bestAffinityCells,
@@ -322,7 +324,7 @@ func (s *skuScheduler) findCellsForSinglePod(
 		if searchCellIndex < 0 {
 			if bestAffinity == highestLevel {
 				// Unreachable
-				panic(fmt.Sprintf("Assert Failure: failed to allocate %v cells in cell %v", pod.CellsPerPod.CellNumber, within.address))
+				panic(fmt.Sprintf("Assert Failure: failed to allocate %v cells in cell %v", pod.CellsPerPod.CellNumber, withinCell.address))
 			}
 			return bestAffinityCells
 		}
@@ -330,7 +332,7 @@ func (s *skuScheduler) findCellsForSinglePod(
 	}
 }
 
-func (s *skuScheduler) getNodeLevel() CellLevel {
+func (s *topologyGuaranteeScheduler) getNodeLevel() CellLevel {
 	for l := CellLevel(1); l <= CellLevel(len(s.chainCellList)); l++ {
 		if s.chainCellList[l][0].AtOrHigherThanNode() {
 			return l
@@ -345,14 +347,14 @@ func getFreeCellsAtLevel(
 	level CellLevel,
 	priority CellPriority,
 	allocatedCells CellList,
-	freeCells CellList,
+	availableCells CellList,
 	preemptibleCells CellList) (
 	CellList, CellList) {
 
 	if cell.GetLevel() > level {
 		for _, c := range cell.GetChildren() {
-			freeCells, preemptibleCells = getFreeCellsAtLevel(
-				c, level, priority, allocatedCells, freeCells, preemptibleCells)
+			availableCells, preemptibleCells = getFreeCellsAtLevel(
+				c, level, priority, allocatedCells, availableCells, preemptibleCells)
 		}
 	} else if cell.GetLevel() == level {
 		isAllocated := false
@@ -364,20 +366,20 @@ func getFreeCellsAtLevel(
 		}
 		if !isAllocated {
 			if cell.GetPriority() == freePriority {
-				freeCells = append(freeCells, cell)
+				availableCells = append(availableCells, cell)
 			} else if cell.GetPriority() < priority {
 				preemptibleCells = append(preemptibleCells, cell)
 			}
 		}
 	}
-	return freeCells, preemptibleCells
+	return availableCells, preemptibleCells
 }
 
 // checkOptimalAffinityForCells checks if the currently picked cells have the lowest LCA.
 // It also checks if the solution is optimal (if the leaf cells are all buddies).
 func checkOptimalAffinityForCells(
 	affinity CellLevel,
-	freeCells CellList,
+	availableCells CellList,
 	currentCellIndices []int32,
 	bestAffinity CellLevel,
 	bestAffinityCells CellList,
@@ -387,7 +389,7 @@ func checkOptimalAffinityForCells(
 	if affinity < bestAffinity {
 		copy(bestAffinityCellIndices, currentCellIndices)
 		for i := 0; i < len(currentCellIndices); i++ {
-			bestAffinityCells[i] = freeCells[currentCellIndices[i]]
+			bestAffinityCells[i] = availableCells[currentCellIndices[i]]
 		}
 		if affinity == optimalAffinity {
 			return affinity, true
@@ -398,16 +400,18 @@ func checkOptimalAffinityForCells(
 	return bestAffinity, false
 }
 
-func (s *skuScheduler) createSkuClusterView(
-	within *skuCell,
+// createSkuClusterView returns list of sku cells within
+// the given cell, level and priority in virtual cluster view.
+func (s *topologyGuaranteeScheduler) createSkuClusterView(
+	withinCell *skuCell,
 	withinLevel CellLevel,
 	priority CellPriority) skuClusterView {
 
 	cv := skuClusterView{}
 	for l := withinLevel; l >= CellLevel(1); l-- {
 		for _, c := range s.chainCellList[l] {
-			if (within != nil && !isAncestor(within.cell, c)) ||
-				cv.contains(ancestorNoHigherThanLevel(withinLevel, c)) {
+			if (withinCell != nil && !isAncestor(withinCell.cell, c)) ||
+				cv.contains(ancestorNoLowerThanLevel(withinLevel, c)) {
 				continue
 			}
 			cell := &skuCell{
@@ -450,7 +454,7 @@ func (s *skuScheduler) createSkuClusterView(
 	return cv
 }
 
-// Len method for sorting sku cells in cluster view
+// Len method for sorting sku cells in cluster view.
 func (cv skuClusterView) Len() int {
 	return len(cv)
 }
@@ -484,7 +488,7 @@ func (cv skuClusterView) Less(i, j int) bool {
 	return true
 }
 
-// Swap method for sorting sku cells in cluster view
+// Swap method for sorting sku cells in cluster view.
 func (cv skuClusterView) Swap(i int, j int) {
 	cv[i], cv[j] = cv[j], cv[i]
 }
@@ -498,14 +502,18 @@ func (cv skuClusterView) contains(cell Cell) bool {
 	return false
 }
 
-func ancestorNoHigherThanLevel(withinLevel CellLevel, cell Cell) Cell {
+// ancestorNoLowerThanLevel returns the ancestor of the given cell
+// and its level is no lower than given cell's level.
+func ancestorNoLowerThanLevel(withinLevel CellLevel, cell Cell) Cell {
 	if cell.GetLevel() >= withinLevel || cell.GetParent() == nil {
 		return cell
 	} else {
-		return ancestorNoHigherThanLevel(withinLevel, cell.GetParent())
+		return ancestorNoLowerThanLevel(withinLevel, cell.GetParent())
 	}
 }
 
+// isAncestor determines whether the given ancestor
+// is the ancestor of the given cell.
 func isAncestor(ancestor Cell, cell Cell) bool {
 	if CellEqual(ancestor, cell) {
 		return true

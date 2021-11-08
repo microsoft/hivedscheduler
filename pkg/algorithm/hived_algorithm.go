@@ -36,13 +36,13 @@ import (
 )
 
 // HivedAlgorithm implements an internal.SchedulerAlgorithm. It schedules pod groups using the algorithm of HiveD.
-// Note that the skuScheduler used in this struct is not another implementation of SchedulerAlgorithm;
+// Note that the topologyGuaranteeScheduler used in this struct is not another implementation of SchedulerAlgorithm;
 // that is a specific algorithm for pod placement, used in intra-VC scheduling and opportunistic pod scheduling.
 type HivedAlgorithm struct {
 	// scheduler in each VC
 	vcSchedulers map[api.VirtualClusterName]intraVCScheduler
 	// scheduler for opportunistic pods
-	opportunisticSchedulers map[CellChain]*skuScheduler
+	opportunisticSchedulers map[CellChain]*topologyGuaranteeScheduler
 	// ChainCellLists of physical cells of each cell chain (including the children of the free cells)
 	fullCellList map[CellChain]ChainCellList
 	// ChainCellLists of free physical cells of each cell chain (used in buddy alloc)
@@ -101,9 +101,9 @@ type HivedAlgorithm struct {
 	leafCellChains map[string][]CellChain
 	// map each within cell type to all chains that contain this type
 	cellChains map[string][]CellChain
-	// map each level in a chain to the specific cell type name
+	// map each level in a chain to the specific cell cell type
 	cellTypes map[CellChain]map[CellLevel]api.CellType
-	// map each type name in a chain to the specific cell level
+	// map each cell type in a chain to the specific cell level
 	cellLevels map[CellChain]map[api.CellType]CellLevel
 	// cluster status exposed to external
 	apiClusterStatus api.ClusterStatus
@@ -118,7 +118,7 @@ func NewHivedAlgorithm(sConfig *api.Config) *HivedAlgorithm {
 
 	h := &HivedAlgorithm{
 		vcSchedulers:            map[api.VirtualClusterName]intraVCScheduler{},
-		opportunisticSchedulers: map[CellChain]*skuScheduler{},
+		opportunisticSchedulers: map[CellChain]*topologyGuaranteeScheduler{},
 		fullCellList:            fullPcl,
 		freeCellList:            freePcl,
 		vcFreeCellNum:           vcFreeCellNum,
@@ -145,7 +145,7 @@ func NewHivedAlgorithm(sConfig *api.Config) *HivedAlgorithm {
 			nonPinnedFullVcl[vcName], nonPinnedFreeVcl[vcName], pinnedVcl[vcName], leafCellNums, cellLevels)
 	}
 	for chain, ccl := range h.fullCellList {
-		h.opportunisticSchedulers[chain] = NewSkuScheduler(ccl, leafCellNums[chain], cellLevels[chain], false)
+		h.opportunisticSchedulers[chain] = NewTopologyGuaranteeScheduler(ccl, leafCellNums[chain], cellLevels[chain], false)
 	}
 	h.initCellNums()
 	h.initAPIClusterStatus()

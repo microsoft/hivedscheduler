@@ -47,8 +47,8 @@ type PodSchedulingSpec struct {
 type PodGroupSpec struct {
 	Name          string               `yaml:"name"`          // pod group name
 	WithinOneCell api.CellType         `yaml:"withinOneCell"` // within cell for all cells in current group, e.g., two GPU-cell within one numa-cell, two node-cell within one rack-cell
-	Pods          []PodGroupMemberSpec `yaml:"pods"`          // pod list for current group, any two pods are gang with each other in the groupS
-	ChildGroups   []*PodGroupSpec      `yaml:"childGroups"`   // child group in the hierarchical structure
+	Pods          []PodGroupMemberSpec `yaml:"pods"`          // pod list for current group, any two pods in the group are always gang with each other, Pods are order sensitive
+	ChildGroups   []*PodGroupSpec      `yaml:"childGroups"`   // child group in the hierarchical structure, any two child groups in the list and pods in them are always gang with each other, ChildGroups are order sensitive
 }
 
 // PodGroupMemberSpec represents content of each node in tree stucture pod group.
@@ -62,7 +62,7 @@ type PodGroupMemberSpec struct {
 
 // PodGroupMemberCellSpec represents cell spec for each pod in pod group.
 type PodGroupMemberCellSpec struct {
-	CellType   api.CellType `yaml:"cellType"`   // cell type to be used in pod, differnt group can have differnt cell typs in the same chain, TODO: not support multiple chains yet
+	CellType   api.CellType `yaml:"cellType"`   // cell type to be used in pod, differnt group can have differnt cell types in the same chain, TODO: not support multiple chains yet
 	CellNumber int32        `yaml:"cellNumber"` // cell number to be used in pod, cannot exceed node resource limit
 }
 
