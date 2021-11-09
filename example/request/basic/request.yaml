@@ -246,11 +246,11 @@ spec:
                 podRootGroup:
                   name: demo3within/group_0
                   withinOneCell: K80-NODE
-                  pods: null
+                  pod: null
                   childGroups:
                   - withinOneCell: K80-SWITCH
-                    pods:
-                    - podMinNumber: 1
+                    pod:
+                      podMinNumber: 1
                       podMaxNumber: 1
                       cellsPerPod:
                         cellType: K80
@@ -258,8 +258,8 @@ spec:
                       containsCurrentPod: true
                     childGroups: null
                   - withinOneCell: null
-                    pods:
-                    - podMinNumber: 1
+                    pod:
+                      podMinNumber: 1
                       podMaxNumber: 1
                       cellsPerPod:
                         cellType: K80
@@ -305,11 +305,11 @@ spec:
                 podRootGroup:
                   name: demo3within/group_0
                   withinOneCell: K80-NODE
-                  pods: null
+                  pod: null
                   childGroups:
                   - withinOneCell: K80-SWITCH
-                    pods:
-                    - podMinNumber: 1
+                    pod:
+                      podMinNumber: 1
                       podMaxNumber: 1
                       cellsPerPod:
                         cellType: K80
@@ -317,8 +317,8 @@ spec:
                       containsCurrentPod: false
                     childGroups: null
                   - withinOneCell: null
-                    pods:
-                    - podMinNumber: 1
+                    pod:
+                      podMinNumber: 1
                       podMaxNumber: 1
                       cellsPerPod:
                         cellType: K80
@@ -458,11 +458,11 @@ metadata:
       podRootGroup:
         name: demo3within/group_0
         withinOneCell: K80-NODE
-        pods: null
+        pod: null
         childGroups:
         - withinOneCell: K80-SWITCH
-          pods:
-          - podMinNumber: 1
+          pod:
+            podMinNumber: 1
             podMaxNumber: 1
             cellsPerPod:
               cellType: K80
@@ -470,8 +470,8 @@ metadata:
             containsCurrentPod: true
           childGroups: null
         - withinOneCell: null
-          pods:
-          - podMinNumber: 1
+          pod:
+            podMinNumber: 1
             podMaxNumber: 1
             cellsPerPod:
               cellType: K80
@@ -511,11 +511,11 @@ metadata:
       podRootGroup:
         name: demo3within/group_0
         withinOneCell: K80-NODE
-        pods: null
+        pod: null
         childGroups:
         - withinOneCell: K80-SWITCH
-          pods:
-          - podMinNumber: 1
+          pod:
+            podMinNumber: 1
             podMaxNumber: 1
             cellsPerPod:
               cellType: K80
@@ -523,8 +523,8 @@ metadata:
             containsCurrentPod: false
           childGroups: null
         - withinOneCell: null
-          pods:
-          - podMinNumber: 1
+          pod:
+            podMinNumber: 1
             podMaxNumber: 1
             cellsPerPod:
               cellType: K80

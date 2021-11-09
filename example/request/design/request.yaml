@@ -189,26 +189,32 @@ spec:
               podRootGroup:
                 name: JOBX/GROUP-ABC
                 withinOneCell: null
-                pods:
-                - podMinNumber: 1
-                  podMaxNumber: 1
-                  cellsPerPod:
-                    cellType: DGX2-V100
-                    cellNumber: 16
-                  containsCurrentPod: true
-                - podMinNumber: 3
-                  podMaxNumber: 3
-                  cellsPerPod:
-                    cellType: DGX2-V100
-                    cellNumber: 8
-                  containsCurrentPod: false
-                - podMinNumber: 1
-                  podMaxNumber: 1
-                  cellsPerPod:
-                    cellType: DGX2-V100
-                    cellNumber: 4
-                  containsCurrentPod: false
-                childGroups: null
+                pod: null
+                childGroups:
+                - pod:
+                    podMinNumber: 1
+                    podMaxNumber: 1
+                    cellsPerPod:
+                      cellType: DGX2-V100
+                      cellNumber: 16
+                    containsCurrentPod: true
+                  childGroups: null
+                - pod:
+                    podMinNumber: 3
+                    podMaxNumber: 3
+                    cellsPerPod:
+                      cellType: DGX2-V100
+                      cellNumber: 8
+                    containsCurrentPod: false
+                  childGroups: null
+                - pod:
+                    podMinNumber: 1
+                    podMaxNumber: 1
+                    cellsPerPod:
+                      cellType: DGX2-V100
+                      cellNumber: 4
+                    containsCurrentPod: false
+                  childGroups: null
         spec:
           # See ../../run/deploy.yaml for why and how to specify the schedulerName.
           schedulerName: hivedscheduler
@@ -258,26 +264,32 @@ spec:
               podRootGroup:
                 name: JOBX/GROUP-ABC
                 withinOneCell: null
-                pods:
-                - podMinNumber: 1
-                  podMaxNumber: 1
-                  cellsPerPod:
-                    cellType: DGX2-V100
-                    cellNumber: 16
-                  containsCurrentPod: false
-                - podMinNumber: 3
-                  podMaxNumber: 3
-                  cellsPerPod:
-                    cellType: DGX2-V100
-                    cellNumber: 8
-                  containsCurrentPod: true
-                - podMinNumber: 1
-                  podMaxNumber: 1
-                  cellsPerPod:
-                    cellType: DGX2-V100
-                    cellNumber: 4
-                  containsCurrentPod: false
-                childGroups: null
+                pod: null
+                childGroups:
+                - pod:
+                    podMinNumber: 1
+                    podMaxNumber: 1
+                    cellsPerPod:
+                      cellType: DGX2-V100
+                      cellNumber: 16
+                    containsCurrentPod: false
+                  childGroups: null
+                - pod:
+                    podMinNumber: 3
+                    podMaxNumber: 3
+                    cellsPerPod:
+                      cellType: DGX2-V100
+                      cellNumber: 8
+                    containsCurrentPod: true
+                  childGroups: null
+                - pod:
+                    podMinNumber: 1
+                    podMaxNumber: 1
+                    cellsPerPod:
+                      cellType: DGX2-V100
+                      cellNumber: 4
+                    containsCurrentPod: false
+                  childGroups: null
         spec:
           schedulerName: hivedscheduler
           priority: 1000
@@ -307,26 +319,32 @@ spec:
               podRootGroup:
                 name: JOBX/GROUP-ABC
                 withinOneCell: null
-                pods:
-                - podMinNumber: 1
-                  podMaxNumber: 1
-                  cellsPerPod:
-                    cellType: DGX2-V100
-                    cellNumber: 16
-                  containsCurrentPod: false
-                - podMinNumber: 3
-                  podMaxNumber: 3
-                  cellsPerPod:
-                    cellType: DGX2-V100
-                    cellNumber: 8
-                  containsCurrentPod: false
-                - podMinNumber: 1
-                  podMaxNumber: 1
-                  cellsPerPod:
-                    cellType: DGX2-V100
-                    cellNumber: 4
-                  containsCurrentPod: true
-                childGroups: null
+                pod: null
+                childGroups:
+                - pod:
+                    podMinNumber: 1
+                    podMaxNumber: 1
+                    cellsPerPod:
+                      cellType: DGX2-V100
+                      cellNumber: 16
+                    containsCurrentPod: false
+                  childGroups: null
+                - pod:
+                    podMinNumber: 3
+                    podMaxNumber: 3
+                    cellsPerPod:
+                      cellType: DGX2-V100
+                      cellNumber: 8
+                    containsCurrentPod: false
+                  childGroups: null
+                - pod:
+                    podMinNumber: 1
+                    podMaxNumber: 1
+                    cellsPerPod:
+                      cellType: DGX2-V100
+                      cellNumber: 4
+                    containsCurrentPod: true
+                  childGroups: null
         spec:
           schedulerName: hivedscheduler
           priority: 1000
@@ -356,8 +374,8 @@ spec:
               podRootGroup:
                 name: JOBX/GROUP-D
                 withinOneCell: null
-                pods:
-                - podMinNumber: 2
+                pod:
+                  podMinNumber: 2
                   podMaxNumber: 2
                   cellsPerPod:
                     cellType: null
@@ -422,8 +440,8 @@ spec:
               podRootGroup:
                 name: JOBX/GROUP-F
                 withinOneCell: null
-                pods:
-                - podMinNumber: 2
+                pod:
+                  podMinNumber: 2
                   podMaxNumber: 2
                   cellsPerPod:
                     cellType: null
@@ -459,20 +477,24 @@ spec:
               podRootGroup:
                 name: JOBX/GROUP-GH
                 withinOneCell: 2-DGX2-V100-NODE
-                pods:
-                - podMinNumber: 2
-                  podMaxNumber: 2
-                  cellsPerPod:
-                    cellType: DGX2-V100-NODE-8-GPU
-                    cellNumber: 1
-                  containsCurrentPod: true
-                - podMinNumber: 4
-                  podMaxNumber: 4
-                  cellsPerPod:
-                    cellType: DGX2-V100-NODE-4-GPU
-                    cellNumber: 1
-                  containsCurrentPod: false
-                childGroups: null
+                pod: null
+                childGroups:
+                - pod:
+                    podMinNumber: 2
+                    podMaxNumber: 2
+                    cellsPerPod:
+                      cellType: DGX2-V100-NODE-8-GPU
+                      cellNumber: 1
+                    containsCurrentPod: true
+                  childGroups: null
+                - pod:
+                    podMinNumber: 4
+                    podMaxNumber: 4
+                    cellsPerPod:
+                      cellType: DGX2-V100-NODE-4-GPU
+                      cellNumber: 1
+                    containsCurrentPod: false
+                  childGroups: null
         spec:
           schedulerName: hivedscheduler
           priority: 1000
@@ -502,20 +524,24 @@ spec:
               podRootGroup:
                 name: JOBX/GROUP-GH
                 withinOneCell: 2-DGX2-V100-NODE
-                pods:
-                - podMinNumber: 2
-                  podMaxNumber: 2
-                  cellsPerPod:
-                    cellType: DGX2-V100-NODE-8-GPU
-                    cellNumber: 1
-                  containsCurrentPod: false
-                - podMinNumber: 4
-                  podMaxNumber: 4
-                  cellsPerPod:
-                    cellType: DGX2-V100-NODE-4-GPU
-                    cellNumber: 1
-                  containsCurrentPod: true
-                childGroups: null
+                pod: null
+                childGroups:
+                - pod:
+                    podMinNumber: 2
+                    podMaxNumber: 2
+                    cellsPerPod:
+                      cellType: DGX2-V100-NODE-8-GPU
+                      cellNumber: 1
+                    containsCurrentPod: false
+                  childGroups: null
+                - pod:
+                    podMinNumber: 4
+                    podMaxNumber: 4
+                    cellsPerPod:
+                      cellType: DGX2-V100-NODE-4-GPU
+                      cellNumber: 1
+                    containsCurrentPod: true
+                  childGroups: null
         spec:
           schedulerName: hivedscheduler
           priority: 1000
@@ -549,26 +575,32 @@ metadata:
       podRootGroup:
         name: JOBX/GROUP-ABC
         withinOneCell: null
-        pods:
-        - podMinNumber: 1
-          podMaxNumber: 1
-          cellsPerPod:
-            cellType: DGX2-V100
-            cellNumber: 16
-          containsCurrentPod: true
-        - podMinNumber: 3
-          podMaxNumber: 3
-          cellsPerPod:
-            cellType: DGX2-V100
-            cellNumber: 8
-          containsCurrentPod: false
-        - podMinNumber: 1
-          podMaxNumber: 1
-          cellsPerPod:
-            cellType: DGX2-V100
-            cellNumber: 4
-          containsCurrentPod: false
-        childGroups: null
+        pod: null
+        childGroups:
+        - pod:
+            podMinNumber: 1
+            podMaxNumber: 1
+            cellsPerPod:
+              cellType: DGX2-V100
+              cellNumber: 16
+            containsCurrentPod: true
+          childGroups: null
+        - pod:
+            podMinNumber: 3
+            podMaxNumber: 3
+            cellsPerPod:
+              cellType: DGX2-V100
+              cellNumber: 8
+            containsCurrentPod: false
+          childGroups: null
+        - pod:
+            podMinNumber: 1
+            podMaxNumber: 1
+            cellsPerPod:
+              cellType: DGX2-V100
+              cellNumber: 4
+            containsCurrentPod: false
+          childGroups: null
 spec:
   schedulerName: hivedscheduler
   priority: 1000
@@ -599,26 +631,32 @@ metadata:
       podRootGroup:
         name: JOBX/GROUP-ABC
         withinOneCell: null
-        pods:
-        - podMinNumber: 1
-          podMaxNumber: 1
-          cellsPerPod:
-            cellType: DGX2-V100
-            cellNumber: 16
-          containsCurrentPod: false
-        - podMinNumber: 3
-          podMaxNumber: 3
-          cellsPerPod:
-            cellType: DGX2-V100
-            cellNumber: 8
-          containsCurrentPod: true
-        - podMinNumber: 1
-          podMaxNumber: 1
-          cellsPerPod:
-            cellType: DGX2-V100
-            cellNumber: 4
-          containsCurrentPod: false
-        childGroups: null
+        pod: null
+        childGroups:
+        - pod:
+            podMinNumber: 1
+            podMaxNumber: 1
+            cellsPerPod:
+              cellType: DGX2-V100
+              cellNumber: 16
+            containsCurrentPod: false
+          childGroups: null
+        - pod:
+            podMinNumber: 3
+            podMaxNumber: 3
+            cellsPerPod:
+              cellType: DGX2-V100
+              cellNumber: 8
+            containsCurrentPod: true
+          childGroups: null
+        - pod:
+            podMinNumber: 1
+            podMaxNumber: 1
+            cellsPerPod:
+              cellType: DGX2-V100
+              cellNumber: 4
+            containsCurrentPod: false
+          childGroups: null
 spec:
   schedulerName: hivedscheduler
   priority: 1000
@@ -648,26 +686,32 @@ metadata:
       podRootGroup:
         name: JOBX/GROUP-ABC
         withinOneCell: null
-        pods:
-        - podMinNumber: 1
-          podMaxNumber: 1
-          cellsPerPod:
-            cellType: DGX2-V100
-            cellNumber: 16
-          containsCurrentPod: false
-        - podMinNumber: 3
-          podMaxNumber: 3
-          cellsPerPod:
-            cellType: DGX2-V100
-            cellNumber: 8
-          containsCurrentPod: false
-        - podMinNumber: 1
-          podMaxNumber: 1
-          cellsPerPod:
-            cellType: DGX2-V100
-            cellNumber: 4
-          containsCurrentPod: true
-        childGroups: null
+        pod: null
+        childGroups:
+        - pod:
+            podMinNumber: 1
+            podMaxNumber: 1
+            cellsPerPod:
+              cellType: DGX2-V100
+              cellNumber: 16
+            containsCurrentPod: false
+          childGroups: null
+        - pod:
+            podMinNumber: 3
+            podMaxNumber: 3
+            cellsPerPod:
+              cellType: DGX2-V100
+              cellNumber: 8
+            containsCurrentPod: false
+          childGroups: null
+        - pod:
+            podMinNumber: 1
+            podMaxNumber: 1
+            cellsPerPod:
+              cellType: DGX2-V100
+              cellNumber: 4
+            containsCurrentPod: true
+          childGroups: null
 spec:
   schedulerName: hivedscheduler
   priority: 1000
@@ -698,8 +742,8 @@ metadata:
       podRootGroup:
         name: JOBX/GROUP-D
         withinOneCell: null
-        pods:
-        - podMinNumber: 2
+        pod:
+          podMinNumber: 2
           podMaxNumber: 2
           cellsPerPod:
             cellType: null
@@ -764,8 +808,8 @@ metadata:
       podRootGroup:
         name: JOBX/GROUP-F
         withinOneCell: null
-        pods:
-        - podMinNumber: 2
+        pod:
+          podMinNumber: 2
           podMaxNumber: 2
           cellsPerPod:
             cellType: null
@@ -802,20 +846,24 @@ metadata:
       podRootGroup:
         name: JOBX/GROUP-GH
         withinOneCell: 2-DGX2-V100-NODE
-        pods:
-        - podMinNumber: 2
-          podMaxNumber: 2
-          cellsPerPod:
-            cellType: DGX2-V100-NODE-8-GPU
-            cellNumber: 1
-          containsCurrentPod: true
-        - podMinNumber: 4
-          podMaxNumber: 4
-          cellsPerPod:
-            cellType: DGX2-V100-NODE-4-GPU
-            cellNumber: 1
-          containsCurrentPod: false
-        childGroups: null
+        pod: null
+        childGroups:
+        - pod:
+            podMinNumber: 2
+            podMaxNumber: 2
+            cellsPerPod:
+              cellType: DGX2-V100-NODE-8-GPU
+              cellNumber: 1
+            containsCurrentPod: true
+          childGroups: null
+        - pod:
+            podMinNumber: 4
+            podMaxNumber: 4
+            cellsPerPod:
+              cellType: DGX2-V100-NODE-4-GPU
+              cellNumber: 1
+            containsCurrentPod: false
+          childGroups: null
 spec:
   schedulerName: hivedscheduler
   priority: 1000
@@ -846,20 +894,24 @@ metadata:
       podRootGroup:
         name: JOBX/GROUP-GH
         withinOneCell: 2-DGX2-V100-NODE
-        pods:
-        - podMinNumber: 2
-          podMaxNumber: 2
-          cellsPerPod:
-            cellType: DGX2-V100-NODE-8-GPU
-            cellNumber: 1
-          containsCurrentPod: false
-        - podMinNumber: 4
-          podMaxNumber: 4
-          cellsPerPod:
-            cellType: DGX2-V100-NODE-4-GPU
-            cellNumber: 1
-          containsCurrentPod: true
-        childGroups: null
+        pod: null
+        childGroups:
+        - pod:
+            podMinNumber: 2
+            podMaxNumber: 2
+            cellsPerPod:
+              cellType: DGX2-V100-NODE-8-GPU
+              cellNumber: 1
+            containsCurrentPod: false
+          childGroups: null
+        - pod:
+            podMinNumber: 4
+            podMaxNumber: 4
+            cellsPerPod:
+              cellType: DGX2-V100-NODE-4-GPU
+              cellNumber: 1
+            containsCurrentPod: true
+          childGroups: null
 spec:
   schedulerName: hivedscheduler
   priority: 1000
