@@ -421,6 +421,27 @@ func checkOptimalAffinityForCells(
 	return bestAffinity, false
 }
 
+// findLCA finds the lowest common ancestor of two cells (nil if they have no LCA).
+func findLCA(lower Cell, higher Cell) Cell {
+	for lower.GetLevel() < higher.GetLevel() {
+		if lower.GetParent() == nil {
+			return nil
+		}
+		lower = lower.GetParent()
+	}
+	if CellEqual(lower, higher) {
+		return lower
+	}
+	for !CellEqual(lower.GetParent(), higher.GetParent()) {
+		if lower.GetParent() == nil || higher.GetParent() == nil {
+			return nil
+		}
+		lower = lower.GetParent()
+		higher = higher.GetParent()
+	}
+	return lower.GetParent()
+}
+
 // createSkuClusterView returns list of sku cells within
 // the given cell, level and priority in virtual cluster view.
 func (s *topologyGuaranteeScheduler) createSkuClusterView(
