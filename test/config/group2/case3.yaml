@@ -1,0 +1,96 @@
+- method: SetNodeToBad
+  parameters:
+    nodeName: 0.0.0.4
+- method: SetNodeToBad
+  parameters:
+    nodeName: 0.0.0.5
+- method: SetNodeToBad
+  parameters:
+    nodeName: 0.0.0.6
+- method: SchedulePod
+  parameters:
+    podName: group1_pod1
+    phase: "Preempting"
+    podGroupSchedulingRequest:
+      version: v2
+      virtualCluster: VC1
+      priority: 1
+      pinnedCellId: ""
+      cellType: V100
+      cellNumber: 1
+      gangReleaseEnable: false
+      lazyPreemptionEnable: false
+      podRootGroup:
+        name: group1
+        withinOneCell: ""
+        pod:
+          podMinNumber: 1
+          podMaxNumber: 1
+          cellsPerPod:
+            cellType: V100
+            cellNumber: 1
+          containsCurrentPod: true
+        childGroups: []
+- method: AssertPodBindResult
+  parameters:
+    podName: group1_pod1
+    expectedResult:
+      node: 0.0.0.3
+      leafCellIsolation: [0]
+- method: SchedulePod
+  parameters:
+    podName: group2_pod1
+    phase: "Preempting"
+    podGroupSchedulingRequest:
+      version: v2
+      virtualCluster: VC2
+      priority: 1
+      pinnedCellId: ""
+      cellType: V100
+      cellNumber: 1
+      gangReleaseEnable: false
+      lazyPreemptionEnable: false
+      podRootGroup:
+        name: group2
+        withinOneCell: ""
+        pod:
+          podMinNumber: 1
+          podMaxNumber: 1
+          cellsPerPod:
+            cellType: V100
+            cellNumber: 1
+          containsCurrentPod: true
+        childGroups: []
+- method: AssertPodBindResult
+  parameters:
+    podName: group2_pod1
+    expectedResult:
+      node: 0.0.0.1
+      leafCellIsolation: [0]
+- method: SchedulePod
+  parameters:
+    podName: group3_pod1
+    phase: "Preempting"
+    podGroupSchedulingRequest:
+      version: v2
+      virtualCluster: VC1
+      priority: 1
+      pinnedCellId: ""
+      cellType: V100-SOCKET
+      cellNumber: 1
+      gangReleaseEnable: false
+      lazyPreemptionEnable: false
+      podRootGroup:
+        name: group3
+        withinOneCell: ""
+        pod:
+          podMinNumber: 4
+          podMaxNumber: 4
+          cellsPerPod:
+            cellType: V100-SOCKET
+            cellNumber: 1
+          containsCurrentPod: true
+        childGroups: []
+- method: AssertPodWait
+  parameters:
+    podName: group3_pod1

@@ -26,16 +26,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
+	"net/http"
+	"strings"
+	"time"
+
 	si "github.com/microsoft/hivedscheduler/pkg/api"
 	"github.com/microsoft/hivedscheduler/pkg/common"
 	"github.com/microsoft/hivedscheduler/pkg/internal"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog"
 	ei "k8s.io/kubernetes/pkg/scheduler/api"
-	"net"
-	"net/http"
-	"strings"
-	"time"
 )
 
 const (
@@ -78,7 +79,7 @@ func NewWebServer(sConfig *si.Config,
 	ws.route(si.FilterPath, ws.serve(ws.serveFilterPath))
 	ws.route(si.BindPath, ws.serve(ws.serveBindPath))
 	ws.route(si.PreemptPath, ws.serve(ws.servePreemptPath))
-	ws.route(si.AffinityGroupsPath, ws.serve(ws.serveAffinityGroups))
+	ws.route(si.PodGroupsPath, ws.serve(ws.servePodGroups))
 	ws.route(si.ClusterStatusPath, ws.serve(ws.serveClusterStatus))
 	ws.route(si.PhysicalClusterPath, ws.serve(ws.servePhysicalClusterStatus))
 	ws.route(si.VirtualClustersPath, ws.serve(ws.serveVirtualClustersStatus))
@@ -239,16 +240,16 @@ func (ws *WebServer) servePreemptPath(w http.ResponseWriter, r *http.Request) {
 	w.Write(common.ToJsonBytes(ws.eHandlers.PreemptHandler(args)))
 }
 
-func (ws *WebServer) serveAffinityGroups(w http.ResponseWriter, r *http.Request) {
-	name := strings.TrimPrefix(r.URL.Path, si.AffinityGroupsPath)
+func (ws *WebServer) servePodGroups(w http.ResponseWriter, r *http.Request) {
+	name := strings.TrimPrefix(r.URL.Path, si.PodGroupsPath)
 	if name == "" {
 		if r.Method == http.MethodGet {
-			w.Write(common.ToJsonBytes(ws.iHandlers.GetAllAffinityGroupsHandler()))
+			w.Write(common.ToJsonBytes(ws.iHandlers.GetAllPodGroupsHandler()))
 			return
 		}
 	} else {
 		if r.Method == http.MethodGet {
-			w.Write(common.ToJsonBytes(ws.iHandlers.GetAffinityGroupHandler(name)))
+			w.Write(common.ToJsonBytes(ws.iHandlers.GetPodGroupHandler(name)))
 			return
 		}
 	}

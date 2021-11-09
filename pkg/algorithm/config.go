@@ -417,10 +417,14 @@ func parseCellChainInfo(
 	chains []CellChain) (
 	map[CellChain]map[CellLevel]int32,
 	map[CellChain]map[CellLevel]api.CellType,
+	map[CellChain]map[api.CellType]CellLevel,
+	map[string][]CellChain,
 	map[string][]CellChain) {
 
 	cellLevelToLeafCellNum := map[CellChain]map[CellLevel]int32{}
 	cellLevelToType := map[CellChain]map[CellLevel]api.CellType{}
+	cellTypeToLevel := map[CellChain]map[api.CellType]CellLevel{}
+	cellTypeToChain := map[string][]CellChain{}
 	leafCellTypeToChain := map[string][]CellChain{}
 	for _, chain := range chains {
 		ce := cellChainElements[api.CellType(chain)]
@@ -428,15 +432,19 @@ func parseCellChainInfo(
 
 		cellLevelToLeafCellNum[chain] = map[CellLevel]int32{}
 		cellLevelToType[chain] = map[CellLevel]api.CellType{}
+		cellTypeToLevel[chain] = map[api.CellType]CellLevel{}
 		ce, ok := cellChainElements[api.CellType(chain)]
 		for ok {
 			cellLevelToLeafCellNum[chain][ce.level] = ce.leafCellNumber
 			cellLevelToType[chain][ce.level] = ce.cellType
+			cellTypeToLevel[chain][ce.cellType] = ce.level
+			if !ce.isMultiNodes {
+				cellTypeToChain[string(ce.cellType)] = append(cellTypeToChain[string(ce.cellType)], chain)
+			}
 			ce, ok = cellChainElements[ce.childCellType]
 		}
 	}
-	return cellLevelToLeafCellNum, cellLevelToType, leafCellTypeToChain
-
+	return cellLevelToLeafCellNum, cellLevelToType, cellTypeToLevel, cellTypeToChain, leafCellTypeToChain
 }
 
 func ParseConfig(sConfig *api.Config) (
@@ -449,7 +457,9 @@ func ParseConfig(sConfig *api.Config) (
 	physicalPinnedCells map[api.VirtualClusterName]map[api.PinnedCellId]*PhysicalCell, // vc:pinnedCellId:PhysicalCell
 	cellLevelToLeafCellNum map[CellChain]map[CellLevel]int32, // chain:level:leafCellNumber
 	leafCellTypeToChain map[string][]CellChain, // leafCellType:[]chain
+	cellTypeToChain map[string][]CellChain, // cellType:[]chain
 	cellLevelToType map[CellChain]map[CellLevel]api.CellType, // chain:level:cellType
+	cellTypeToLevel map[CellChain]map[api.CellType]CellLevel, // chain:cellType:level
 ) {
 
 	cellTypes := sConfig.PhysicalCluster.CellTypes
@@ -471,7 +481,8 @@ func ParseConfig(sConfig *api.Config) (
 	for k := range physicalFullList {
 		cellChains = append(cellChains, k)
 	}
-	cellLevelToLeafCellNum, cellLevelToType, leafCellTypeToChain = parseCellChainInfo(cellChainElements, cellChains)
+	cellLevelToLeafCellNum, cellLevelToType, cellTypeToLevel, cellTypeToChain, leafCellTypeToChain =
+		parseCellChainInfo(cellChainElements, cellChains)
 
 	return
 }

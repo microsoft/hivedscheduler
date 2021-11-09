@@ -81,10 +81,10 @@ const (
 
 	// Scheduler Inspect API: API to inspect current scheduling status
 	// Notes:
-	// 1. Both Binding and Bound AffinityGroups/Pods are considered as Allocated.
+	// 1. Both Binding and Bound PodGroups/Pods are considered as Allocated.
 	InspectPath = VersionPath + "/inspect"
-	// Inspect current allocated AffinityGroup(s)
-	AffinityGroupsPath = InspectPath + "/affinitygroups/"
+	// Inspect current allocated PodGroup(s)
+	PodGroupsPath = InspectPath + "/podgroups/"
 	// Inspect current cluster status
 	ClusterStatusPath = InspectPath + "/clusterstatus"
 	// Inspect current physical cluster status

@@ -24,7 +24,9 @@ package internal
 
 import (
 	"fmt"
+
 	si "github.com/microsoft/hivedscheduler/pkg/api"
+	apiv2 "github.com/microsoft/hivedscheduler/pkg/api/v2"
 	core "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ei "k8s.io/kubernetes/pkg/scheduler/api"
@@ -46,8 +48,8 @@ type ExtenderHandlers struct {
 }
 
 type InspectHandlers struct {
-	GetAllAffinityGroupsHandler        func() si.AffinityGroupList
-	GetAffinityGroupHandler            func(groupName string) si.AffinityGroup
+	GetAllPodGroupsHandler             func() apiv2.PodGroupList
+	GetPodGroupHandler                 func(groupName string) apiv2.PodGroup
 	GetClusterStatusHandler            func() si.ClusterStatus
 	GetPhysicalClusterStatusHandler    func() si.PhysicalClusterStatus
 	GetAllVirtualClustersStatusHandler func() map[si.VirtualClusterName]si.VirtualClusterStatus
@@ -91,8 +93,8 @@ type SchedulerAlgorithm interface {
 	DeleteAllocatedPod(pod *core.Pod)
 
 	// Expose current scheduling status
-	GetAllAffinityGroups() si.AffinityGroupList
-	GetAffinityGroup(name string) si.AffinityGroup
+	GetAllPodGroups() apiv2.PodGroupList
+	GetPodGroup(name string) apiv2.PodGroup
 	GetClusterStatus() si.ClusterStatus
 	GetPhysicalClusterStatus() si.PhysicalClusterStatus
 	GetAllVirtualClustersStatus() map[si.VirtualClusterName]si.VirtualClusterStatus
@@ -132,7 +134,7 @@ const (
 type PodScheduleResult struct {
 	PodWaitInfo    *PodWaitInfo
 	PodPreemptInfo *PodPreemptInfo
-	PodBindInfo    *si.PodBindInfo
+	PodBindInfo    *apiv2.PodBindInfo
 }
 
 // PodUID -> PodScheduleStatus

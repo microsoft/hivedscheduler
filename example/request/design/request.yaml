@@ -2,21 +2,20 @@
 # [Optional]: Job User -> RestServer Request
 #
 # Constrains:
-# 1. For one task, only need to specify leafCellType or pinnedCellId, not both.
-# 2. All leafCellTypes or pinnedCellIds under the same affinityGroup must be the same.
+# 1. For one task, only need to specify cellType or pinnedCellId, not both.
+# 2. All cellTypes or pinnedCellIds under the same podGroup must be the same.
 #
-# affinityGroupName:
-# An affinityGroup forms a cell request and scheduler will try all candidate
+# A podGroup forms a cell request and scheduler will try all candidate
 # cellTypes and physicalCells for the cell to allocate.
 # 1. All candidate cellTypes:
-#    All the sufficient cellTypes with the smallest cellLevel.
+#    All the sufficient cellTypes with the cellLevel no higher than node level.
 # 2. All candidate physicalCells:
 #    If pinnedCellId not specified:
 #       All the sufficient physicalCells, except for all pinnedCells.
 #    Else:
 #       All the sufficient physicalCells, only within the specified pinned cell.
 #
-# Allocate task within its affinityGroup cell:
+# Allocate task within its podGroup cell:
 # 1. Avoid allocating one task across multiple nodes:
 #    Using buddy allocation.
 ################################################################################
@@ -24,67 +23,105 @@ jobVC: VC1
 jobName: JOBX
 jobPriorityClass: PROD
 taskRoles:
-  # All tasks in role A, B, C should be within the same cell named PCN-ABC.
+  # All tasks in role A, B, C should be within the same podGroup, referred by JOBX/GROUP-ABC.
   #
-  # Total request of PCN-ABC:
-  #   leafCellType: DGX2-V100
-  #   leafCellNumber: 1 * 16 + 3 * 8 + 1 * 4 = 44 GPUs = 2.75 DGX2 nodes
+  # Total request of JOBX/GROUP-ABC:
+  #   cellType: DGX2-V100
+  #   cellNumber: 1 * 16 + 3 * 8 + 1 * 4 = 44 GPUs = 2.75 DGX2 nodes
   # Candidate cellTypes:
   #   3-DGX2-NODE, 4-DGX2-NODE, 4-DIRECT-DGX2-NODE, 5-DGX2-NODE.
   A:
     taskNumber: 1
-    leafCellType: DGX2-V100
-    leafCellNumber: 16
-    affinityGroupName: PCN-ABC
+    resourcePerInstance:
+      skuNum: 16
+      skuType: DGX2-V100
   B:
     taskNumber: 3
-    leafCellType: DGX2-V100
-    leafCellNumber: 8
-    affinityGroupName: PCN-ABC
+    resourcePerInstance:
+      skuNum: 8
+      skuType: DGX2-V100
   C:
     taskNumber: 1
-    leafCellType: DGX2-V100
-    leafCellNumber: 4
-    affinityGroupName: PCN-ABC
+    resourcePerInstance:
+      skuNum: 4
+      skuType: DGX2-V100
+taskRoleGroups:
+  - taskRoles:
+    - A
+    - B
+    - C
+    withinOne: null
 
-  # All tasks in role D should be within the same cell named PCN-D.
+  # All tasks in role D should be within the same podGroup, referred by JOBX/GROUP-D.
   #
-  # Total request of PCN-D:
-  #   leafCellType: null -> any leafCellType
-  #   leafCellNumber: 2 * CP2(3) = 2 * 4 = 8 GPUs
+  # Total request of JOBX/GROUP-D:
+  #   cellType: null -> any leaf cellType
+  #   cellNumber: 2 * CP2(3) = 2 * 4 = 8 GPUs
   # Candidate cellTypes:
   #   DGX1-P100-NODE, DGX1-V100-NODE, DGX2-NODE-8-GPU, IB-DGX2-NODE-8-GPU.
   D:
     taskNumber: 2
-    leafCellType: null # null, empty or not specified -> any leafCellType
-    leafCellNumber: 3
-    affinityGroupName: PCN-D
+    resourcePerInstance:
+      skuNum: 3
+      skuType: null # null, empty or not specified -> any cellType
+    within: null # null, empty or not specified -> one podGroup by default and gang schedule
 
-  # Tasks in role E is not required to be within the same cell.
+  # Tasks in role E is not required to be within the same cell if `gang: false` is specified.
   #
   # Each task forms a cell request:
-  #   leafCellType: DGX2-V100
-  #   leafCellNumber: 1 * 16 = 16 GPUs = 1 DGX2 node
+  #   cellType: DGX2-V100
+  #   cellNumber: 1 * 16 = 16 GPUs = 1 DGX2 node
   # Candidate cellTypes:
   #   DGX2-NODE.
   E:
     taskNumber: 2
-    leafCellType: DGX2-V100
-    leafCellNumber: 16
-    affinityGroupName: null # null, empty or not specified -> no affinityGroup
+    resourcePerInstance:
+      skuNum: 16
+      skuType: DGX2-V100
+    gang: false
 
-  # All tasks in role F should be within the same cell named PCN-F.
+  # All tasks in role F should be within the same podGroup, referred by JOBX/GROUP-F.
   #
-  # Total request of PCN-F:
+  # Total request of JOBX/GROUP-F:
   #   pinnedCellId: VC1-YQW-IB-DGX2
-  #   leafCellNumber: 2 * CP2(3) = 2 * 4 = 8 GPUs
+  #   cellNumber: 2 * CP2(3) = 2 * 4 = 8 GPUs
   # Candidate physicalCells:
   #   VC1-YQW-IB-DGX2.
   F:
     taskNumber: 2
     pinnedCellId: VC1-YQW-IB-DGX2
-    leafCellNumber: 3
-    affinityGroupName: PCN-F
+    resourcePerInstance:
+      skuNum: 3
+      skuType: null
+  
+  # All tasks in role G, H should be within the same podGroup, referred by JOBX/GROUP-GH.
+  # All tasks in role G should be within one DGX2 node, all tasks in role H should also be within one DGX2 node,
+  # role G and role H should be within one DGX2 rack at the same time.
+  # Cell types requested from role G, H can be different from leaf cell type DGX2-V100,
+  # role G requests 2 8-GPU cells while role H requests 4 4-GPU cells.
+  #
+  # Total request of JOBX/GROUP-GH:
+  #   cellType: DGX2-V100-NODE-8-GPU and DGX2-V100-NODE-4-GPU
+  #   cellNumber: 2 * 8 + 4 * 4 = 32 GPUs = 2 DGX2 nodes
+  # Candidate cellTypes:
+  #   4-DGX2-NODE, 4-DIRECT-DGX2-NODE
+  G:
+    taskNumber: 2
+    resourcePerInstance:
+      skuNum: 1
+      skuType: DGX2-V100-NODE-8-GPU # 8-GPU inside one board in DGX2
+    within: DGX2-NODE # 2x 8-GPU boards should be within one DGX2 node
+  H:
+    taskNumber: 4
+    resourcePerInstance:
+      skuNum: 1
+      skuType: DGX2-V100-NODE-4-GPU # 4-GPU inside one socket in DGX2
+    within: DGX2-NODE # 4x 4-GPU socket should be within one DGX2 node
+taskRoleGroups:
+  - taskRoles:
+    - G
+    - H
+    withinOne: 2-DGX2-V100-NODE # role G and role H should be within one 2-node DGX2 rack
 
 ---
 ################################################################################
@@ -94,10 +131,10 @@ taskRoles:
 # things in advance.
 # For example:
 # Pod Spec cpu, memory.
-# 1. Given leafCellType or pinnedCellId, just pick the corresponding cpu, memory unit.
-# 2. No leafCellType or pinnedCellId is given, choose the minimal cpu, memory unit.
+# 1. Given cellType or pinnedCellId, just pick the corresponding cpu, memory unit.
+# 2. No cellType or pinnedCellId is given, choose the minimal cpu, memory unit.
 physicalCluster:
-  leafCellTypes:
+  cellTypes:
     # Check resource value format in
     #   k8s.io/apimachinery/pkg/api/resource/quantity.go
 
@@ -141,22 +178,43 @@ spec:
       pod:
         metadata:
           annotations:
-            # Format of affinityGroup.name :
-            # {jobName}/{affinityGroupName}
+            # Format of podRootGroup.name :
+            # {jobName}/group_{podRootGroupIndex}
             hivedscheduler.microsoft.com/pod-scheduling-spec: |-
+              version: v2
               virtualCluster: VC1
               priority: 1000
-              leafCellType: DGX2-V100
-              leafCellNumber: 16
-              affinityGroup:
-                name: JOBX/PCN-ABC
-                members:
-                - podNumber: 1
-                  leafCellNumber: 16
-                - podNumber: 3
-                  leafCellNumber: 8
-                - podNumber: 1
-                  leafCellNumber: 4
+              cellType: DGX2-V100
+              cellNumber: 16
+              podRootGroup:
+                name: JOBX/GROUP-ABC
+                withinOneCell: null
+                pod: null
+                childGroups:
+                - pod:
+                    podMinNumber: 1
+                    podMaxNumber: 1
+                    cellsPerPod:
+                      cellType: DGX2-V100
+                      cellNumber: 16
+                    containsCurrentPod: true
+                  childGroups: null
+                - pod:
+                    podMinNumber: 3
+                    podMaxNumber: 3
+                    cellsPerPod:
+                      cellType: DGX2-V100
+                      cellNumber: 8
+                    containsCurrentPod: false
+                  childGroups: null
+                - pod:
+                    podMinNumber: 1
+                    podMaxNumber: 1
+                    cellsPerPod:
+                      cellType: DGX2-V100
+                      cellNumber: 4
+                    containsCurrentPod: false
+                  childGroups: null
         spec:
           # See ../../run/deploy.yaml for why and how to specify the schedulerName.
           schedulerName: hivedscheduler
@@ -198,19 +256,40 @@ spec:
         metadata:
           annotations:
             hivedscheduler.microsoft.com/pod-scheduling-spec: |-
+              version: v2
               virtualCluster: VC1
               priority: 1000
-              leafCellType: DGX2-V100
-              leafCellNumber: 8
-              affinityGroup:
-                name: JOBX/PCN-ABC
-                members:
-                - podNumber: 1
-                  leafCellNumber: 16
-                - podNumber: 3
-                  leafCellNumber: 8
-                - podNumber: 1
-                  leafCellNumber: 4
+              cellType: DGX2-V100
+              cellNumber: 8
+              podRootGroup:
+                name: JOBX/GROUP-ABC
+                withinOneCell: null
+                pod: null
+                childGroups:
+                - pod:
+                    podMinNumber: 1
+                    podMaxNumber: 1
+                    cellsPerPod:
+                      cellType: DGX2-V100
+                      cellNumber: 16
+                    containsCurrentPod: false
+                  childGroups: null
+                - pod:
+                    podMinNumber: 3
+                    podMaxNumber: 3
+                    cellsPerPod:
+                      cellType: DGX2-V100
+                      cellNumber: 8
+                    containsCurrentPod: true
+                  childGroups: null
+                - pod:
+                    podMinNumber: 1
+                    podMaxNumber: 1
+                    cellsPerPod:
+                      cellType: DGX2-V100
+                      cellNumber: 4
+                    containsCurrentPod: false
+                  childGroups: null
         spec:
           schedulerName: hivedscheduler
           priority: 1000
@@ -232,19 +311,40 @@ spec:
         metadata:
           annotations:
             hivedscheduler.microsoft.com/pod-scheduling-spec: |-
+              version: v2
               virtualCluster: VC1
               priority: 1000
-              leafCellType: DGX2-V100
-              leafCellNumber: 4
-              affinityGroup:
-                name: JOBX/PCN-ABC
-                members:
-                - podNumber: 1
-                  leafCellNumber: 16
-                - podNumber: 3
-                  leafCellNumber: 8
-                - podNumber: 1
-                  leafCellNumber: 4
+              cellType: DGX2-V100
+              cellNumber: 4
+              podRootGroup:
+                name: JOBX/GROUP-ABC
+                withinOneCell: null
+                pod: null
+                childGroups:
+                - pod:
+                    podMinNumber: 1
+                    podMaxNumber: 1
+                    cellsPerPod:
+                      cellType: DGX2-V100
+                      cellNumber: 16
+                    containsCurrentPod: false
+                  childGroups: null
+                - pod:
+                    podMinNumber: 3
+                    podMaxNumber: 3
+                    cellsPerPod:
+                      cellType: DGX2-V100
+                      cellNumber: 8
+                    containsCurrentPod: false
+                  childGroups: null
+                - pod:
+                    podMinNumber: 1
+                    podMaxNumber: 1
+                    cellsPerPod:
+                      cellType: DGX2-V100
+                      cellNumber: 4
+                    containsCurrentPod: true
+                  childGroups: null
         spec:
           schedulerName: hivedscheduler
           priority: 1000
@@ -266,15 +366,22 @@ spec:
         metadata:
           annotations:
             hivedscheduler.microsoft.com/pod-scheduling-spec: |-
+              version: v2
               virtualCluster: VC1
               priority: 1000
-              leafCellType: null
-              leafCellNumber: 3
-              affinityGroup:
-                name: JOBX/PCN-D
-                members:
-                - podNumber: 2
-                  leafCellNumber: 3
+              cellType: null
+              cellNumber: 3
+              podRootGroup:
+                name: JOBX/GROUP-D
+                withinOneCell: null
+                pod:
+                  podMinNumber: 2
+                  podMaxNumber: 2
+                  cellsPerPod:
+                    cellType: null
+                    cellNumber: 3
+                  containsCurrentPod: true
+                childGroups: null
         spec:
           schedulerName: hivedscheduler
           priority: 1000
@@ -298,11 +405,12 @@ spec:
         metadata:
           annotations:
             hivedscheduler.microsoft.com/pod-scheduling-spec: |-
+              version: v2
               virtualCluster: VC1
               priority: 1000
-              leafCellType: DGX2-V100
-              leafCellNumber: 16
-              affinityGroup: null
+              cellType: DGX2-V100
+              cellNumber: 1
+              podRootGroup: null
         spec:
           schedulerName: hivedscheduler
           priority: 1000
@@ -324,15 +432,22 @@ spec:
         metadata:
           annotations:
             hivedscheduler.microsoft.com/pod-scheduling-spec: |-
+              version: v2
               virtualCluster: VC1
               priority: 1000
               pinnedCellId: VC1-YQW-IB-DGX2
-              leafCellNumber: 3
-              affinityGroup:
-                name: JOBX/PCN-F
-                members:
-                - podNumber: 2
-                  leafCellNumber: 3
+              cellNumber: 3
+              podRootGroup:
+                name: JOBX/GROUP-F
+                withinOneCell: null
+                pod:
+                  podMinNumber: 2
+                  podMaxNumber: 2
+                  cellsPerPod:
+                    cellType: null
+                    cellNumber: 3
+                  containsCurrentPod: true
+                childGroups: null
         spec:
           schedulerName: hivedscheduler
           priority: 1000
@@ -342,6 +457,100 @@ spec:
                 hivedscheduler.microsoft.com/pod-scheduling-enable: 1
                 cpu: 3 * 3
                 memory: 96Gi * 3
+            env:
+            - name: NVIDIA_VISIBLE_DEVICES
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.annotations['hivedscheduler.microsoft.com/pod-leaf-cell-isolation']
+  - name: G
+    taskNumber: 2
+    task:
+      pod:
+        metadata:
+          annotations:
+            hivedscheduler.microsoft.com/pod-scheduling-spec: |-
+              version: v2
+              virtualCluster: VC1
+              priority: 1000
+              cellType: DGX2-V100-NODE-8-GPU
+              cellNumber: 1
+              podRootGroup:
+                name: JOBX/GROUP-GH
+                withinOneCell: 2-DGX2-V100-NODE
+                pod: null
+                childGroups:
+                - pod:
+                    podMinNumber: 2
+                    podMaxNumber: 2
+                    cellsPerPod:
+                      cellType: DGX2-V100-NODE-8-GPU
+                      cellNumber: 1
+                    containsCurrentPod: true
+                  childGroups: null
+                - pod:
+                    podMinNumber: 4
+                    podMaxNumber: 4
+                    cellsPerPod:
+                      cellType: DGX2-V100-NODE-4-GPU
+                      cellNumber: 1
+                    containsCurrentPod: false
+                  childGroups: null
+        spec:
+          schedulerName: hivedscheduler
+          priority: 1000
+          containers:
+          - resources:
+              limits:
+                hivedscheduler.microsoft.com/pod-scheduling-enable: 1
+                cpu: 3 * 8
+                memory: 96Gi * 8
+            env:
+            - name: NVIDIA_VISIBLE_DEVICES
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.annotations['hivedscheduler.microsoft.com/pod-leaf-cell-isolation']
+  - name: H
+    taskNumber: 4
+    task:
+      pod:
+        metadata:
+          annotations:
+            hivedscheduler.microsoft.com/pod-scheduling-spec: |-
+              version: v2
+              virtualCluster: VC1
+              priority: 1000
+              cellType: DGX2-V100-NODE-4-GPU
+              cellNumber: 1
+              podRootGroup:
+                name: JOBX/GROUP-GH
+                withinOneCell: 2-DGX2-V100-NODE
+                pod: null
+                childGroups:
+                - pod:
+                    podMinNumber: 2
+                    podMaxNumber: 2
+                    cellsPerPod:
+                      cellType: DGX2-V100-NODE-8-GPU
+                      cellNumber: 1
+                    containsCurrentPod: false
+                  childGroups: null
+                - pod:
+                    podMinNumber: 4
+                    podMaxNumber: 4
+                    cellsPerPod:
+                      cellType: DGX2-V100-NODE-4-GPU
+                      cellNumber: 1
+                    containsCurrentPod: true
+                  childGroups: null
+        spec:
+          schedulerName: hivedscheduler
+          priority: 1000
+          containers:
+          - resources:
+              limits:
+                hivedscheduler.microsoft.com/pod-scheduling-enable: 1
+                cpu: 3 * 4
+                memory: 96Gi * 4
             env:
             - name: NVIDIA_VISIBLE_DEVICES
               valueFrom:
@@ -358,19 +567,40 @@ metadata:
   name: JOBX-A-0
   annotations:
     hivedscheduler.microsoft.com/pod-scheduling-spec: |-
+      version: v2
       virtualCluster: VC1
       priority: 1000
-      leafCellType: DGX2-V100
-      leafCellNumber: 16
-      affinityGroup:
-        name: JOBX/PCN-ABC
-        members:
-        - podNumber: 1
-          leafCellNumber: 16
-        - podNumber: 3
-          leafCellNumber: 8
-        - podNumber: 1
-          leafCellNumber: 4
+      cellType: DGX2-V100
+      cellNumber: 16
+      podRootGroup:
+        name: JOBX/GROUP-ABC
+        withinOneCell: null
+        pod: null
+        childGroups:
+        - pod:
+            podMinNumber: 1
+            podMaxNumber: 1
+            cellsPerPod:
+              cellType: DGX2-V100
+              cellNumber: 16
+            containsCurrentPod: true
+          childGroups: null
+        - pod:
+            podMinNumber: 3
+            podMaxNumber: 3
+            cellsPerPod:
+              cellType: DGX2-V100
+              cellNumber: 8
+            containsCurrentPod: false
+          childGroups: null
+        - pod:
+            podMinNumber: 1
+            podMaxNumber: 1
+            cellsPerPod:
+              cellType: DGX2-V100
+              cellNumber: 4
+            containsCurrentPod: false
+          childGroups: null
 spec:
   schedulerName: hivedscheduler
   priority: 1000
@@ -393,19 +623,40 @@ metadata:
   name: JOBX-B-0
   annotations:
     hivedscheduler.microsoft.com/pod-scheduling-spec: |-
+      version: v2
       virtualCluster: VC1
       priority: 1000
-      leafCellType: DGX2-V100
-      leafCellNumber: 8
-      affinityGroup:
-        name: JOBX/PCN-ABC
-        members:
-        - podNumber: 1
-          leafCellNumber: 16
-        - podNumber: 3
-          leafCellNumber: 8
-        - podNumber: 1
-          leafCellNumber: 4
+      cellType: DGX2-V100
+      cellNumber: 8
+      podRootGroup:
+        name: JOBX/GROUP-ABC
+        withinOneCell: null
+        pod: null
+        childGroups:
+        - pod:
+            podMinNumber: 1
+            podMaxNumber: 1
+            cellsPerPod:
+              cellType: DGX2-V100
+              cellNumber: 16
+            containsCurrentPod: false
+          childGroups: null
+        - pod:
+            podMinNumber: 3
+            podMaxNumber: 3
+            cellsPerPod:
+              cellType: DGX2-V100
+              cellNumber: 8
+            containsCurrentPod: true
+          childGroups: null
+        - pod:
+            podMinNumber: 1
+            podMaxNumber: 1
+            cellsPerPod:
+              cellType: DGX2-V100
+              cellNumber: 4
+            containsCurrentPod: false
+          childGroups: null
 spec:
   schedulerName: hivedscheduler
   priority: 1000
@@ -427,19 +678,40 @@ metadata:
   name: JOBX-C-0
   annotations:
     hivedscheduler.microsoft.com/pod-scheduling-spec: |-
+      version: v2
       virtualCluster: VC1
       priority: 1000
-      leafCellType: DGX2-V100
-      leafCellNumber: 4
-      affinityGroup:
-        name: JOBX/PCN-ABC
-        members:
-        - podNumber: 1
-          leafCellNumber: 16
-        - podNumber: 3
-          leafCellNumber: 8
-        - podNumber: 1
-          leafCellNumber: 4
+      cellType: DGX2-V100
+      cellNumber: 4
+      podRootGroup:
+        name: JOBX/GROUP-ABC
+        withinOneCell: null
+        pod: null
+        childGroups:
+        - pod:
+            podMinNumber: 1
+            podMaxNumber: 1
+            cellsPerPod:
+              cellType: DGX2-V100
+              cellNumber: 16
+            containsCurrentPod: false
+          childGroups: null
+        - pod:
+            podMinNumber: 3
+            podMaxNumber: 3
+            cellsPerPod:
+              cellType: DGX2-V100
+              cellNumber: 8
+            containsCurrentPod: false
+          childGroups: null
+        - pod:
+            podMinNumber: 1
+            podMaxNumber: 1
+            cellsPerPod:
+              cellType: DGX2-V100
+              cellNumber: 4
+            containsCurrentPod: true
+          childGroups: null
 spec:
   schedulerName: hivedscheduler
   priority: 1000
@@ -462,15 +734,22 @@ metadata:
   name: JOBX-D-0
   annotations:
     hivedscheduler.microsoft.com/pod-scheduling-spec: |-
+      version: v2
       virtualCluster: VC1
       priority: 1000
-      leafCellType: null
-      leafCellNumber: 3
-      affinityGroup:
-        name: JOBX/PCN-D
-        members:
-        - podNumber: 2
-          leafCellNumber: 3
+      cellType: null
+      cellNumber: 3
+      podRootGroup:
+        name: JOBX/GROUP-D
+        withinOneCell: null
+        pod:
+          podMinNumber: 2
+          podMaxNumber: 2
+          cellsPerPod:
+            cellType: null
+            cellNumber: 3
+          containsCurrentPod: true
+        childGroups: null
 spec:
   schedulerName: hivedscheduler
   priority: 1000
@@ -493,11 +772,12 @@ metadata:
   name: JOBX-E-0
   annotations:
     hivedscheduler.microsoft.com/pod-scheduling-spec: |-
+      version: v2
       virtualCluster: VC1
       priority: 1000
-      leafCellType: DGX2-V100
-      leafCellNumber: 16
-      affinityGroup: null
+      cellType: DGX2-V100
+      cellNumber: 1
+      podRootGroup: null
 spec:
   schedulerName: hivedscheduler
   priority: 1000
@@ -520,15 +800,22 @@ metadata:
   name: JOBX-F-0
   annotations:
     hivedscheduler.microsoft.com/pod-scheduling-spec: |-
+      version: v2
       virtualCluster: VC1
       priority: 1000
       pinnedCellId: VC1-YQW-IB-DGX2
-      leafCellNumber: 3
-      affinityGroup:
-        name: JOBX/PCN-F
-        members:
-        - podNumber: 2
-          leafCellNumber: 3
+      cellNumber: 3
+      podRootGroup:
+        name: JOBX/GROUP-F
+        withinOneCell: null
+        pod:
+          podMinNumber: 2
+          podMaxNumber: 2
+          cellsPerPod:
+            cellType: null
+            cellNumber: 3
+          containsCurrentPod: true
+        childGroups: null
 spec:
   schedulerName: hivedscheduler
   priority: 1000
@@ -538,6 +825,102 @@ spec:
         hivedscheduler.microsoft.com/pod-scheduling-enable: 1
         cpu: 3 * 3
         memory: 96Gi * 3
+    env:
+    - name: NVIDIA_VISIBLE_DEVICES
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.annotations['hivedscheduler.microsoft.com/pod-leaf-cell-isolation']
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  # JOBX-G-1 is the same
+  name: JOBX-G-0
+  annotations:
+    hivedscheduler.microsoft.com/pod-scheduling-spec: |-
+      version: v2
+      virtualCluster: VC1
+      priority: 1000
+      cellType: DGX2-V100-NODE-8-GPU
+      cellNumber: 1
+      podRootGroup:
+        name: JOBX/GROUP-GH
+        withinOneCell: 2-DGX2-V100-NODE
+        pod: null
+        childGroups:
+        - pod:
+            podMinNumber: 2
+            podMaxNumber: 2
+            cellsPerPod:
+              cellType: DGX2-V100-NODE-8-GPU
+              cellNumber: 1
+            containsCurrentPod: true
+          childGroups: null
+        - pod:
+            podMinNumber: 4
+            podMaxNumber: 4
+            cellsPerPod:
+              cellType: DGX2-V100-NODE-4-GPU
+              cellNumber: 1
+            containsCurrentPod: false
+          childGroups: null
+spec:
+  schedulerName: hivedscheduler
+  priority: 1000
+  containers:
+  - resources:
+      limits:
+        hivedscheduler.microsoft.com/pod-scheduling-enable: 1
+        cpu: 3 * 8
+        memory: 96Gi * 8
+    env:
+    - name: NVIDIA_VISIBLE_DEVICES
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.annotations['hivedscheduler.microsoft.com/pod-leaf-cell-isolation']
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  # JOBX-H-1, JOBX-H-2, JOBX-H-3 are the same
+  name: JOBX-H-0
+  annotations:
+    hivedscheduler.microsoft.com/pod-scheduling-spec: |-
+      version: v2
+      virtualCluster: VC1
+      priority: 1000
+      cellType: DGX2-V100-NODE-4-GPU
+      cellNumber: 1
+      podRootGroup:
+        name: JOBX/GROUP-GH
+        withinOneCell: 2-DGX2-V100-NODE
+        pod: null
+        childGroups:
+        - pod:
+            podMinNumber: 2
+            podMaxNumber: 2
+            cellsPerPod:
+              cellType: DGX2-V100-NODE-8-GPU
+              cellNumber: 1
+            containsCurrentPod: false
+          childGroups: null
+        - pod:
+            podMinNumber: 4
+            podMaxNumber: 4
+            cellsPerPod:
+              cellType: DGX2-V100-NODE-4-GPU
+              cellNumber: 1
+            containsCurrentPod: true
+          childGroups: null
+spec:
+  schedulerName: hivedscheduler
+  priority: 1000
+  containers:
+  - resources:
+      limits:
+        hivedscheduler.microsoft.com/pod-scheduling-enable: 1
+        cpu: 3 * 4
+        memory: 96Gi * 4
     env:
     - name: NVIDIA_VISIBLE_DEVICES
       valueFrom:

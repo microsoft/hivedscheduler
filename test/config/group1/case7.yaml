@@ -1,0 +1,123 @@
+- method: SchedulePod
+  parameters:
+    podName: group1_pod1
+    phase: "Preempting"
+    podGroupSchedulingRequest:
+      version: v2
+      virtualCluster: VC1
+      priority: 1
+      pinnedCellId: ""
+      cellType: V100
+      cellNumber: 5
+      gangReleaseEnable: false
+      lazyPreemptionEnable: false
+      podRootGroup:
+        name: group1
+        withinOneCell: ""
+        pod:
+          podMinNumber: 1
+          podMaxNumber: 1
+          cellsPerPod:
+            cellType: V100
+            cellNumber: 5
+          containsCurrentPod: true
+        childGroups: []
+- method: AssertPodBindResult
+  parameters:
+    podName: group1_pod1
+    expectedResult:
+      node: 0.0.0.1
+      leafCellIsolation: [0, 1, 2, 3, 4]
+- method: SchedulePod
+  parameters:
+    podName: group2_pod1
+    phase: "Preempting"
+    podGroupSchedulingRequest:
+      version: v2
+      virtualCluster: VC1
+      priority: 1
+      pinnedCellId: ""
+      cellType: V100
+      cellNumber: 5
+      gangReleaseEnable: false
+      lazyPreemptionEnable: false
+      podRootGroup:
+        name: group2
+        withinOneCell: ""
+        pod:
+          podMinNumber: 1
+          podMaxNumber: 1
+          cellsPerPod:
+            cellType: V100
+            cellNumber: 5
+          containsCurrentPod: true
+        childGroups: []
+- method: AssertPodBindResult
+  parameters:
+    podName: group2_pod1
+    expectedResult:
+      node: 0.0.0.2
+      leafCellIsolation: [0, 1, 2, 3, 4]
+- method: SchedulePod
+  parameters:
+    podName: group3_pod1
+    phase: "Preempting"
+    podGroupSchedulingRequest:
+      version: v2
+      virtualCluster: VC1
+      priority: 1
+      pinnedCellId: ""
+      cellType: V100
+      cellNumber: 5
+      gangReleaseEnable: false
+      lazyPreemptionEnable: false
+      podRootGroup:
+        name: group3
+        withinOneCell: ""
+        pod:
+          podMinNumber: 1
+          podMaxNumber: 1
+          cellsPerPod:
+            cellType: V100
+            cellNumber: 5
+          containsCurrentPod: true
+        childGroups: []
+- method: AssertPodBindResult
+  parameters:
+    podName: group3_pod1
+    expectedResult:
+      node: 0.0.0.3
+      leafCellIsolation: [0, 1, 2, 3, 4]
+- method: DeallocatePod
+  parameters:
+    podName: group2_pod1
+- method: SchedulePod
+  parameters:
+    podName: group4_pod1
+    phase: "Preempting"
+    podGroupSchedulingRequest:
+      version: v2
+      virtualCluster: VC1
+      priority: 2
+      pinnedCellId: ""
+      cellType: V100-NODE
+      cellNumber: 1
+      gangReleaseEnable: false
+      lazyPreemptionEnable: false
+      podRootGroup:
+        name: group4
+        withinOneCell: "V100-RACK"
+        pod:
+          podMinNumber: 2
+          podMaxNumber: 2
+          cellsPerPod:
+            cellType: V100-NODE
+            cellNumber: 1
+          containsCurrentPod: true
+        childGroups: []
+- method: AssertPodPreemptResult
+  parameters:
+    podName: group4_pod1
+    expectedResult:
+      victimPods:
+        - group1_pod1
