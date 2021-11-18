@@ -28,11 +28,11 @@ set -o pipefail
 
 BASH_DIR=$(cd $(dirname ${BASH_SOURCE}) && pwd)
 PROJECT_DIR=${BASH_DIR}/..
-GOPKG_LOCK_FILE=${PROJECT_DIR}/Gopkg.lock
+GO_SUM_FILE=${PROJECT_DIR}/go.sum
 
 cd ${PROJECT_DIR}
 
-rm -rf ${GOPKG_LOCK_FILE}
+rm -rf ${GO_SUM_FILE}
 
 ${BASH_DIR}/update-dep.sh
 

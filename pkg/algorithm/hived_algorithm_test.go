@@ -39,7 +39,7 @@ import (
 var allPods = map[string]*core.Pod{}
 
 func init() {
-	common.InitAll()
+	// common.InitAll()
 	for i := 1; i <= len(pss); i++ {
 		podName := fmt.Sprintf("pod%v", i)
 		allPods[podName] = &core.Pod{

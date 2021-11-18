@@ -31,6 +31,6 @@ PROJECT_DIR=${BASH_DIR}/..
 
 cd ${PROJECT_DIR}
 
-dep ensure
+GO111MODULE=on go mod tidy
 
 echo Succeeded to update dependent package

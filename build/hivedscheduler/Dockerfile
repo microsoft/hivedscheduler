@@ -20,7 +20,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE
 
-FROM golang:1.12.6-alpine as builder
+FROM golang:1.13.15-alpine as builder
 
 ARG TEST=false
 ENV PROJECT_DIR=${GOPATH}/src/github.com/microsoft/hivedscheduler
