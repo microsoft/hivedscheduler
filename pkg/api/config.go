@@ -82,6 +82,8 @@ type Config struct {
 
 	// Specify all the virtual clusters belongs to the physical cluster
 	VirtualClusters *map[VirtualClusterName]VirtualClusterSpec `yaml:"virtualClusters"`
+	// Exclude vc names, a list like ["default", "vc1", "vc2"]
+	QuotaExcludeVCs []string `yaml:"quotaExcludeVCs,omitempty"`
 }
 
 func NewConfig(rawConfig *Config) *Config {

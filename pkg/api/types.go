@@ -75,6 +75,13 @@ type PinnedCellSpec struct {
 	PinnedCellId PinnedCellId `yaml:"pinnedCellId"`
 }
 
+type Quota struct {
+	// Tag for quota
+	Tag string `yaml:"tag,omitempty"`
+	// Count for quota
+	Count int32 `yaml:"count,omitempty"`
+}
+
 type PodSchedulingSpec struct {
 	VirtualCluster          VirtualClusterName `yaml:"virtualCluster"`
 	Priority                int32              `yaml:"priority"`
@@ -85,6 +92,7 @@ type PodSchedulingSpec struct {
 	LazyPreemptionEnable    bool               `yaml:"lazyPreemptionEnable"`
 	IgnoreK8sSuggestedNodes bool               `yaml:"ignoreK8sSuggestedNodes" default:"true"`
 	AffinityGroup           *AffinityGroupSpec `yaml:"affinityGroup"`
+	Quota                   Quota              `yaml:"quota,omitempty"`
 }
 
 type AffinityGroupSpec struct {

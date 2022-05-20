@@ -48,6 +48,8 @@ type HivedAlgorithm struct {
 	freeCellList map[CellChain]ChainCellList
 	// all affinity groups that have been allocated or are preempting other groups
 	affinityGroups map[string]*AlgoAffinityGroup
+	// quota exclude VCs
+	quotaExcludeVCs []string
 
 	// vcFreeCellNum, allVCFreeCellNum, and totalLeftCellNum are used to track cell usage of the VCs.
 	// Note that these numbers count both healthy and bad cells.
@@ -124,6 +126,7 @@ func NewHivedAlgorithm(sConfig *api.Config) *HivedAlgorithm {
 		cellChains:              chains,
 		cellTypes:               cellTypes,
 		affinityGroups:          map[string]*AlgoAffinityGroup{},
+		quotaExcludeVCs:         sConfig.QuotaExcludeVCs,
 		apiClusterStatus: api.ClusterStatus{
 			PhysicalCluster: api.PhysicalClusterStatus{},
 			VirtualClusters: map[api.VirtualClusterName]api.VirtualClusterStatus{},
@@ -771,6 +774,7 @@ func (h *HivedAlgorithm) scheduleNewAffinityGroup(
 		affinityGroupPodNums: map[int32]int32{},
 		suggestedNodes:       suggestedNodes,
 		ignoreSuggestedNodes: s.IgnoreK8sSuggestedNodes,
+		quota:                s.Quota,
 	}
 	for _, m := range s.AffinityGroup.Members {
 		// we will merge group members with same leaf cell number
@@ -895,6 +899,62 @@ func (h *HivedAlgorithm) handleSchedulingRequest(
 	return physicalPlacement, virtualPlacement, ""
 }
 
+// scheduleUserQuota make sure that the number of SKUs used by the user does not exceed the quota.
+func (h *HivedAlgorithm) scheduleUserQuota(
+	sr schedulingRequest) (
+	failedReason string,
+	failed bool) {
+
+	// Exclude vc
+	var excludeVCs = make(map[string]bool)
+	if h.quotaExcludeVCs != nil {
+		for _, item := range h.quotaExcludeVCs {
+			excludeVCs[item] = true
+		}
+	}
+	if excludeVCs[string(sr.vc)] {
+		return "", false
+	}
+
+	// Get quota from sr
+	var quota = sr.quota
+
+	klog.Infof("quota.Tag, quota.Count: %v, %v", quota.Tag, quota.Count)
+
+	// No quota
+	if quota.Tag == "" || quota.Count < 0 {
+		return "", false
+	}
+
+	// Count used leaf cell count
+	var used int32 = 0
+	for group := range h.affinityGroups {
+		if h.affinityGroups[group].quota.Tag == quota.Tag {
+			// Exclude oppo jobs.
+			if h.affinityGroups[group].priority == int32(opportunisticPriority) {
+				continue
+			}
+			if excludeVCs[string(h.affinityGroups[group].vc)] {
+				continue
+			}
+			for pod := range h.affinityGroups[group].totalPodNums {
+				used += pod * h.affinityGroups[group].totalPodNums[pod]
+			}
+		}
+	}
+
+	// Count required leaf cell count
+	var required int32 = 0
+	for key := range sr.affinityGroupPodNums {
+		required += key * sr.affinityGroupPodNums[key]
+	}
+
+	if used+required > quota.Count {
+		return "exceeded user quota, used " + fmt.Sprint(used) + ", required " + fmt.Sprint(required) + ", quota " + fmt.Sprint(quota.Count), true
+	}
+	return "", false
+}
+
 // scheduleGuaranteedAffinityGroup schedules an affinity group in its VC,
 // and then maps the placement in VC to the physical cluster.
 func (h *HivedAlgorithm) scheduleGuaranteedAffinityGroup(
@@ -902,6 +962,12 @@ func (h *HivedAlgorithm) scheduleGuaranteedAffinityGroup(
 	physicalPlacement groupPhysicalPlacement,
 	virtualPlacement groupVirtualPlacement,
 	failedReason string) {
+
+	// schedule Quota
+	failedReason, failed := h.scheduleUserQuota(sr)
+	if failed {
+		return nil, nil, failedReason
+	}
 
 	// schedule in VC
 	virtualPlacement, failedReason = h.vcSchedulers[sr.vc].schedule(sr)
@@ -982,7 +1048,7 @@ func (h *HivedAlgorithm) scheduleOpportunisticAffinityGroup(
 func (h *HivedAlgorithm) createAllocatedAffinityGroup(s *api.PodSchedulingSpec, info *api.PodBindInfo, pod *core.Pod) {
 	klog.Infof("[%v]: Creating new allocated affinity group: %v", internal.Key(pod), s.AffinityGroup.Name)
 	newGroup := newAlgoAffinityGroup(
-		s.AffinityGroup, s.VirtualCluster, s.LazyPreemptionEnable, s.Priority, groupAllocated)
+		s.AffinityGroup, s.VirtualCluster, s.LazyPreemptionEnable, s.Priority, s.Quota, groupAllocated)
 	shouldLazyPreempt := false
 	for _, gms := range info.AffinityGroupBindInfo {
 		leafCellNumber := int32(len(gms.PodPlacements[0].PhysicalLeafCellIndices))
@@ -1081,7 +1147,7 @@ func (h *HivedAlgorithm) createPreemptingAffinityGroup(
 
 	klog.Infof("[%v]: Creating new preempting affinity group: %v", internal.Key(pod), s.AffinityGroup.Name)
 	newGroup := newAlgoAffinityGroup(
-		s.AffinityGroup, s.VirtualCluster, s.LazyPreemptionEnable, s.Priority, groupPreempting)
+		s.AffinityGroup, s.VirtualCluster, s.LazyPreemptionEnable, s.Priority, s.Quota, groupPreempting)
 	newGroup.physicalLeafCellPlacement = physicalPlacement
 	newGroup.virtualLeafCellPlacement = virtualPlacement
 	for leafCellNum := range physicalPlacement {
